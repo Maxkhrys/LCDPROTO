@@ -27,6 +27,9 @@ export type BehaviourId =
   | "TALL_STRETCH"
   | "JELLY_TWIST_LEFT"
   | "JELLY_TWIST_RIGHT"
+  | "SPIN_360"
+  | "WALL_IMPACT_LEFT"
+  | "WALL_IMPACT_RIGHT"
   | "SOFT_SQUINT"
   | "ONE_EYE_SQUINT_LEFT"
   | "ONE_EYE_SQUINT_RIGHT"
@@ -95,6 +98,7 @@ export interface PoseDelta {
   blobX: number;
   blobY: number;
   blobRotation: number;
+  blobSpin: number;
   blobScaleX: number;
   blobScaleY: number;
   bodyX: number;
@@ -136,6 +140,7 @@ export const NEUTRAL_DELTA: PoseDelta = {
   blobX: 0,
   blobY: 0,
   blobRotation: 0,
+  blobSpin: 0,
   blobScaleX: 0,
   blobScaleY: 0,
   bodyX: 0,
@@ -365,6 +370,10 @@ export class BehaviourController {
   private beatMouthId: MouthBehaviour | null = null;
   private beatBodyId: BodyBehaviour | null = null;
   private manualBeat = false;
+  private spinStartedAt = -1;
+  private spinRotation = 0;
+  private impactAt = 0;
+  private impactDirection = 0;
 
   private gazeAction = "RESTING";
   private lidAction = "OPEN";
@@ -462,6 +471,10 @@ export class BehaviourController {
     this.followXTarget = 0;
     this.followRotationTarget = 0;
     this.followScaleYTarget = 0;
+    this.spinStartedAt = -1;
+    this.spinRotation = 0;
+    this.impactAt = 0;
+    this.impactDirection = 0;
     this.activityId = "REST";
     this.activityStartedAt = 0;
     this.activityUntil = 0;
@@ -531,6 +544,14 @@ export class BehaviourController {
     // animation tick. Keep this direct cue alive through that transition;
     // Auto only controls the seeded playlist, never manual inspection.
     this.manualBeat = true;
+    if (id === "SPIN_360") {
+      this.startSpin();
+      return;
+    }
+    if (id === "WALL_IMPACT_LEFT" || id === "WALL_IMPACT_RIGHT") {
+      this.startWallImpact(id, cfg);
+      return;
+    }
     if (id === "NORMAL_BLINK" || id === "DOUBLE_BLINK") {
       this.startBlink(id === "DOUBLE_BLINK", cfg);
       return;
@@ -593,6 +614,18 @@ export class BehaviourController {
   update(dtMs: number, cfg: BehaviourConfig, autoEnabled = true) {
     this.ensureSchedule(cfg);
     this.clock += Math.max(0, dtMs);
+
+    this.updateSpin();
+    if (this.impactAt > 0 && this.clock >= this.impactAt) {
+      this.impactAt = 0;
+      // Impact arrives after the travel. Compress hard, then let the body
+      // spring rebound from the wall instead of holding one static squish.
+      this.bodyYTarget = 2.8;
+      this.bodyScaleYTarget = -0.095;
+      this.massYTarget = 2.4;
+      this.massScaleYTarget = -0.065;
+      this.massSkewYTarget = this.impactDirection * 3.2;
+    }
 
     if (!autoEnabled && this.autoWasEnabled && !this.manualBeat)
       this.clearBeatCues();
@@ -730,7 +763,18 @@ export class BehaviourController {
     let mouth: MouthBehaviour | null = null;
     let body: BodyBehaviour | null = null;
 
-    if (r < 0.23) {
+    // Large physical beats stay rare. They are still in the same global
+    // vocabulary, so HOME and quieter states get identical choreography.
+    if (r > 0.985) {
+      gaze = "LOOK_UP";
+      expression = "CURIOUS_WIDE";
+      mouth = "MOUTH_O";
+      body = "SPIN_360";
+    } else if (r > 0.97) {
+      expression = "SOFT_SQUINT";
+      mouth = "MOUTH_O";
+      body = this.rand() < 0.5 ? "WALL_IMPACT_LEFT" : "WALL_IMPACT_RIGHT";
+    } else if (r < 0.23) {
       gaze = side === "LEFT" ? "GLANCE_LEFT" : "GLANCE_RIGHT";
       expression =
         this.rand() < 0.42
@@ -893,8 +937,10 @@ export class BehaviourController {
     const mood = MOODS[this.mood];
     let duration = 850;
     if (id === "SOFT_SQUINT") {
-      this.leftTension.target = 0.7;
-      this.rightTension.target = 0.76;
+      // Squint is a real two-lid closure, not a mild scale change. Both
+      // apertures narrow toward a readable centre slit.
+      this.leftTension.target = 0.24;
+      this.rightTension.target = 0.29;
       this.leftScaleX.target = mood.eyeScaleX + 0.055;
       this.rightScaleX.target = mood.eyeScaleX + 0.045;
       duration = 850 + this.rand() * 650;
@@ -1092,6 +1138,14 @@ export class BehaviourController {
   }
 
   private startBody(id: BehaviourId, cfg: BehaviourConfig) {
+    if (id === "SPIN_360") {
+      this.startSpin();
+      return;
+    }
+    if (id === "WALL_IMPACT_LEFT" || id === "WALL_IMPACT_RIGHT") {
+      this.startWallImpact(id, cfg);
+      return;
+    }
     const strength = clamp(cfg.squash / 0.032, 0.55, 1.35);
     let sy = 0;
     let duration = 620;
@@ -1174,6 +1228,53 @@ export class BehaviourController {
     this.massSkewYTarget = 0;
     this.massOriginXTarget = 0;
     this.massOriginYTarget = 0.82;
+  }
+
+  private startSpin() {
+    this.clearBeatCues();
+    this.clearBodyTargets();
+    this.spinStartedAt = this.clock;
+    this.spinRotation = 0;
+    this.mark("SPIN_360", 980);
+    this.nextBeatAt = Math.max(this.nextBeatAt, this.clock + 1240);
+  }
+
+  private startWallImpact(
+    id: "WALL_IMPACT_LEFT" | "WALL_IMPACT_RIGHT",
+    cfg: BehaviourConfig
+  ) {
+    this.clearBeatCues();
+    this.clearBodyTargets();
+    const direction = id === "WALL_IMPACT_LEFT" ? -1 : 1;
+    const strength = clamp(cfg.squash / 0.032, 0.8, 1.5);
+    this.impactDirection = direction;
+    this.impactAt = this.clock + 260;
+    this.bodyXTarget = direction * 13;
+    this.bodyRotationTarget = direction * 2.2;
+    this.massXTarget = direction * 6;
+    this.massRotationTarget = direction * 2.8;
+    this.massSkewYTarget = direction * 2.4;
+    this.massOriginXTarget = -direction;
+    this.bodyScaleYTarget = 0.018 * strength;
+    this.massScaleYTarget = 0.012 * strength;
+    this.bodyAction = id;
+    this.bodyReleaseAt = this.clock + 1040;
+    this.mark(id, 1500);
+  }
+
+  private updateSpin() {
+    if (this.spinStartedAt < 0) return;
+    const elapsed = this.clock - this.spinStartedAt;
+    const duration = 880;
+    const t = clamp01(elapsed / duration);
+    // One unwrapped turn. At 360 degrees the orientation is identical to
+    // neutral, so clearing to zero after completion does not snap visually.
+    this.spinRotation = 360 * smoothstep(t);
+    if (t >= 1) {
+      this.spinStartedAt = -1;
+      this.spinRotation = 0;
+      this.bodyAction = "SETTLING";
+    }
   }
 
   private startBlink(double: boolean, cfg?: BehaviourConfig) {
@@ -1314,6 +1415,7 @@ export class BehaviourController {
     this.delta.blobRotation =
       this.bodyRotationTarget +
       (followActive ? this.followRotationTarget : 0);
+    this.delta.blobSpin = this.spinRotation;
     this.delta.blobScaleY = scaleY;
     this.delta.blobScaleX = preserveAreaX(scaleY);
     this.delta.bodyX = this.massXTarget;

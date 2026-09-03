@@ -464,7 +464,9 @@ export default function BlobCharacter({
       // Blink closes from the top while the lower lid stays planted. This
       // keeps a half-blink from looking like the bottom half was erased.
       const openingHeight = apertureHeight * open;
-      const openingY = apertureHeight * 0.5 * (1 - open);
+      // Both lids travel toward a narrow centre slit. This prevents the old
+      // “top half disappears, bottom half stays open” blink failure.
+      const openingY = apertureHeight * 0.12 * (1 - open);
       const gazeX = clamp(t.x, -socketWidth * 0.2, socketWidth * 0.2);
       const gazeY = clamp(t.y, -socketHeight * 0.12, socketHeight * 0.12);
 

@@ -9,6 +9,7 @@ export type ExpressionCategory =
   | "Idle"
   | "Angry"
   | "Sad"
+  | "Action"
   | "Variants";
 export type ExpressionFilter = "ALL" | ExpressionCategory;
 
@@ -114,6 +115,15 @@ export const HOME_EXPRESSION_GROUPS: readonly ExpressionGroup[] = [
       { id: "SAD_SMALL", label: "Small sad", hint: "quiet retreat" },
     ],
   },
+  {
+    id: "Action",
+    label: "Big beats",
+    entries: [
+      { id: "SPIN_360", label: "360 spin", hint: "full turn" },
+      { id: "WALL_IMPACT_LEFT", label: "Wall hit left", hint: "hard squash" },
+      { id: "WALL_IMPACT_RIGHT", label: "Wall hit right", hint: "hard squash" },
+    ],
+  },
 ] as const satisfies readonly ExpressionGroup[];
 
 export const EXPRESSION_FILTERS: readonly ExpressionFilter[] = [
@@ -125,6 +135,7 @@ export const EXPRESSION_FILTERS: readonly ExpressionFilter[] = [
   "Idle",
   "Angry",
   "Sad",
+  "Action",
   "Variants",
 ];
 

@@ -195,7 +195,7 @@ export default function HomeState({
             // attached instead of preserving a separate screen-space grid.
             scaleX: 1,
             scaleY: 1,
-            rotation: latestRotation,
+            rotation: latestRotation + d.blobSpin,
             opacity: 1,
           },
           // The body is the actual deforming surface. Facial anchors inherit
@@ -212,6 +212,10 @@ export default function HomeState({
             originY: physical.bodyOriginY,
             scaleX: 1 + deformX + clampBodyDeform(physical.bodyScaleX),
             scaleY: 1 + deformY + clampBodyDeform(physical.bodyScaleY),
+            rippleTop: physical.rippleTop,
+            rippleUpper: physical.rippleUpper,
+            rippleLower: physical.rippleLower,
+            rippleBottom: physical.rippleBottom,
           },
           leftEye: {
             ...NEUTRAL_ELEMENT,

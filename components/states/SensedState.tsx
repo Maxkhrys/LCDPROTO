@@ -41,15 +41,15 @@ const ZERO_AMBIENT = {
 function sensedIdleConfig(idle: IdleConfig): IdleConfig {
   return {
     ...idle,
-    floatPx: idle.floatPx * 0.62,
+    floatPx: idle.floatPx * 0.76,
     breathAmount: idle.breathAmount * 0.84,
-    squashAmount: idle.squashAmount * 0.72,
-    jellyAmount: idle.jellyAmount * 0.88,
-    rippleAmount: idle.rippleAmount * 0.78,
-    blinkInterval: idle.blinkInterval * 1.28,
-    gazeDriftPx: idle.gazeDriftPx * 0.78,
-    rotationDeg: idle.rotationDeg * 0.72,
-    activityPace: idle.activityPace * 1.3,
+    squashAmount: idle.squashAmount * 0.86,
+    jellyAmount: idle.jellyAmount * 0.96,
+    rippleAmount: idle.rippleAmount * 0.94,
+    blinkInterval: idle.blinkInterval * 1.18,
+    gazeDriftPx: idle.gazeDriftPx * 0.9,
+    rotationDeg: idle.rotationDeg * 0.82,
+    activityPace: idle.activityPace * 1.12,
   };
 }
 
@@ -229,7 +229,7 @@ export default function SensedState({
             scale: 1 + amb.breath,
             scaleX: 1,
             scaleY: 1,
-            rotation: latestRotation,
+            rotation: latestRotation + d.blobSpin,
             opacity: 1,
           },
           body: {

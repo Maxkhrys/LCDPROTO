@@ -130,7 +130,7 @@ settles.
 | gaze | glances, look up/down, curious left/right tilts | 1.45-1.85 s |
 | eyes | soft squint, independent one-eye squints, curious wide | 1.35-1.75 s |
 | mouth | relax, twitch, rounded O, 180-degree expression flip | 0.62-2.1 s |
-| body | settle, tiny squish, side squish, sway, tall stretch, twist | 0.82-1.6 s |
+| body | settle, tiny squish, side squish, sway, tall stretch, twist, wall impact, 360 spin | 0.82-1.6 s |
 
 A beat starts roughly every 2-4s, with no forced repeated pose. Blink events stay
 independent and irregular; the mouth flip is deliberately rare.
@@ -178,9 +178,9 @@ hardware/default view remains dark.
 
 The fixed **Expressions** tab exposes the authored catalogue without changing
 the animation architecture. HOME is grouped into Gaze, Lids & eyes, Jelly body,
-Mouth, Idle life, Angry, and Sad. SENSED inherits those groups and adds its own
-variants. Search filters the library without hiding the currently selected
-state.
+Mouth, Idle life, Angry, Sad, and Big beats. SENSED inherits that same global
+catalogue and adds its own variants. Search filters the library without hiding
+the currently selected state.
 
 ## SENSED state
 

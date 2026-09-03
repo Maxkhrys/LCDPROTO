@@ -57,6 +57,25 @@ function drawField(
   timeSeconds: number
 ) {
   ctx.clearRect(0, 0, size, size);
+  // Soft sensing wash. It is a native-pixel colour field, not a CSS glow or
+  // blur, so it stays cheap enough to reproduce on the eventual display.
+  const washPulse = (Math.sin((timeSeconds / 4.8) * TAU - 0.7) + 1) * 0.5;
+  const wash = ctx.createRadialGradient(
+    CENTRE,
+    CENTRE,
+    18,
+    CENTRE,
+    CENTRE,
+    118
+  );
+  wash.addColorStop(0, `rgba(83, 235, 127, ${0.015 + washPulse * 0.02})`);
+  wash.addColorStop(0.58, `rgba(83, 235, 127, ${0.035 + washPulse * 0.035})`);
+  wash.addColorStop(0.88, `rgba(103, 244, 145, ${0.075 + washPulse * 0.065})`);
+  wash.addColorStop(1, `rgba(103, 244, 145, ${0.12 + washPulse * 0.08})`);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = wash;
+  ctx.fillRect(0, 0, size, size);
+
   ctx.lineWidth = 0.7;
   ctx.strokeStyle = "#62e895";
 
