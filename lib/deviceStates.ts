@@ -58,8 +58,8 @@ export interface StateViewProps {
   calibration: FaceCalibration;
   /** Procedural idle motion settings from the dev controls. */
   idle: IdleConfig;
-  /** HOME micro-behaviour system on/off. Off shows the neutral calibrated pose. */
-  behaviourEnabled: boolean;
+  /** HOME automatic playlist on/off. Manual cue buttons still work when off. */
+  autoBehaviourEnabled: boolean;
   /** Dev request to run a behaviour now; a new nonce fires it. */
   triggerRequest: { id: BehaviourId; nonce: number } | null;
   /** Reports the running behaviour back to the dev readout. */

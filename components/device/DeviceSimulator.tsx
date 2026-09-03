@@ -54,7 +54,7 @@ export default function DeviceSimulator() {
   );
   const [saved, setSaved] = useState<string | null>(null);
   const [idle, setIdle] = useState<IdleConfig>(DEFAULT_IDLE);
-  const [behaviourEnabled, setBehaviourEnabled] = useState(true);
+  const [autoBehaviourEnabled, setAutoBehaviourEnabled] = useState(true);
   const [trigger, setTrigger] = useState<{ id: BehaviourId; nonce: number } | null>(
     null
   );
@@ -110,7 +110,7 @@ export default function DeviceSimulator() {
     setBlobColour("teal");
     setCalibration(DEFAULT_FACE_CALIBRATION);
     setIdle(DEFAULT_IDLE);
-    setBehaviourEnabled(true);
+    setAutoBehaviourEnabled(true);
     setTrigger(null);
     setSaved(null);
     setShowExpressions(false);
@@ -150,7 +150,7 @@ export default function DeviceSimulator() {
                 calibration={calibration}
                 renderScale={renderScale}
                 idle={idle}
-                behaviourEnabled={behaviourEnabled}
+                autoBehaviourEnabled={autoBehaviourEnabled}
                 triggerRequest={trigger}
                 onBehaviourStatus={setStatus}
                 displayMode={displayMode}
@@ -229,10 +229,10 @@ export default function DeviceSimulator() {
             </DevButton>
 
             <DevButton
-              active={behaviourEnabled}
-              onClick={() => setBehaviourEnabled((v) => !v)}
+              active={autoBehaviourEnabled}
+              onClick={() => setAutoBehaviourEnabled((v) => !v)}
             >
-              Behaviour
+              Auto
             </DevButton>
 
             <DevButton
@@ -261,7 +261,7 @@ export default function DeviceSimulator() {
             <ActivityReadout
               status={status}
               playing={playing}
-              behaviourEnabled={behaviourEnabled}
+              autoEnabled={autoBehaviourEnabled}
               idleEnabled={idle.enabled}
             />
           )}
@@ -269,8 +269,8 @@ export default function DeviceSimulator() {
           {showCalibration && (
             <BehaviourPanel
               status={status}
-              enabled={behaviourEnabled}
-              onToggle={() => setBehaviourEnabled((v) => !v)}
+              autoEnabled={autoBehaviourEnabled}
+              onToggle={() => setAutoBehaviourEnabled((v) => !v)}
               onTrigger={fire}
             />
           )}
@@ -325,7 +325,11 @@ export default function DeviceSimulator() {
           /
         </span>
         <span className="text-white/40">
-          {behaviourEnabled ? (status?.id ?? "REST") : "neutral"}
+          {autoBehaviourEnabled
+            ? (status?.id ?? "REST")
+            : status?.id && status.id !== "REST"
+              ? status.id
+              : "manual"}
         </span>
         <span aria-hidden className="text-white/10">
           /
@@ -675,12 +679,12 @@ function Slider({
  */
 function BehaviourPanel({
   status,
-  enabled,
+  autoEnabled,
   onToggle,
   onTrigger,
 }: {
   status: HomeActivityStatus | null;
-  enabled: boolean;
+  autoEnabled: boolean;
   onToggle: () => void;
   onTrigger: (id: BehaviourId) => void;
 }) {
@@ -689,16 +693,22 @@ function BehaviourPanel({
     <div className="flex w-full max-w-md flex-col gap-3 rounded-lg border border-white/[0.06] bg-white/[0.015] p-4">
       <div className="flex items-center justify-between">
         <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/30">
-          home behaviour
+          auto playlist
         </span>
         <button
           type="button"
           onClick={onToggle}
+          aria-pressed={autoEnabled}
           className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/40 transition-colors hover:text-white/80"
         >
-          {enabled ? "On" : "Off"}
+          {autoEnabled ? "On" : "Off"}
         </button>
       </div>
+
+      <p className="text-[11px] leading-relaxed text-white/35">
+        Auto plays the HOME catalogue. The individual cue buttons below always
+        work manually.
+      </p>
 
       <div className="flex items-baseline justify-between gap-3 rounded-md border border-white/[0.06] bg-black/40 px-3 py-2">
         <span
@@ -706,12 +716,18 @@ function BehaviourPanel({
             resting ? "text-white/35" : "text-[#b295ff]"
           }`}
         >
-          {enabled ? (status?.id ?? "REST") : "NEUTRAL"}
+          {autoEnabled
+            ? (status?.id ?? "REST")
+            : status?.id && status.id !== "REST"
+              ? status.id
+              : "MANUAL"}
         </span>
         <span className="font-mono text-[10px] tabular-nums text-white/25">
-          {enabled && status
+          {status
             ? status.id === "REST"
-              ? `${(status.nextBehaviourMs / 1000).toFixed(1)}s next`
+              ? autoEnabled
+                ? `${(status.nextBehaviourMs / 1000).toFixed(1)}s next`
+                : "ready for cue"
               : `${(status.remainingMs / 1000).toFixed(1)}s left`
             : "—"}
         </span>
@@ -960,23 +976,31 @@ function ExpressionDrawer({
 function ActivityReadout({
   status,
   playing,
-  behaviourEnabled,
+  autoEnabled,
   idleEnabled,
 }: {
   status: HomeActivityStatus | null;
   playing: boolean;
-  behaviourEnabled: boolean;
+  autoEnabled: boolean;
   idleEnabled: boolean;
 }) {
-  const behaviour = behaviourEnabled ? (status?.id ?? "REST") : "NEUTRAL";
+  const behaviour = autoEnabled
+    ? (status?.id ?? "REST")
+    : status?.id && status.id !== "REST"
+      ? status.id
+      : "MANUAL";
   const next =
-    playing && behaviourEnabled && status
-      ? `${(status.nextBehaviourMs / 1000).toFixed(1)}s`
+    playing && status
+      ? autoEnabled
+        ? `${(status.nextBehaviourMs / 1000).toFixed(1)}s`
+        : status.id === "REST"
+          ? "ready"
+          : `${(status.remainingMs / 1000).toFixed(1)}s`
       : "paused";
   const x = idleEnabled ? (status?.idleX ?? 0) : 0;
   const y = idleEnabled ? (status?.idleY ?? 0) : 0;
   const rotation = status?.bodyRotation ?? 0;
-  const blink = behaviourEnabled ? (status?.blinkState ?? "open") : "open";
+  const blink = status?.blinkState ?? "open";
 
   return (
     <div className="grid w-full max-w-2xl grid-cols-2 gap-x-5 gap-y-3 rounded-lg border border-white/[0.06] bg-white/[0.015] px-4 py-3 font-mono text-[10px] sm:grid-cols-5">

@@ -57,7 +57,7 @@ export default function HomeState({
   renderScale,
   calibration,
   idle,
-  behaviourEnabled,
+  autoBehaviourEnabled,
   triggerRequest,
   onBehaviourStatus,
   displayMode,
@@ -85,8 +85,8 @@ export default function HomeState({
 
   // Live config is read through a ref so changing a slider never restarts the
   // animation loop (which would visibly reset the character).
-  const cfg = useRef({ calibration, idle, behaviourEnabled, onBehaviourStatus });
-  cfg.current = { calibration, idle, behaviourEnabled, onBehaviourStatus };
+  const cfg = useRef({ calibration, idle, autoBehaviourEnabled, onBehaviourStatus });
+  cfg.current = { calibration, idle, autoBehaviourEnabled, onBehaviourStatus };
 
   const reset = useCallback(() => {
     controller.current.reset();
@@ -137,35 +137,38 @@ export default function HomeState({
     const frameInterval = 1000 / fps;
 
     const build = (dt: number) => {
-      const { calibration: cal, idle: cfgIdle, behaviourEnabled: on } = cfg.current;
+      const {
+        calibration: cal,
+        idle: cfgIdle,
+        autoBehaviourEnabled,
+      } = cfg.current;
       const bc = behaviourConfig(cfgIdle);
 
-      if (on) controller.current.update(dt, bc);
+      controller.current.update(dt, bc, autoBehaviourEnabled);
       const d = controller.current.pose();
 
       // Ambient sees the behaviour's vertical contribution too, so the soft-body
       // lag reacts to real movement rather than only to the drift.
       const amb = cfgIdle.enabled
-        ? ambient.current.update(dt, cfgIdle, on ? d.blobY : 0)
+        ? ambient.current.update(dt, cfgIdle, d.blobY)
         : ZERO_AMBIENT;
 
-      const active = on;
-      const dsx = (active ? d.blobScaleX : 0) + amb.squashX;
-      const dsy = (active ? d.blobScaleY : 0) + amb.squashY;
-      jellyTarget.x = amb.x + (active ? d.blobX : 0);
-      jellyTarget.y = amb.y + (active ? d.blobY : 0);
-      jellyTarget.rotation = amb.rotation + (active ? d.blobRotation : 0);
+      const dsx = d.blobScaleX + amb.squashX;
+      const dsy = d.blobScaleY + amb.squashY;
+      jellyTarget.x = amb.x + d.blobX;
+      jellyTarget.y = amb.y + d.blobY;
+      jellyTarget.rotation = amb.rotation + d.blobRotation;
       jellyTarget.scaleX = clampDeform(dsx);
       jellyTarget.scaleY = clampDeform(dsy);
-      jellyTarget.bodyX = active ? d.bodyX : 0;
-      jellyTarget.bodyY = active ? d.bodyY : 0;
-      jellyTarget.bodyRotation = active ? d.bodyRotation : 0;
-      jellyTarget.bodyScaleX = active ? clampBodyDeform(d.bodyScaleX) : 0;
-      jellyTarget.bodyScaleY = active ? clampBodyDeform(d.bodyScaleY) : 0;
-      jellyTarget.bodySkewX = active ? d.bodySkewX : 0;
-      jellyTarget.bodySkewY = active ? d.bodySkewY : 0;
-      jellyTarget.bodyOriginX = active ? d.bodyOriginX : 0;
-      jellyTarget.bodyOriginY = active ? d.bodyOriginY : 0.82;
+      jellyTarget.bodyX = d.bodyX;
+      jellyTarget.bodyY = d.bodyY;
+      jellyTarget.bodyRotation = d.bodyRotation;
+      jellyTarget.bodyScaleX = clampBodyDeform(d.bodyScaleX);
+      jellyTarget.bodyScaleY = clampBodyDeform(d.bodyScaleY);
+      jellyTarget.bodySkewX = d.bodySkewX;
+      jellyTarget.bodySkewY = d.bodySkewY;
+      jellyTarget.bodyOriginX = d.bodyOriginX;
+      jellyTarget.bodyOriginY = d.bodyOriginY;
       jellyTarget.jellyAmount = cfgIdle.jellyAmount;
       jellyTarget.rippleAmount = cfgIdle.rippleAmount;
       const physical = physics.current.update(dt, jellyTarget);
@@ -209,40 +212,40 @@ export default function HomeState({
           },
           leftEye: {
             ...NEUTRAL_ELEMENT,
-            x: active ? d.eyeX + d.leftEyeX : 0,
-            y: active ? d.eyeY + d.leftEyeY : 0,
+            x: d.eyeX + d.leftEyeX,
+            y: d.eyeY + d.leftEyeY,
             // Gaze moves texture; socketX/socketY stay at the body-space
             // anchor. eyeOpen drives an anchored top-down lid closure.
-            eyeOpen: active ? d.eyeLid * d.leftEyeTension : 1,
-            eyeSocketScaleX: 1 + (active ? d.leftEyeScaleX : 0),
-            eyeSocketScaleY: 1 + (active ? d.leftEyeScaleY : 0),
-            browLift: active ? d.leftEyeTension - 1 : 0,
-            scaleX: 1 + (active ? d.leftEyeScaleX : 0),
-            scaleY: 1 + (active ? d.leftEyeScaleY : 0),
-            rotation: active ? d.leftEyeRotation : 0,
+            eyeOpen: d.eyeLid * d.leftEyeTension,
+            eyeSocketScaleX: 1 + d.leftEyeScaleX,
+            eyeSocketScaleY: 1 + d.leftEyeScaleY,
+            browLift: d.leftEyeTension - 1,
+            scaleX: 1 + d.leftEyeScaleX,
+            scaleY: 1 + d.leftEyeScaleY,
+            rotation: d.leftEyeRotation,
           },
           rightEye: {
             ...NEUTRAL_ELEMENT,
-            x: active ? d.eyeX + d.rightEyeX : 0,
-            y: active ? d.eyeY + d.rightEyeY : 0,
-            eyeOpen: active ? d.eyeLid * d.rightEyeTension : 1,
-            eyeSocketScaleX: 1 + (active ? d.rightEyeScaleX : 0),
-            eyeSocketScaleY: 1 + (active ? d.rightEyeScaleY : 0),
-            browLift: active ? d.rightEyeTension - 1 : 0,
-            scaleX: 1 + (active ? d.rightEyeScaleX : 0),
-            scaleY: 1 + (active ? d.rightEyeScaleY : 0),
-            rotation: active ? d.rightEyeRotation : 0,
+            x: d.eyeX + d.rightEyeX,
+            y: d.eyeY + d.rightEyeY,
+            eyeOpen: d.eyeLid * d.rightEyeTension,
+            eyeSocketScaleX: 1 + d.rightEyeScaleX,
+            eyeSocketScaleY: 1 + d.rightEyeScaleY,
+            browLift: d.rightEyeTension - 1,
+            scaleX: 1 + d.rightEyeScaleX,
+            scaleY: 1 + d.rightEyeScaleY,
+            rotation: d.rightEyeRotation,
           },
           mouth: {
             ...NEUTRAL_ELEMENT,
-            x: active ? d.mouthX : 0,
-            y: active ? d.mouthY : 0,
-            scaleX: 1 + (active ? d.mouthScaleX : 0),
-            scaleY: 1 + (active ? d.mouthScaleY : 0),
-            rotation: active ? d.mouthRotation : 0,
-            opacity: active ? d.mouthOpacity : 1,
-            mouthCurve: active ? d.mouthCurve : 0.82,
-            mouthO: active ? d.mouthO : 0,
+            x: d.mouthX,
+            y: d.mouthY,
+            scaleX: 1 + d.mouthScaleX,
+            scaleY: 1 + d.mouthScaleY,
+            rotation: d.mouthRotation,
+            opacity: d.mouthOpacity,
+            mouthCurve: d.mouthCurve,
+            mouthO: d.mouthO,
           },
         },
         cal

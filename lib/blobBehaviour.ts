@@ -332,6 +332,7 @@ export interface HomeActivityStatus extends BehaviourStatus {
 export class BehaviourController {
   private clock = 0;
   private initialized = false;
+  private autoWasEnabled = true;
   private rand = mulberry32(0x1a11ee);
   private mood: HomeMood = "CONTENT";
   private lastMood: HomeMood = "CONTENT";
@@ -423,6 +424,7 @@ export class BehaviourController {
   reset() {
     this.clock = 0;
     this.initialized = false;
+    this.autoWasEnabled = true;
     this.rand = mulberry32(0x1a11ee);
     this.mood = "CONTENT";
     this.lastMood = "CONTENT";
@@ -549,9 +551,18 @@ export class BehaviourController {
     this.startBody(id, cfg);
   }
 
-  update(dtMs: number, cfg: BehaviourConfig) {
+  /**
+   * Advance the presentation every frame. `autoEnabled` only gates the seeded
+   * playlist; direct trigger() calls and any active spring are always allowed
+   * to finish, which keeps manual cue inspection useful.
+   */
+  update(dtMs: number, cfg: BehaviourConfig, autoEnabled = true) {
     this.ensureSchedule(cfg);
     this.clock += Math.max(0, dtMs);
+
+    if (!autoEnabled && this.autoWasEnabled) this.clearBeatCues();
+    if (autoEnabled && !this.autoWasEnabled) this.resumeAutomaticSchedule(cfg);
+    this.autoWasEnabled = autoEnabled;
 
     if (this.gazeReleaseAt > 0 && this.clock >= this.gazeReleaseAt) {
       this.gazeReleaseAt = 0;
@@ -586,14 +597,16 @@ export class BehaviourController {
       this.followScaleYTarget = 0;
     }
 
-    this.runBeatCues(cfg);
+    if (autoEnabled) {
+      this.runBeatCues(cfg);
 
-    if (this.clock >= this.nextMoodAt) this.pickMood(cfg);
-    if (this.clock >= this.nextMicroAt) this.pickMicro(cfg);
-    if (this.clock >= this.nextBeatAt && this.beatUntil === 0)
-      this.pickBeat(cfg);
-    if (this.clock >= this.nextBlinkAt && this.blinkStartedAt < 0)
-      this.startBlink(this.rand() < 0.14, cfg);
+      if (this.clock >= this.nextMoodAt) this.pickMood(cfg);
+      if (this.clock >= this.nextMicroAt) this.pickMicro(cfg);
+      if (this.clock >= this.nextBeatAt && this.beatUntil === 0)
+        this.pickBeat(cfg);
+      if (this.clock >= this.nextBlinkAt && this.blinkStartedAt < 0)
+        this.startBlink(this.rand() < 0.14, cfg);
+    }
 
     this.updateBlink();
     this.updateMouthTurn();
@@ -612,6 +625,18 @@ export class BehaviourController {
     this.nextBodyAt = this.nextBeatAt;
     this.nextBlinkAt = this.clock + this.blinkGap(cfg);
     this.applyMoodTargets();
+  }
+
+  /** Start a fresh, non-backlogged playlist after manual inspection. */
+  private resumeAutomaticSchedule(cfg: BehaviourConfig) {
+    this.nextMoodAt = this.clock + this.interval(5200, 8200, cfg);
+    this.nextMicroAt = this.clock + this.interval(350, 900, cfg);
+    this.nextBeatAt = this.clock + this.interval(1000, 1700, cfg);
+    this.nextGazeAt = this.nextBeatAt;
+    this.nextExpressionAt = this.nextBeatAt;
+    this.nextMouthAt = this.nextBeatAt;
+    this.nextBodyAt = this.nextBeatAt;
+    this.nextBlinkAt = this.clock + this.blinkGap(cfg);
   }
 
   private clearBeatCues() {

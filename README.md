@@ -161,9 +161,10 @@ Scheduling uses a seeded PRNG advanced only inside the animation loop, so runs
 are reproducible, `Reset` restarts the schedule exactly, `Pause` freezes it,
 and nothing random happens during render.
 
-**Behaviour** toggles the micro-behaviours (leaving the neutral pose plus
-ambient); **Idle** toggles the ambient layer. Both off is a completely static
-calibrated pose. The side tuning rail exposes Float, Drift, Breath, Squash,
+**Auto** toggles the seeded HOME behaviour playlist; the individual cue buttons
+remain available for manual testing when Auto is off. **Idle** toggles the
+ambient layer. With both Auto and Idle off, the calibrated pose is static until
+a cue is fired. The side tuning rail exposes Float, Drift, Breath, Squash,
 Jelly, Ripple, Blink, Gaze, Rotate, and Activity controls beside the device so
 changes can be judged live. **Warm** changes the complete simulator UI and LCD
 preview to a low-glare warm testing theme; hardware/default view remains dark.
