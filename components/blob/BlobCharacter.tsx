@@ -73,6 +73,49 @@ function ellipsePath(
   ctx.ellipse(x, y, radiusX, radiusY, 0, 0, Math.PI * 2);
 }
 
+function drawMouthShape(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  curve: number,
+  oAmount: number
+) {
+  const o = clamp(oAmount, 0, 1);
+  const lineHalf = Math.max(0.65, height * 0.18) * (1 - o);
+  const ovalHalf = Math.max(1.25, height * 0.46) * o;
+  const mouthWidth = width * (1 - o * 0.2);
+  const centerY = curve * height * 0.82 * (1 - o);
+  const topEnd = -lineHalf;
+  const bottomEnd = lineHalf;
+  const topCenter = centerY - lineHalf - ovalHalf;
+  const bottomCenter = centerY + lineHalf + ovalHalf;
+  const halfWidth = mouthWidth / 2;
+
+  // One filled path morphs between a curved mouth and a rounded O. No asset
+  // swap, opacity trick, or rotation is used at any point in the transition.
+  ctx.beginPath();
+  ctx.moveTo(-halfWidth, topEnd);
+  ctx.bezierCurveTo(
+    -halfWidth * 0.72,
+    topCenter,
+    halfWidth * 0.72,
+    topCenter,
+    halfWidth,
+    topEnd
+  );
+  ctx.bezierCurveTo(
+    halfWidth * 0.72,
+    bottomCenter,
+    -halfWidth * 0.72,
+    bottomCenter,
+    -halfWidth,
+    bottomEnd
+  );
+  ctx.closePath();
+  ctx.fillStyle = "#050506";
+  ctx.fill();
+}
+
 function drawRippleBody(
   ctx: CanvasRenderingContext2D,
   image: HTMLCanvasElement,
@@ -188,7 +231,8 @@ export default function BlobCharacter({
       );
     }
 
-    // Facial layers already carry alpha; bake them at their neutral size.
+    // Eye layers carry alpha and are baked at their neutral size. Mouth is
+    // procedural so its smile, frown and O can share one continuous shape.
     const face = {} as Record<FaceLayerId, HTMLCanvasElement>;
     for (const id of FACE_ORDER) {
       const asset = assets.face[id];
@@ -268,9 +312,12 @@ export default function BlobCharacter({
       const socketScaleY = clamp(t.eyeSocketScaleY, 0.72, 1.35);
       const socketWidth = a.width * socketScaleX;
       const socketHeight = a.height * socketScaleY;
-      const open = clamp(t.eyeOpen, 0, 1.12);
-      const clipTop = socketHeight / 2 - socketHeight * open;
-      const clipHeight = socketHeight * open + 1.5;
+      const open = clamp(t.eyeOpen, 0, 1);
+      // Blink closes from both lids. Keep a tiny upper-lid lead so it still
+      // reads as a blink, while never leaving the lower half exposed.
+      const visibleHeight = socketHeight * open;
+      const visibleTop = -visibleHeight / 2 - socketHeight * 0.035;
+      const visibleBottom = visibleTop + visibleHeight + 1.5;
       const textureScaleX = Math.max(0.1, faceCompensationX * t.scaleX);
       const textureScaleY = Math.max(0.1, faceCompensationY * t.scaleY);
 
@@ -285,7 +332,7 @@ export default function BlobCharacter({
         ellipsePath(ctx, 0, 0, socketWidth / 2, socketHeight / 2);
         ctx.clip();
         ctx.beginPath();
-        ctx.rect(-socketWidth / 2, clipTop, socketWidth, clipHeight);
+        ctx.rect(-socketWidth / 2, visibleTop, socketWidth, visibleBottom - visibleTop);
         ctx.clip();
 
         ctx.translate(textureX - socketX, textureY - socketY);
@@ -300,8 +347,8 @@ export default function BlobCharacter({
       // Do not leave a transparent half-eye during a blink. Repaint the
       // covered part with the exact body texture already underneath it. This
       // creates a coloured, surface-matched lid without inventing new art.
-      const coverHeight = socketHeight * (1 - Math.min(1, open));
-      if (coverHeight > 0.001) {
+      const coverAmount = 1 - Math.min(1, open);
+      if (coverAmount > 0.001) {
         ctx.save();
         ctx.globalAlpha = t.opacity;
         applyBodySurface(ctx, center, bw, bh, bt);
@@ -311,11 +358,20 @@ export default function BlobCharacter({
         ellipsePath(ctx, socketX, socketY, socketWidth / 2, socketHeight / 2);
         ctx.clip();
         ctx.beginPath();
+        const coverTop = -socketHeight / 2;
+        const coverBottom = socketHeight / 2;
+        const lidBoundary = visibleHeight / 2 + socketHeight * 0.035;
         ctx.rect(
           socketX - socketWidth / 2,
-          socketY - socketHeight / 2,
+          socketY + coverTop,
           socketWidth,
-          coverHeight
+          lidBoundary - coverTop
+        );
+        ctx.rect(
+          socketX - socketWidth / 2,
+          socketY + lidBoundary,
+          socketWidth,
+          coverBottom - lidBoundary
         );
         ctx.clip();
         ctx.drawImage(layers.body, -bw / 2, -bh / 2, bw, bh);
@@ -330,11 +386,14 @@ export default function BlobCharacter({
       applyBodySurface(ctx, center, bw, bh, bt);
       ctx.translate(a.x - center + t.x, a.y - center + t.y);
       ctx.rotate((t.rotation * Math.PI) / 180);
-      ctx.scale(
-        faceCompensationX * t.scaleX,
-        faceCompensationY * t.scaleY
+      ctx.scale(faceCompensationX, faceCompensationY);
+      drawMouthShape(
+        ctx,
+        a.width * 0.56 * clamp(t.scaleX, 0.62, 1.18),
+        a.height * 0.52 * clamp(t.scaleY, 0.7, 1.24),
+        clamp(t.mouthCurve, -1, 1),
+        clamp(t.mouthO, 0, 1)
       );
-      ctx.drawImage(layers.face.mouth, -a.width / 2, -a.height / 2, a.width, a.height);
       ctx.restore();
     };
 

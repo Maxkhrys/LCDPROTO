@@ -117,6 +117,8 @@ export interface PoseDelta {
   mouthScaleY: number;
   mouthRotation: number;
   mouthOpacity: number;
+  mouthCurve: number;
+  mouthO: number;
 }
 
 export const NEUTRAL_DELTA: PoseDelta = {
@@ -155,6 +157,8 @@ export const NEUTRAL_DELTA: PoseDelta = {
   mouthScaleY: 0,
   mouthRotation: 0,
   mouthOpacity: 1,
+  mouthCurve: 0.82,
+  mouthO: 0,
 };
 
 const clamp = (v: number, min: number, max: number) =>
@@ -213,6 +217,7 @@ interface MoodPose {
   mouthScaleX: number;
   mouthScaleY: number;
   mouthRotation: number;
+  mouthCurve: number;
 }
 
 const MOODS: Record<HomeMood, MoodPose> = {
@@ -226,6 +231,7 @@ const MOODS: Record<HomeMood, MoodPose> = {
     mouthScaleX: 0,
     mouthScaleY: 0,
     mouthRotation: 0,
+    mouthCurve: 0.84,
   },
   CURIOUS: {
     leftTension: 1.06,
@@ -237,6 +243,7 @@ const MOODS: Record<HomeMood, MoodPose> = {
     mouthScaleX: -0.12,
     mouthScaleY: 0.09,
     mouthRotation: 2,
+    mouthCurve: 0.45,
   },
   SLEEPY: {
     leftTension: 0.84,
@@ -248,6 +255,7 @@ const MOODS: Record<HomeMood, MoodPose> = {
     mouthScaleX: 0.05,
     mouthScaleY: -0.05,
     mouthRotation: -1.5,
+    mouthCurve: 0.18,
   },
   AMUSED: {
     leftTension: 0.9,
@@ -259,6 +267,7 @@ const MOODS: Record<HomeMood, MoodPose> = {
     mouthScaleX: 0.075,
     mouthScaleY: 0.025,
     mouthRotation: 1.5,
+    mouthCurve: 0.96,
   },
   DISTRACTED: {
     leftTension: 0.97,
@@ -270,6 +279,7 @@ const MOODS: Record<HomeMood, MoodPose> = {
     mouthScaleX: -0.06,
     mouthScaleY: 0.02,
     mouthRotation: 3,
+    mouthCurve: 0.25,
   },
   THOUGHTFUL: {
     leftTension: 0.9,
@@ -281,6 +291,7 @@ const MOODS: Record<HomeMood, MoodPose> = {
     mouthScaleX: -0.08,
     mouthScaleY: 0.015,
     mouthRotation: -4,
+    mouthCurve: -0.12,
   },
 };
 
@@ -387,6 +398,8 @@ export class BehaviourController {
   private readonly mouthScaleX = new SpringAxis();
   private readonly mouthScaleY = new SpringAxis();
   private readonly mouthRotation = new SpringAxis();
+  private readonly mouthCurve = new SpringAxis(0.82);
+  private readonly mouthO = new SpringAxis();
   private mouthOpacityValue = 1;
   private mouthTurnStartedAt = -1;
   private mouthTurnTarget = 0;
@@ -463,6 +476,8 @@ export class BehaviourController {
     this.mouthScaleX.reset();
     this.mouthScaleY.reset();
     this.mouthRotation.reset();
+    this.mouthCurve.reset(0.82);
+    this.mouthO.reset();
     this.mouthOpacityValue = 1;
     this.mouthTurnStartedAt = -1;
     this.mouthTurnTarget = 0;
@@ -852,6 +867,8 @@ export class BehaviourController {
       this.mouthY.target = 0.7;
       this.mouthScaleX.target = 0.09;
       this.mouthScaleY.target = -0.1;
+      this.mouthCurve.target = 0.5;
+      this.mouthO.target = 0;
       this.setMouthRotationTarget(0);
       duration = 900 + this.rand() * 500;
     } else if (id === "MOUTH_TWITCH") {
@@ -860,24 +877,27 @@ export class BehaviourController {
       this.mouthY.target = -0.08;
       this.mouthScaleX.target = 0.04;
       this.mouthScaleY.target = -0.02;
+      this.mouthCurve.target = 0.62 + dir * 0.18;
+      this.mouthO.target = 0;
       this.setMouthRotationTarget(dir * 4.5);
       duration = 380 + this.rand() * 260;
     } else if (id === "MOUTH_O") {
       this.mouthX.target = 0;
       this.mouthY.target = -0.28;
-      this.mouthScaleX.target = -0.62;
-      this.mouthScaleY.target = -0.04;
+      this.mouthScaleX.target = -0.16;
+      this.mouthScaleY.target = 0.08;
+      this.mouthCurve.target = 0;
+      this.mouthO.target = 1;
       this.setMouthRotationTarget(0);
       duration = 820 + this.rand() * 520;
     } else {
       this.mouthX.target = 0;
       this.mouthY.target = 0.3;
       this.mouthScaleX.target = -0.12;
-      this.mouthScaleY.target = -0.02;
-      const facing = this.mouthTurnStartedAt >= 0
-        ? this.mouthTurnTarget
-        : this.mouthRotation.value;
-      this.setMouthRotationTarget(Math.abs(facing) >= 90 ? 0 : 180);
+      this.mouthScaleY.target = 0.06;
+      this.mouthCurve.target = -1;
+      this.mouthO.target = 0;
+      this.setMouthRotationTarget(0);
       duration = 1100 + this.rand() * 650;
     }
     this.mouthAction = id;
@@ -1039,63 +1059,23 @@ export class BehaviourController {
     this.mouthY.target = mood.mouthY;
     this.mouthScaleX.target = mood.mouthScaleX;
     this.mouthScaleY.target = mood.mouthScaleY;
+    this.mouthCurve.target = mood.mouthCurve;
+    this.mouthO.target = 0;
     this.setMouthRotationTarget(mood.mouthRotation);
   }
 
-  /**
-   * Large mouth orientation changes are discrete shape changes, not turns.
-   * Hide the small mouth, swap orientation while hidden, then reveal it. This
-   * prevents the baked U-shaped artwork from visibly spinning through 90°.
-   */
   private setMouthRotationTarget(target: number) {
-    if (this.mouthTurnStartedAt >= 0) {
-      this.mouthTurnTarget = target;
-      return;
-    }
-    if (Math.abs(target - this.mouthRotation.value) <= 42) {
-      this.mouthRotation.target = target;
-      return;
-    }
-    this.mouthTurnStartedAt = this.clock;
-    this.mouthTurnTarget = target;
+    // Mouth orientation stays stable. Smile/frown morph belongs to vertical
+    // scale, so the artwork never spins or vanishes between expressions.
+    this.mouthRotation.target = clamp(target, -12, 12);
+    this.mouthTurnStartedAt = -1;
+    this.mouthTurnTarget = 0;
     this.mouthTurnSnapped = false;
-    this.mouthRotation.target = this.mouthRotation.value;
+    this.mouthOpacityValue = 1;
   }
 
   private updateMouthTurn() {
-    if (this.mouthTurnStartedAt < 0) {
-      this.mouthOpacityValue = 1;
-      return;
-    }
-
-    const elapsed = this.clock - this.mouthTurnStartedAt;
-    const fadeOutMs = 92;
-    const hiddenHoldMs = 34;
-    const fadeInMs = 128;
-
-    if (!this.mouthTurnSnapped) {
-      if (elapsed < fadeOutMs) {
-        this.mouthOpacityValue = 1 - smoothstep(elapsed / fadeOutMs);
-        return;
-      }
-      this.mouthRotation.value = this.mouthTurnTarget;
-      this.mouthRotation.target = this.mouthTurnTarget;
-      this.mouthRotation.velocity = 0;
-      this.mouthTurnSnapped = true;
-      this.mouthOpacityValue = 0;
-      return;
-    }
-
-    const reveal = elapsed - fadeOutMs - hiddenHoldMs;
-    if (reveal < 0) {
-      this.mouthOpacityValue = 0;
-    } else if (reveal < fadeInMs) {
-      this.mouthOpacityValue = smoothstep(reveal / fadeInMs);
-    } else {
-      this.mouthOpacityValue = 1;
-      this.mouthTurnStartedAt = -1;
-      this.mouthTurnSnapped = false;
-    }
+    this.mouthOpacityValue = 1;
   }
 
   private stepFaceSprings(dtMs: number) {
@@ -1121,6 +1101,8 @@ export class BehaviourController {
       this.mouthScaleX.step(dt, 6.8, 0.69);
       this.mouthScaleY.step(dt, 6.6, 0.7);
       this.mouthRotation.step(dt, 5.5, 0.72);
+      this.mouthCurve.step(dt, 5.8, 0.72);
+      this.mouthO.step(dt, 6.2, 0.7);
     }
   }
 
@@ -1178,6 +1160,8 @@ export class BehaviourController {
     this.delta.mouthScaleY = this.mouthScaleY.value;
     this.delta.mouthRotation = this.mouthRotation.value;
     this.delta.mouthOpacity = this.mouthOpacityValue;
+    this.delta.mouthCurve = this.mouthCurve.value;
+    this.delta.mouthO = this.mouthO.value;
     return this.delta;
   }
 

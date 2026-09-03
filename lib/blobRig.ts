@@ -250,6 +250,9 @@ export interface ElementTransform {
   eyeOpen: number;
   eyeSocketScaleX: number;
   eyeSocketScaleY: number;
+  /** Procedural mouth shape controls. */
+  mouthCurve: number;
+  mouthO: number;
   /** Body-only surface ripple offsets, in 240-space pixels. */
   rippleTop: number;
   rippleUpper: number;
@@ -293,6 +296,8 @@ export const NEUTRAL_ELEMENT: ElementTransform = {
   eyeOpen: 1,
   eyeSocketScaleX: 1,
   eyeSocketScaleY: 1,
+  mouthCurve: 0,
+  mouthO: 0,
   rippleTop: 0,
   rippleUpper: 0,
   rippleLower: 0,
