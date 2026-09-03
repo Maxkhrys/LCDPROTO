@@ -35,7 +35,9 @@ export type BehaviourId =
   | "MOUTH_RELAX"
   | "MOUTH_TWITCH"
   | "MOUTH_O"
-  | "MOUTH_FLIP";
+  | "MOUTH_FLIP"
+  | "SENSED_WORRIED"
+  | "SENSED_SURPRISED";
 
 export type HomeMood =
   | "CONTENT"
@@ -353,6 +355,7 @@ export class BehaviourController {
   private beatExpressionId: ExpressionBehaviour | null = null;
   private beatMouthId: MouthBehaviour | null = null;
   private beatBodyId: BodyBehaviour | null = null;
+  private manualBeat = false;
 
   private gazeAction = "RESTING";
   private lidAction = "OPEN";
@@ -548,6 +551,10 @@ export class BehaviourController {
       this.startMouth(id);
       return;
     }
+    if (id === "SENSED_WORRIED" || id === "SENSED_SURPRISED") {
+      this.startSensedVariant(id, cfg);
+      return;
+    }
     this.startBody(id, cfg);
   }
 
@@ -560,7 +567,8 @@ export class BehaviourController {
     this.ensureSchedule(cfg);
     this.clock += Math.max(0, dtMs);
 
-    if (!autoEnabled && this.autoWasEnabled) this.clearBeatCues();
+    if (!autoEnabled && this.autoWasEnabled && !this.manualBeat)
+      this.clearBeatCues();
     if (autoEnabled && !this.autoWasEnabled) this.resumeAutomaticSchedule(cfg);
     this.autoWasEnabled = autoEnabled;
 
@@ -647,6 +655,7 @@ export class BehaviourController {
     this.beatExpressionId = null;
     this.beatMouthId = null;
     this.beatBodyId = null;
+    this.manualBeat = false;
   }
 
   /** Deliver delayed cues in face-first, body-last order. */
@@ -677,6 +686,7 @@ export class BehaviourController {
       this.beatBodyAt === 0
     ) {
       this.beatUntil = 0;
+      this.manualBeat = false;
     }
   }
 
@@ -928,6 +938,35 @@ export class BehaviourController {
     this.mouthAction = id;
     this.mouthReleaseAt = this.clock + duration;
     this.mark(id, duration + 300);
+  }
+
+  /**
+   * SENSED variants are short coordinated thoughts, not separate animation
+   * systems. Eyes lead, mouth follows, and the jelly body answers last while
+   * the normal SENSED idle playlist remains available between beats.
+   */
+  private startSensedVariant(
+    id: "SENSED_WORRIED" | "SENSED_SURPRISED",
+    cfg: BehaviourConfig
+  ) {
+    this.clearBeatCues();
+    const worried = id === "SENSED_WORRIED";
+    this.startGaze(worried ? "LOOK_DOWN" : "LOOK_UP", cfg);
+    this.beatExpressionAt = this.clock + 58;
+    this.beatExpressionId = worried ? "SOFT_SQUINT" : "CURIOUS_WIDE";
+    this.beatMouthAt = this.clock + 94;
+    this.beatMouthId = worried ? "MOUTH_FLIP" : "MOUTH_O";
+    this.beatBodyAt = this.clock + 122;
+    this.beatBodyId = worried ? "BODY_SETTLE" : "TALL_STRETCH";
+    this.beatUntil = this.clock + (worried ? 1900 : 1650);
+    this.manualBeat = true;
+    this.nextBeatAt = Math.max(this.nextBeatAt, this.beatUntil + 260);
+    this.activityId = id;
+    this.activityStartedAt = this.clock;
+    this.activityUntil = this.beatUntil;
+    // Let the authored beat land cleanly before an automatic blink competes
+    // with it. Manual blink tests still work immediately.
+    this.nextBlinkAt = Math.max(this.nextBlinkAt, this.beatUntil + 180);
   }
 
   private startBody(id: BehaviourId, cfg: BehaviourConfig) {

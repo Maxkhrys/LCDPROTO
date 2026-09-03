@@ -191,11 +191,21 @@ appear under their own state filter when authored.
 
 ## SENSED state
 
-SENSED now uses the same layered Blob rig with a quiet proximity field behind
-it: five thin green orbital rings and 18 sparse signal points. Each point has
-its own deterministic phase and period, so only a few points twinkle at once;
-the field never becomes a dense radar or a full-screen effect. The field is
-drawn at native 240-space and pauses with the simulator.
+SENSED uses the same layered Blob rig and HOME motion stack with quieter
+settings: reduced float, jelly, ripple, gaze, and rotation amplitude; wider
+action spacing; and a slower blink cadence. HOME's face-first/body-last
+timing, independent lid/mouth channels, springs, and interruption behaviour
+are shared rather than reimplemented as a separate animation language.
+
+Behind Blob is a quiet proximity field: five thin green orbital rings and 18
+sparse signal points. Each point has its own deterministic phase and period,
+so only a few points twinkle at once; the field never becomes a dense radar or
+a full-screen effect. The field is drawn at native 240-space and pauses with
+the simulator.
+
+Expressions → SENSED includes inherited HOME cues plus two coordinated
+variants: Worried (look down, squint, frown, settle) and Surprised (look up,
+widen, round O, stretch). Both can be previewed manually with Auto disabled.
 
 ## Adding a state's animation
 

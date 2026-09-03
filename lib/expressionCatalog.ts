@@ -1,7 +1,7 @@
 import type { BehaviourId } from "./blobBehaviour";
 import type { DeviceState } from "./deviceStates";
 
-export type ExpressionCategory = "Gaze" | "Lids" | "Body" | "Mouth";
+export type ExpressionCategory = "Gaze" | "Lids" | "Body" | "Mouth" | "Variants";
 export type ExpressionFilter = "ALL" | ExpressionCategory;
 
 export interface ExpressionEntry {
@@ -79,11 +79,30 @@ export const EXPRESSION_FILTERS: readonly ExpressionFilter[] = [
   "Lids",
   "Body",
   "Mouth",
+  "Variants",
 ];
+
+const SENSED_VARIANT_GROUP: ExpressionGroup = {
+  id: "Variants",
+  label: "SENSED variants",
+  entries: [
+    {
+      id: "SENSED_WORRIED",
+      label: "Worried",
+      hint: "down + frown + settle",
+    },
+    {
+      id: "SENSED_SURPRISED",
+      label: "Surprised",
+      hint: "wide + O + stretch",
+    },
+  ],
+};
 
 /** Add each future device-state vocabulary here as it gets authored. */
 export const EXPRESSION_GROUPS_BY_STATE: Partial<
   Record<DeviceState, readonly ExpressionGroup[]>
 > = {
   HOME: HOME_EXPRESSION_GROUPS,
+  SENSED: [...HOME_EXPRESSION_GROUPS, SENSED_VARIANT_GROUP],
 };
