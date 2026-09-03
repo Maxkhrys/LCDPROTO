@@ -30,6 +30,7 @@ components/states/       one file per device state
 public/blob/             Blob-body.png + facial layers
 lib/deviceConfig.ts      resolution, bezel, fps/speed options
 lib/deviceStates.ts      DeviceState type, state table, StateViewProps
+lib/blobPhysics.ts       lightweight soft-body spring follow-through
 ```
 
 ## Design space vs rasterisation
@@ -99,37 +100,45 @@ correction; the layers are drawn exactly as supplied.
 
 ## HOME behaviour system
 
-HOME is a small character behaviour system, not a loop. Two layers compose:
+HOME is a small character behaviour system, not a loop. Three stages compose:
 
-**Ambient** (`lib/blobIdle.ts`) runs continuously — a weightless drift that
-eases between random targets every 7-11s, breathing, and a soft-body lag that
-makes the body trail its own movement so a downward move compresses it slightly
-and rebounds.
+**Ambient** (`lib/blobIdle.ts`) runs continuously — a weightless centre-of-mass
+drift that eases between seeded targets every 3.2-6s, composite breathing,
+sub-degree rotation, and slow silhouette deformation. It starts travelling on
+the first frame rather than sitting at zero for its first leg.
 
 **Behaviours** (`lib/blobBehaviour.ts`) fire one at a time with quiet gaps
-between them. Roughly one gap in five is a long stretch where nothing happens.
+between them. A separate blink deadline prevents expressive actions from
+starving natural eye activity; a due blink waits for the current pose to settle.
 
 | behaviour | weight | duration |
 | --- | --- | --- |
-| NORMAL_BLINK | 34 | 145 ms |
-| GLANCE_LEFT / GLANCE_RIGHT | 11 each | 1500 ms |
-| BODY_SETTLE | 10 | 1150 ms |
-| TINY_SQUISH | 8 | 760 ms |
-| LOOK_UP | 7 | 1650 ms |
-| MOUTH_RELAX | 7 | 1900 ms |
-| MOUTH_TWITCH | 5 | 430 ms |
-| DOUBLE_BLINK | 4 | 440 ms |
+| NORMAL_BLINK | timed | 180 ms |
+| DOUBLE_BLINK | 14% of blink events | 510 ms |
+| GLANCE_LEFT / GLANCE_RIGHT | 14 each | 1450 ms |
+| BODY_SETTLE | 16 | 1080 ms |
+| TINY_SQUISH | 14 | 820 ms |
+| LOOK_UP | 10 | 1550 ms |
+| SOFT_SWAY_LEFT / SOFT_SWAY_RIGHT | 8 each | 1600 ms |
+| MOUTH_RELAX | 9 | 1550 ms |
+| MOUTH_TWITCH | 7 | 620 ms |
 
-A behaviour never repeats back to back, and after a glance there is a 35%
-chance of a quick follow-up blink — a tell that reads as spontaneous.
+A non-blink behaviour never repeats back to back. Default action starts average
+about 2.6s apart in a five-minute 30 FPS deterministic run. Blink events average
+9/minute, with double blinks bringing visible lid closures to about 10.2/minute.
 
 ### Face and body stay connected
 
-Glances move the eyes first and the body follows ~8.5% of the behaviour later,
-leaning 0.75 degrees and shifting 0.85px, then settling after the eyes return.
-That lag is what stops the face and body reading as separate layers. Body
-deformation is applied to the **whole character**, not to the body layer alone,
-so the face is never left sliding across the body.
+Glances move the eyes first and the body follows about 102ms later, leaning 1.1
+degrees and shifting 1.15px. The eyes begin returning before the body, and body
+settles last. Body deformation is applied to the **whole character**, so the
+face is never left sliding across the body.
+
+**Jelly physics** (`lib/blobPhysics.ts`) filters translation, rotation, and
+squash targets through five underdamped scalar springs. The body trails, passes
+its target once, then loses energy quickly. Spring integration uses small
+substeps so 30 and 60 FPS previews have matching motion. It is directly portable
+to embedded code and needs no mesh, blur, shader, video, or sprite sequence.
 
 ### Interruption
 
@@ -137,7 +146,7 @@ so the face is never left sliding across the body.
 `cancel()` abandons whatever is running and returns to REST, and `trigger(id)`
 cuts in immediately. Every behaviour is a delta on the neutral pose, so a
 future device state can take the rig over on any frame without inheriting a
-half-finished glance. Total body deformation is clamped to +/-1.5% regardless
+half-finished glance. Total body deformation is clamped to +/-2% regardless
 of what the layers add up to.
 
 Scheduling uses a seeded PRNG advanced only inside the animation loop, so runs

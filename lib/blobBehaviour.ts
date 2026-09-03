@@ -24,6 +24,8 @@ export type BehaviourId =
   | "LOOK_UP"
   | "BODY_SETTLE"
   | "TINY_SQUISH"
+  | "SOFT_SWAY_LEFT"
+  | "SOFT_SWAY_RIGHT"
   | "MOUTH_RELAX"
   | "MOUTH_TWITCH";
 
@@ -69,6 +71,8 @@ export interface BehaviourConfig {
   squash: number;
   /** Scales every quiet gap. 1 = the tuned default. */
   paceScale: number;
+  /** Mean time between blinks, before deterministic jitter. */
+  blinkIntervalMs: number;
 }
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -82,7 +86,7 @@ const smoothstep = (t: number) => {
  * whole envelope later, which is how the body trails the eyes.
  */
 function envelope(p: number, attack: number, release: number, lag = 0): number {
-  const t = p - lag;
+  const t = (p - lag) / (1 - lag);
   if (t <= 0 || t >= 1) return 0;
   if (t < attack) return smoothstep(t / attack);
   if (t > 1 - release) return smoothstep((1 - t) / release);
@@ -98,7 +102,7 @@ function lidCurve(p: number): number {
     : 1 - smoothstep((p - CLOSE) / (1 - CLOSE));
 }
 
-const LID_MIN = 0.06;
+const LID_MIN = 0.07;
 
 interface BehaviourDef {
   duration: number;
@@ -107,21 +111,34 @@ interface BehaviourDef {
   evaluate: (p: number, cfg: BehaviourConfig, out: PoseDelta) => void;
 }
 
-/** Body trails the eyes by this fraction of a glance. ~120ms at 1.5s. */
-const BODY_LAG = 0.085;
+/** Body trails the face by this fraction of a behaviour. Roughly 90-115ms. */
+const BODY_LAG = 0.07;
 
 function glance(dir: 1 | -1): BehaviourDef["evaluate"] {
   return (p, cfg, out) => {
-    const eye = envelope(p, 0.13, 0.34);
+    const eye = envelope(p, 0.12, 0.4);
     // The body starts after the eyes and settles after them too, which is what
     // stops the face and body reading as separate layers.
-    const body = envelope(p, 0.2, 0.42, BODY_LAG);
-    out.eyeX = dir * cfg.gazePx * 1.55 * eye;
-    out.eyeY = -0.15 * eye;
-    out.blobRotation = dir * 0.75 * body;
-    out.blobX = dir * 0.85 * body;
-    out.blobScaleX = cfg.squash * 0.35 * body;
-    out.blobScaleY = -cfg.squash * 0.35 * body;
+    const body = envelope(p, 0.2, 0.27, BODY_LAG);
+    out.eyeX = dir * cfg.gazePx * eye;
+    out.eyeY = -0.18 * eye;
+    out.blobRotation = dir * 1.1 * body;
+    out.blobX = dir * 1.15 * body;
+    out.blobScaleX = cfg.squash * 0.32 * body;
+    out.blobScaleY = -cfg.squash * 0.32 * body;
+  };
+}
+
+function softSway(dir: 1 | -1): BehaviourDef["evaluate"] {
+  return (p, cfg, out) => {
+    const face = envelope(p, 0.18, 0.42);
+    const body = envelope(p, 0.24, 0.28, BODY_LAG);
+    // Face shifts first, then mass follows and is last to settle.
+    out.eyeX = dir * 0.8 * face;
+    out.blobX = dir * 1.6 * body;
+    out.blobRotation = dir * 0.7 * body;
+    out.blobScaleX = cfg.squash * 0.3 * body;
+    out.blobScaleY = -cfg.squash * 0.22 * body;
   };
 }
 
@@ -129,90 +146,104 @@ export const BEHAVIOURS: Record<BehaviourId, BehaviourDef> = {
   REST: { duration: 2000, weight: 0, evaluate: () => {} },
 
   NORMAL_BLINK: {
-    duration: 145,
-    weight: 34,
+    duration: 180,
+    weight: 0,
     evaluate: (p, _cfg, out) => {
       out.eyeLid = 1 - lidCurve(p) * (1 - LID_MIN);
     },
   },
 
   DOUBLE_BLINK: {
-    duration: 440,
-    weight: 4,
+    duration: 510,
+    weight: 0,
     evaluate: (p, _cfg, out) => {
       // Two closures with a short beat between them.
-      const first = lidCurve(p / 0.33);
-      const second = lidCurve((p - 0.47) / 0.33);
+      const first = lidCurve(p / 0.3);
+      const second = lidCurve((p - 0.48) / 0.34);
       out.eyeLid = 1 - Math.max(first, second) * (1 - LID_MIN);
     },
   },
 
-  GLANCE_LEFT: { duration: 1500, weight: 11, evaluate: glance(-1) },
-  GLANCE_RIGHT: { duration: 1500, weight: 11, evaluate: glance(1) },
+  GLANCE_LEFT: { duration: 1450, weight: 14, evaluate: glance(-1) },
+  GLANCE_RIGHT: { duration: 1450, weight: 14, evaluate: glance(1) },
 
   LOOK_UP: {
-    duration: 1650,
-    weight: 7,
+    duration: 1550,
+    weight: 10,
     evaluate: (p, cfg, out) => {
-      const eye = envelope(p, 0.15, 0.36);
-      const body = envelope(p, 0.22, 0.44, BODY_LAG);
-      out.eyeY = -cfg.gazePx * 1.35 * eye;
+      const eye = envelope(p, 0.14, 0.4);
+      const body = envelope(p, 0.22, 0.28, BODY_LAG);
+      out.eyeY = -cfg.gazePx * 0.76 * eye;
       // Reaching up reads as a slight vertical stretch.
-      out.blobScaleY = cfg.squash * 0.6 * body;
-      out.blobScaleX = -cfg.squash * 0.45 * body;
-      out.blobY = -0.45 * body;
+      out.blobScaleY = cfg.squash * 0.76 * body;
+      out.blobScaleX = -cfg.squash * 0.5 * body;
+      out.blobY = -0.6 * body;
     },
   },
 
   BODY_SETTLE: {
-    duration: 1150,
-    weight: 10,
+    duration: 1080,
+    weight: 16,
     evaluate: (p, cfg, out) => {
-      // Drop, compress, then a single soft rebound — no cartoon bounce.
-      const drop = Math.sin(Math.PI * p) - 0.32 * Math.sin(2 * Math.PI * p);
-      out.blobY = 1.15 * drop;
-      out.blobScaleY = -cfg.squash * 0.9 * drop;
-      out.blobScaleX = cfg.squash * 0.9 * drop;
+      // One weighted drop and soft recovery. No repeated bounce.
+      const drop = Math.sin(Math.PI * p) + 0.1 * Math.sin(2 * Math.PI * p);
+      out.blobY = 1.35 * drop;
+      out.blobScaleY = -cfg.squash * 0.95 * drop;
+      out.blobScaleX = cfg.squash * 0.82 * drop;
     },
   },
 
   TINY_SQUISH: {
-    duration: 760,
-    weight: 8,
+    duration: 820,
+    weight: 14,
     evaluate: (p, cfg, out) => {
-      const s = Math.sin(Math.PI * p);
-      out.blobScaleX = cfg.squash * 1.15 * s;
-      out.blobScaleY = -cfg.squash * 1.15 * s;
+      const s =
+        p < 0.72
+          ? Math.sin(Math.PI * (p / 0.72))
+          : -0.13 * Math.sin(Math.PI * ((p - 0.72) / 0.28));
+      out.blobScaleX = cfg.squash * 1.18 * s;
+      out.blobScaleY = -cfg.squash * 1.18 * s;
     },
   },
 
+  SOFT_SWAY_LEFT: { duration: 1600, weight: 8, evaluate: softSway(-1) },
+  SOFT_SWAY_RIGHT: { duration: 1600, weight: 8, evaluate: softSway(1) },
+
   MOUTH_RELAX: {
-    duration: 1900,
-    weight: 7,
+    duration: 1550,
+    weight: 9,
     evaluate: (p, _cfg, out) => {
-      const e = envelope(p, 0.26, 0.36);
-      out.mouthScaleX = 0.035 * e;
-      out.mouthScaleY = -0.022 * e;
-      out.mouthY = 0.32 * e;
+      const e = envelope(p, 0.22, 0.38);
+      out.mouthScaleX = 0.05 * e;
+      out.mouthScaleY = -0.04 * e;
+      out.mouthY = 0.55 * e;
     },
   },
 
   MOUTH_TWITCH: {
-    duration: 430,
-    weight: 5,
+    duration: 620,
+    weight: 7,
     evaluate: (p, _cfg, out) => {
       const s = Math.sin(Math.PI * p);
-      out.mouthX = 0.45 * s;
-      out.mouthRotation = 1.5 * s;
-      out.mouthScaleX = 0.018 * s;
+      out.mouthX = 0.7 * s;
+      out.mouthRotation = 2 * s;
+      out.mouthScaleX = 0.025 * s;
     },
   },
 };
 
-/** Behaviours that can be chosen spontaneously. */
-const PICKABLE = (Object.keys(BEHAVIOURS) as BehaviourId[]).filter(
-  (id) => BEHAVIOURS[id].weight > 0
-);
+/** Stable authored order keeps the seeded schedule varied from its first run. */
+const PICKABLE: readonly BehaviourId[] = [
+  "BODY_SETTLE",
+  "GLANCE_LEFT",
+  "MOUTH_RELAX",
+  "SOFT_SWAY_RIGHT",
+  "TINY_SQUISH",
+  "GLANCE_RIGHT",
+  "LOOK_UP",
+  "MOUTH_TWITCH",
+  "SOFT_SWAY_LEFT",
+];
 
 /** Small, fast, deterministic PRNG. */
 function mulberry32(seed: number): () => number {
@@ -233,6 +264,15 @@ export interface BehaviourStatus {
   /** 0..1 through the current behaviour. */
   phase: number;
   remainingMs: number;
+  /** Time until the next scheduled action starts, including current settle. */
+  nextBehaviourMs: number;
+  blinkState: "open" | "closing" | "closed" | "opening";
+}
+
+export interface HomeActivityStatus extends BehaviourStatus {
+  idleX: number;
+  idleY: number;
+  bodyRotation: number;
 }
 
 /**
@@ -242,22 +282,26 @@ export interface BehaviourStatus {
 export class BehaviourController {
   private clock = 0;
   private startedAt = 0;
-  private duration = 1600;
+  private duration = 0;
   private current: BehaviourId = "REST";
   private rand = mulberry32(SEED);
   private lastPerformed: BehaviourId | null = null;
-  private blinkAfterGlance = false;
+  private initialized = false;
+  private nextBehaviourAt = 0;
+  private nextBlinkAt = 0;
   private readonly delta: PoseDelta = { ...NEUTRAL_DELTA };
 
   /** Returns to the neutral pose and restarts the schedule from the top. */
   reset() {
     this.clock = 0;
     this.startedAt = 0;
-    this.duration = 1600;
+    this.duration = 0;
     this.current = "REST";
     this.rand = mulberry32(SEED);
     this.lastPerformed = null;
-    this.blinkAfterGlance = false;
+    this.initialized = false;
+    this.nextBehaviourAt = 0;
+    this.nextBlinkAt = 0;
   }
 
   /**
@@ -268,87 +312,136 @@ export class BehaviourController {
   cancel() {
     this.current = "REST";
     this.startedAt = this.clock;
-    this.duration = this.restDuration(1);
-    this.blinkAfterGlance = false;
+    this.duration = 0;
+    this.nextBehaviourAt = this.clock + 1800;
   }
 
   /** Runs a behaviour now, cutting short anything in progress. */
-  trigger(id: BehaviourId) {
+  trigger(id: BehaviourId, cfg: BehaviourConfig) {
+    this.ensureSchedule(cfg);
+    if (id === "REST") {
+      this.cancel();
+      return;
+    }
+    this.start(id, cfg, this.clock);
+  }
+
+  private start(id: BehaviourId, cfg: BehaviourConfig, at: number) {
     this.current = id;
-    this.startedAt = this.clock;
+    this.startedAt = at;
     this.duration = BEHAVIOURS[id].duration;
-    if (id !== "REST") this.lastPerformed = id;
+    if (BEHAVIOURS[id].weight > 0) this.lastPerformed = id;
+
+    if (id === "NORMAL_BLINK" || id === "DOUBLE_BLINK") {
+      this.nextBlinkAt = at + this.blinkDuration(cfg);
+    }
+
+    const end = at + this.duration;
+    const normalNext = end + this.restDuration(cfg.paceScale);
+    // Never stack a blink directly on an expressive pose. Let body finish,
+    // then leave a tiny physical beat before closing the eyes.
+    const blinkNext = Math.max(this.nextBlinkAt, end + 220);
+    this.nextBehaviourAt = Math.max(at + 1800, Math.min(normalNext, blinkNext));
   }
 
   update(dt: number, cfg: BehaviourConfig) {
+    this.ensureSchedule(cfg);
     this.clock += dt;
-    // A while-loop, so a long frame cannot leave the schedule behind.
+
+    // A while-loop keeps deterministic timing intact after a long frame.
     let guard = 0;
-    while (this.clock - this.startedAt >= this.duration && guard++ < 8) {
-      this.advance(cfg);
+    while (guard++ < 8) {
+      if (this.current !== "REST") {
+        const end = this.startedAt + this.duration;
+        if (this.clock < end) break;
+        this.current = "REST";
+        this.startedAt = end;
+        this.duration = 0;
+        continue;
+      }
+
+      if (this.clock < this.nextBehaviourAt) break;
+      const at = this.nextBehaviourAt;
+      const blinkDue = this.nextBlinkAt <= at + 1;
+      this.start(blinkDue ? this.pickBlink() : this.pick(), cfg, at);
     }
   }
 
-  private advance(cfg: BehaviourConfig) {
-    this.startedAt += this.duration;
+  private ensureSchedule(cfg: BehaviourConfig) {
+    if (this.initialized) return;
+    this.initialized = true;
+    this.nextBlinkAt = this.clock + this.blinkDuration(cfg);
+    this.nextBehaviourAt = this.clock + 1200 + this.rand() * 800;
+  }
 
-    if (this.current !== "REST") {
-      const wasGlance =
-        this.current === "GLANCE_LEFT" || this.current === "GLANCE_RIGHT";
-      this.current = "REST";
-      // Blob sometimes blinks just after looking back — a small tell that
-      // reads as spontaneous rather than scheduled.
-      if (wasGlance && this.rand() < 0.35) {
-        this.blinkAfterGlance = true;
-        this.duration = (260 + this.rand() * 340) * cfg.paceScale;
-      } else {
-        this.duration = this.restDuration(cfg.paceScale);
-      }
-      return;
-    }
+  private blinkDuration(cfg: BehaviourConfig): number {
+    return cfg.blinkIntervalMs * (0.85 + this.rand() * 0.3);
+  }
 
-    const id = this.blinkAfterGlance ? "NORMAL_BLINK" : this.pick();
-    this.blinkAfterGlance = false;
-    this.current = id;
-    this.duration = BEHAVIOURS[id].duration;
-    this.lastPerformed = id;
+  private pickBlink(): BehaviourId {
+    return this.rand() < 0.14 ? "DOUBLE_BLINK" : "NORMAL_BLINK";
   }
 
   private restDuration(paceScale: number): number {
-    let d = 1500 + this.rand() * 3200;
-    // Roughly one gap in five is a long quiet stretch, so the character has
-    // stretches where genuinely nothing happens.
-    if (this.rand() < 0.2) d += 2200 + this.rand() * 3600;
+    let d = 1300 + this.rand() * 1500;
+    // Rare longer breath. Most action starts remain roughly 2-5s apart.
+    if (this.rand() < 0.12) d += 1300 + this.rand() * 900;
     return d * paceScale;
   }
 
   private pick(): BehaviourId {
-    // Never repeat the previous behaviour, so no short cycle is learnable.
-    const options = PICKABLE.filter((id) => id !== this.lastPerformed);
+    // Never repeat the previous non-blink action, so no short cycle is learned.
     let total = 0;
-    for (const id of options) total += BEHAVIOURS[id].weight;
+    for (const id of PICKABLE) {
+      if (id !== this.lastPerformed) total += BEHAVIOURS[id].weight;
+    }
     let r = this.rand() * total;
-    for (const id of options) {
+    for (const id of PICKABLE) {
+      if (id === this.lastPerformed) continue;
       r -= BEHAVIOURS[id].weight;
       if (r <= 0) return id;
     }
-    return options[options.length - 1];
+    return PICKABLE[PICKABLE.length - 1];
   }
 
   /** Current pose delta. The returned object is reused between frames. */
   pose(cfg: BehaviourConfig): PoseDelta {
     Object.assign(this.delta, NEUTRAL_DELTA);
-    const p = clamp01((this.clock - this.startedAt) / this.duration);
+    const p =
+      this.current === "REST" || this.duration === 0
+        ? 0
+        : clamp01((this.clock - this.startedAt) / this.duration);
     BEHAVIOURS[this.current].evaluate(p, cfg, this.delta);
     return this.delta;
   }
 
-  status(): BehaviourStatus {
+  status(eyeLid = 1): BehaviourStatus {
     const elapsed = this.clock - this.startedAt;
+    const phase =
+      this.current === "REST" || this.duration === 0
+        ? 0
+        : clamp01(elapsed / this.duration);
+    const blinking =
+      this.current === "NORMAL_BLINK" || this.current === "DOUBLE_BLINK";
+    let blinkState: BehaviourStatus["blinkState"] = "open";
+    if (blinking) {
+      if (eyeLid <= 0.13) {
+        blinkState = "closed";
+      } else if (this.current === "NORMAL_BLINK") {
+        blinkState = phase < 0.38 ? "closing" : "opening";
+      } else if (phase < 0.3) {
+        blinkState = phase / 0.3 < 0.38 ? "closing" : "opening";
+      } else if (phase >= 0.48 && phase < 0.82) {
+        blinkState = (phase - 0.48) / 0.34 < 0.38 ? "closing" : "opening";
+      }
+    }
     return {
       id: this.current,
-      phase: clamp01(elapsed / this.duration),
-      remainingMs: Math.max(0, this.duration - elapsed),
+      phase,
+      remainingMs:
+        this.current === "REST" ? 0 : Math.max(0, this.duration - elapsed),
+      nextBehaviourMs: Math.max(0, this.nextBehaviourAt - this.clock),
+      blinkState,
     };
   }
 }

@@ -6,24 +6,41 @@ import { applyCalibration } from "@/lib/blobCalibration";
 import {
   BehaviourController,
   type BehaviourConfig,
-  type BehaviourStatus,
+  type HomeActivityStatus,
 } from "@/lib/blobBehaviour";
-import { AmbientDrift } from "@/lib/blobIdle";
+import { AmbientDrift, type IdleConfig } from "@/lib/blobIdle";
+import { BlobJellyPhysics, type JellyTarget } from "@/lib/blobPhysics";
 import { NEUTRAL_BLOB, NEUTRAL_ELEMENT, type BlobRig } from "@/lib/blobRig";
 import type { StateViewProps } from "@/lib/deviceStates";
 
 /** Safety cap on total body deformation, whatever the layers add up to. */
-const MAX_DEFORM = 0.015;
+const MAX_DEFORM = 0.02;
 const clampDeform = (v: number) =>
   v < -MAX_DEFORM ? -MAX_DEFORM : v > MAX_DEFORM ? MAX_DEFORM : v;
+
+const ZERO_AMBIENT = {
+  x: 0,
+  y: 0,
+  rotation: 0,
+  breath: 0,
+  squashX: 0,
+  squashY: 0,
+};
+
+const behaviourConfig = (idle: IdleConfig): BehaviourConfig => ({
+  gazePx: idle.gazeDriftPx,
+  squash: idle.squashAmount,
+  paceScale: idle.activityPace,
+  blinkIntervalMs: idle.blinkInterval * 1000,
+});
 
 /**
  * HOME — the neutral Blob, driven by the micro-behaviour system.
  *
  * Two layers compose into one pose: continuous ambient drift and breathing,
  * and whatever single behaviour the scheduler is currently running. Both are
- * deltas on the calibrated neutral pose, so with behaviour off, or the moment
- * a future device state takes over, the rig returns cleanly to neutral.
+ * deltas on calibrated HOME. Ambient and actions stay independently switchable,
+ * and a future device state can still take over from any frame.
  */
 export default function HomeState({
   size,
@@ -55,6 +72,8 @@ export default function HomeState({
   if (controller.current === null) controller.current = new BehaviourController();
   const ambient = useRef<AmbientDrift>(null as never);
   if (ambient.current === null) ambient.current = new AmbientDrift();
+  const physics = useRef<BlobJellyPhysics>(null as never);
+  if (physics.current === null) physics.current = new BlobJellyPhysics();
 
   // Live config is read through a ref so changing a slider never restarts the
   // animation loop (which would visibly reset the character).
@@ -64,6 +83,7 @@ export default function HomeState({
   const reset = useCallback(() => {
     controller.current.reset();
     ambient.current.reset();
+    physics.current.reset();
   }, []);
 
   useEffect(() => {
@@ -75,7 +95,7 @@ export default function HomeState({
   useEffect(() => {
     if (!triggerRequest || triggerRequest.nonce === lastNonce.current) return;
     lastNonce.current = triggerRequest.nonce;
-    controller.current.trigger(triggerRequest.id);
+    controller.current.trigger(triggerRequest.id, behaviourConfig(cfg.current.idle));
   }, [triggerRequest]);
 
   useEffect(() => {
@@ -83,31 +103,47 @@ export default function HomeState({
     let accumulator = 0;
     let frameId = 0;
     let statusAt = 0;
-    let lastStatus: BehaviourStatus | null = null;
+    let lastStatus: HomeActivityStatus | null = null;
+    let latestIdleX = 0;
+    let latestIdleY = 0;
+    let latestRotation = 0;
+    let latestEyeLid = 1;
+    const jellyTarget: JellyTarget = {
+      x: 0,
+      y: 0,
+      rotation: 0,
+      scaleX: 0,
+      scaleY: 0,
+    };
     const frameInterval = 1000 / fps;
 
     const build = (dt: number) => {
       const { calibration: cal, idle: cfgIdle, behaviourEnabled: on } = cfg.current;
-      const bc: BehaviourConfig = {
-        gazePx: cfgIdle.gazeDriftPx,
-        squash: cfgIdle.squashAmount,
-        paceScale: cfgIdle.blinkInterval / 5.5,
-      };
+      const bc = behaviourConfig(cfgIdle);
 
-      if (on && cfgIdle.enabled) controller.current.update(dt, bc);
-      const d = on && cfgIdle.enabled
-        ? controller.current.pose(bc)
-        : controller.current.pose({ ...bc, gazePx: 0, squash: 0 });
+      if (on) controller.current.update(dt, bc);
+      const d = controller.current.pose(bc);
 
       // Ambient sees the behaviour's vertical contribution too, so the soft-body
       // lag reacts to real movement rather than only to the drift.
       const amb = cfgIdle.enabled
-        ? ambient.current.update(dt, cfgIdle, d.blobY)
-        : { x: 0, y: 0, breath: 0, squashX: 0, squashY: 0 };
+        ? ambient.current.update(dt, cfgIdle, on ? d.blobY : 0)
+        : ZERO_AMBIENT;
 
-      const active = on && cfgIdle.enabled;
+      const active = on;
       const dsx = (active ? d.blobScaleX : 0) + amb.squashX;
       const dsy = (active ? d.blobScaleY : 0) + amb.squashY;
+      jellyTarget.x = amb.x + (active ? d.blobX : 0);
+      jellyTarget.y = amb.y + (active ? d.blobY : 0);
+      jellyTarget.rotation = amb.rotation + (active ? d.blobRotation : 0);
+      jellyTarget.scaleX = clampDeform(dsx);
+      jellyTarget.scaleY = clampDeform(dsy);
+      const physical = physics.current.update(dt, jellyTarget);
+
+      latestIdleX = amb.x;
+      latestIdleY = amb.y;
+      latestRotation = physical.rotation;
+      latestEyeLid = active ? d.eyeLid : 1;
 
       const eye = {
         ...NEUTRAL_ELEMENT,
@@ -119,12 +155,12 @@ export default function HomeState({
       return applyCalibration(
         {
           blob: {
-            x: amb.x + (active ? d.blobX : 0),
-            y: amb.y + (active ? d.blobY : 0),
+            x: physical.x,
+            y: physical.y,
             scale: 1 + amb.breath,
-            scaleX: 1 + clampDeform(dsx),
-            scaleY: 1 + clampDeform(dsy),
-            rotation: active ? d.blobRotation : 0,
+            scaleX: 1 + clampDeform(physical.scaleX),
+            scaleY: 1 + clampDeform(physical.scaleY),
+            rotation: latestRotation,
             opacity: 1,
           },
           // The body carries no transform of its own: lean and deformation are
@@ -147,8 +183,20 @@ export default function HomeState({
     };
 
     const report = (now: number) => {
-      const s = controller.current.status();
-      if (now - statusAt < 200 && lastStatus?.id === s.id) return;
+      const base = controller.current.status(latestEyeLid);
+      const s: HomeActivityStatus = {
+        ...base,
+        idleX: latestIdleX,
+        idleY: latestIdleY,
+        bodyRotation: latestRotation,
+      };
+      if (
+        now - statusAt < 100 &&
+        lastStatus?.id === s.id &&
+        lastStatus.blinkState === s.blinkState
+      ) {
+        return;
+      }
       statusAt = now;
       lastStatus = s;
       cfg.current.onBehaviourStatus?.(s);
@@ -160,8 +208,9 @@ export default function HomeState({
       last = now;
       accumulator += delta;
       if (accumulator < frameInterval) return;
-      accumulator = 0;
-      setRig(build(delta * speed));
+      const elapsed = Math.floor(accumulator / frameInterval) * frameInterval;
+      accumulator -= elapsed;
+      setRig(build(elapsed * speed));
       report(now);
     };
 

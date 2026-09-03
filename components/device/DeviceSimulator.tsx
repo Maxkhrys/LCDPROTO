@@ -12,7 +12,7 @@ import {
 } from "@/lib/blobCalibration";
 import type { FaceLayerId } from "@/lib/blobRig";
 import { DEFAULT_IDLE, IDLE_LIMITS, type IdleConfig } from "@/lib/blobIdle";
-import type { BehaviourId, BehaviourStatus } from "@/lib/blobBehaviour";
+import type { BehaviourId, HomeActivityStatus } from "@/lib/blobBehaviour";
 import {
   DEFAULT_STATE,
   DEVICE_STATES,
@@ -46,7 +46,7 @@ export default function DeviceSimulator() {
   const [trigger, setTrigger] = useState<{ id: BehaviourId; nonce: number } | null>(
     null
   );
-  const [status, setStatus] = useState<BehaviourStatus | null>(null);
+  const [status, setStatus] = useState<HomeActivityStatus | null>(null);
   const fire = useCallback(
     (id: BehaviourId) => setTrigger((t) => ({ id, nonce: (t?.nonce ?? 0) + 1 })),
     []
@@ -205,6 +205,15 @@ export default function DeviceSimulator() {
         </DevButton>
       </div>
 
+      {state === "HOME" && (
+        <ActivityReadout
+          status={status}
+          playing={playing}
+          behaviourEnabled={behaviourEnabled}
+          idleEnabled={idle.enabled}
+        />
+      )}
+
       {showCalibration && (
         <BehaviourPanel
           status={status}
@@ -310,8 +319,7 @@ function DevButton({
 /**
  * Temporary idle-motion controls.
  *
- * Defaults sit at the quiet end of the brief's ranges — the goal is "alive",
- * which reads as almost subconscious rather than as animation.
+ * Defaults are tuned for native 240x240 readability while remaining restrained.
  */
 function IdlePanel({
   value,
@@ -380,6 +388,20 @@ function IdlePanel({
         value={value.gazeDriftPx}
         format={(v) => `${v.toFixed(1)} px`}
         onChange={(gazeDriftPx) => onChange({ ...value, gazeDriftPx })}
+      />
+      <Slider
+        label="Rotate"
+        {...IDLE_LIMITS.rotationDeg}
+        value={value.rotationDeg}
+        format={(v) => `${v.toFixed(2)} deg`}
+        onChange={(rotationDeg) => onChange({ ...value, rotationDeg })}
+      />
+      <Slider
+        label="Activity"
+        {...IDLE_LIMITS.activityPace}
+        value={value.activityPace}
+        format={(v) => `${v.toFixed(2)}x`}
+        onChange={(activityPace) => onChange({ ...value, activityPace })}
       />
     </div>
   );
@@ -560,6 +582,8 @@ const TRIGGERS: { id: BehaviourId; label: string }[] = [
   { id: "LOOK_UP", label: "Look up" },
   { id: "BODY_SETTLE", label: "Settle" },
   { id: "TINY_SQUISH", label: "Squish" },
+  { id: "SOFT_SWAY_LEFT", label: "Sway left" },
+  { id: "SOFT_SWAY_RIGHT", label: "Sway right" },
   { id: "MOUTH_RELAX", label: "Mouth relax" },
   { id: "MOUTH_TWITCH", label: "Mouth twitch" },
 ];
@@ -574,7 +598,7 @@ function BehaviourPanel({
   onToggle,
   onTrigger,
 }: {
-  status: BehaviourStatus | null;
+  status: HomeActivityStatus | null;
   enabled: boolean;
   onToggle: () => void;
   onTrigger: (id: BehaviourId) => void;
@@ -604,7 +628,11 @@ function BehaviourPanel({
           {enabled ? (status?.id ?? "REST") : "NEUTRAL"}
         </span>
         <span className="font-mono text-[10px] tabular-nums text-white/25">
-          {enabled && status ? `${(status.remainingMs / 1000).toFixed(1)}s left` : "—"}
+          {enabled && status
+            ? status.id === "REST"
+              ? `${(status.nextBehaviourMs / 1000).toFixed(1)}s next`
+              : `${(status.remainingMs / 1000).toFixed(1)}s left`
+            : "—"}
         </span>
       </div>
 
@@ -619,6 +647,62 @@ function BehaviourPanel({
             {t.label}
           </button>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function ActivityReadout({
+  status,
+  playing,
+  behaviourEnabled,
+  idleEnabled,
+}: {
+  status: HomeActivityStatus | null;
+  playing: boolean;
+  behaviourEnabled: boolean;
+  idleEnabled: boolean;
+}) {
+  const behaviour = behaviourEnabled ? (status?.id ?? "REST") : "NEUTRAL";
+  const next =
+    playing && behaviourEnabled && status
+      ? `${(status.nextBehaviourMs / 1000).toFixed(1)}s`
+      : "paused";
+  const x = idleEnabled ? (status?.idleX ?? 0) : 0;
+  const y = idleEnabled ? (status?.idleY ?? 0) : 0;
+  const rotation = status?.bodyRotation ?? 0;
+  const blink = behaviourEnabled ? (status?.blinkState ?? "open") : "open";
+
+  return (
+    <div className="grid w-full max-w-2xl grid-cols-2 gap-x-5 gap-y-2 rounded-lg border border-white/[0.06] bg-white/[0.015] px-4 py-3 font-mono text-[10px] sm:grid-cols-5">
+      <ActivityValue label="Activity" value={behaviour} accent />
+      <ActivityValue label="Next" value={next} />
+      <ActivityValue label="Idle offset" value={`${x.toFixed(2)}, ${y.toFixed(2)} px`} />
+      <ActivityValue label="Body rotation" value={`${rotation.toFixed(2)} deg`} />
+      <ActivityValue label="Blink" value={blink} />
+    </div>
+  );
+}
+
+function ActivityValue({
+  label,
+  value,
+  accent = false,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="uppercase tracking-[0.15em] text-white/25">{label}</div>
+      <div
+        className={`mt-1 truncate tabular-nums ${
+          accent ? "text-[#b295ff]" : "text-white/50"
+        }`}
+        title={value}
+      >
+        {value}
       </div>
     </div>
   );
