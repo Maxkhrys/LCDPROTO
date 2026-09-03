@@ -234,6 +234,7 @@ export default function HomeState({
             scaleX: 1 + (active ? d.mouthScaleX : 0),
             scaleY: 1 + (active ? d.mouthScaleY : 0),
             rotation: active ? d.mouthRotation : 0,
+            opacity: active ? d.mouthOpacity : 1,
           },
         },
         cal

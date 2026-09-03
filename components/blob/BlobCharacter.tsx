@@ -62,26 +62,15 @@ function applyBodySurface(
   ctx.translate(-pivotX, -pivotY);
 }
 
-function roundedRectPath(
+function ellipsePath(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
-  width: number,
-  height: number,
-  radius: number
+  radiusX: number,
+  radiusY: number
 ) {
-  const r = Math.min(radius, Math.abs(width) / 2, Math.abs(height) / 2);
   ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + width - r, y);
-  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
-  ctx.lineTo(x + width, y + height - r);
-  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
-  ctx.lineTo(x + r, y + height);
-  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
+  ctx.ellipse(x, y, radiusX, radiusY, 0, 0, Math.PI * 2);
 }
 
 /**
@@ -247,36 +236,57 @@ export default function BlobCharacter({
       const socketScaleY = clamp(t.eyeSocketScaleY, 0.72, 1.35);
       const socketWidth = a.width * socketScaleX;
       const socketHeight = a.height * socketScaleY;
-      const open = clamp(t.eyeOpen, 0.035, 1.12);
+      const open = clamp(t.eyeOpen, 0, 1.12);
       const clipTop = socketHeight / 2 - socketHeight * open;
       const clipHeight = socketHeight * open + 1.5;
       const textureScaleX = Math.max(0.1, faceCompensationX * t.scaleX);
       const textureScaleY = Math.max(0.1, faceCompensationY * t.scaleY);
 
-      ctx.save();
-      ctx.globalAlpha = t.opacity;
-      applyBodySurface(ctx, center, bw, bh, bt);
+      if (open > 0.001) {
+        ctx.save();
+        ctx.globalAlpha = t.opacity;
+        applyBodySurface(ctx, center, bw, bh, bt);
 
-      // Clip is created before texture translation, so the socket does not
-      // travel with a glance.
-      ctx.translate(socketX, socketY);
-      roundedRectPath(
-        ctx,
-        -socketWidth / 2,
-        clipTop,
-        socketWidth,
-        clipHeight,
-        Math.min(socketWidth * 0.42, clipHeight * 0.5)
-      );
-      ctx.clip();
+        // Clip is created before texture translation, so the socket does not
+        // travel with a glance. The aperture follows the eye's oval silhouette.
+        ctx.translate(socketX, socketY);
+        ellipsePath(ctx, 0, 0, socketWidth / 2, socketHeight / 2);
+        ctx.clip();
+        ctx.beginPath();
+        ctx.rect(-socketWidth / 2, clipTop, socketWidth, clipHeight);
+        ctx.clip();
 
-      ctx.translate(textureX - socketX, textureY - socketY);
-      ctx.rotate((t.rotation * Math.PI) / 180);
-      ctx.scale(textureScaleX, textureScaleY);
-      // Re-anchor texture bottom after an expressive vertical scale.
-      ctx.translate(0, socketHeight / (2 * textureScaleY) - a.height / 2);
-      ctx.drawImage(layers.face[id], -a.width / 2, -a.height / 2, a.width, a.height);
-      ctx.restore();
+        ctx.translate(textureX - socketX, textureY - socketY);
+        ctx.rotate((t.rotation * Math.PI) / 180);
+        ctx.scale(textureScaleX, textureScaleY);
+        // Re-anchor texture bottom after an expressive vertical scale.
+        ctx.translate(0, socketHeight / (2 * textureScaleY) - a.height / 2);
+        ctx.drawImage(layers.face[id], -a.width / 2, -a.height / 2, a.width, a.height);
+        ctx.restore();
+      }
+
+      // Do not leave a transparent half-eye during a blink. Repaint the
+      // covered part with the exact body texture already underneath it. This
+      // creates a coloured, surface-matched lid without inventing new art.
+      const coverHeight = socketHeight * (1 - Math.min(1, open));
+      if (coverHeight > 0.001) {
+        ctx.save();
+        ctx.globalAlpha = t.opacity;
+        applyBodySurface(ctx, center, bw, bh, bt);
+        ctx.translate(socketX, socketY);
+        ellipsePath(ctx, 0, 0, socketWidth / 2, socketHeight / 2);
+        ctx.clip();
+        ctx.beginPath();
+        ctx.rect(
+          -socketWidth / 2,
+          -socketHeight / 2,
+          socketWidth,
+          coverHeight
+        );
+        ctx.clip();
+        ctx.drawImage(layers.body, -bw / 2, -bh / 2, bw, bh);
+        ctx.restore();
+      }
     };
 
     const drawMouth = (t: ElementTransform) => {
