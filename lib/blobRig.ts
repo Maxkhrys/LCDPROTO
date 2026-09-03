@@ -59,8 +59,13 @@ export type FaceLayerId = keyof typeof FACE_LAYERS;
 
 export const FACE_ORDER: readonly FaceLayerId[] = ["leftEye", "rightEye", "mouth"];
 
-/** Share of the 240px screen diameter the body's solid core spans. */
-export const BODY_FRACTION = 0.68;
+/**
+ * Share of the 240px screen diameter the body's solid core spans.
+ *
+ * V2 reduced this from 0.68 so Blob floats inside the display rather than
+ * filling it, leaving room for leaning, squash and future state transitions.
+ */
+export const BODY_FRACTION = 0.57;
 
 /**
  * Neutral face placement, calibrated against the artwork.
@@ -74,9 +79,11 @@ export const FACE_PLACEMENT: Record<
   FaceLayerId,
   { dx: number; dy: number; scale: number }
 > = {
-  leftEye: { dx: -0.17, dy: -0.02, scale: 0.305 },
-  rightEye: { dx: 0.17, dy: -0.02, scale: 0.305 },
-  mouth: { dx: 0.0, dy: 0.13, scale: 0.29 },
+  // Slight left/right differences are deliberate: a perfectly mirrored face
+  // reads as mechanical, and the two eye assets are not identical either.
+  leftEye: { dx: -0.158, dy: -0.038, scale: 0.305 },
+  rightEye: { dx: 0.163, dy: -0.034, scale: 0.305 },
+  mouth: { dx: 0.003, dy: 0.114, scale: 0.238 },
 };
 
 /** Scale applied to the body image so its solid core spans BODY_FRACTION. */

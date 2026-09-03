@@ -97,22 +97,56 @@ candidate grids and comparing at 240x240, not derived from the old artwork.
 Nothing in the render pipeline adds glow, stroke, shadow, blur or colour
 correction; the layers are drawn exactly as supplied.
 
-## Idle motion
+## HOME behaviour system
 
-`lib/blobIdle.ts` builds the pose as a **pure function of elapsed time** — no
-accumulated state, no runtime randomness — so a moment always yields the same
-pose and pausing freezes cleanly. Float, breathing, squash, blink and gaze all
-run on different periods, so nothing loops in lockstep.
+HOME is a small character behaviour system, not a loop. Two layers compose:
 
-| motion | default | effect |
+**Ambient** (`lib/blobIdle.ts`) runs continuously — a weightless drift that
+eases between random targets every 7-11s, breathing, and a soft-body lag that
+makes the body trail its own movement so a downward move compresses it slightly
+and rebounds.
+
+**Behaviours** (`lib/blobBehaviour.ts`) fire one at a time with quiet gaps
+between them. Roughly one gap in five is a long stretch where nothing happens.
+
+| behaviour | weight | duration |
 | --- | --- | --- |
-| Float | 1.4 px | whole character rises and falls |
-| Breath | 0.7% | slow uniform scale |
-| Squash | 0.6% | scaleX up while scaleY goes down |
-| Blink | 5.5 s | 130 ms close, jittered per window |
-| Gaze | 1.3 px | gated drift that settles back to neutral |
+| NORMAL_BLINK | 34 | 145 ms |
+| GLANCE_LEFT / GLANCE_RIGHT | 11 each | 1500 ms |
+| BODY_SETTLE | 10 | 1150 ms |
+| TINY_SQUISH | 8 | 760 ms |
+| LOOK_UP | 7 | 1650 ms |
+| MOUTH_RELAX | 7 | 1900 ms |
+| MOUTH_TWITCH | 5 | 430 ms |
+| DOUBLE_BLINK | 4 | 440 ms |
 
-Float and breath are stated as total travel, squash as maximum deviation.
+A behaviour never repeats back to back, and after a glance there is a 35%
+chance of a quick follow-up blink — a tell that reads as spontaneous.
+
+### Face and body stay connected
+
+Glances move the eyes first and the body follows ~8.5% of the behaviour later,
+leaning 0.75 degrees and shifting 0.85px, then settling after the eyes return.
+That lag is what stops the face and body reading as separate layers. Body
+deformation is applied to the **whole character**, not to the body layer alone,
+so the face is never left sliding across the body.
+
+### Interruption
+
+`BehaviourController` is stateful precisely so it can be interrupted.
+`cancel()` abandons whatever is running and returns to REST, and `trigger(id)`
+cuts in immediately. Every behaviour is a delta on the neutral pose, so a
+future device state can take the rig over on any frame without inheriting a
+half-finished glance. Total body deformation is clamped to +/-1.5% regardless
+of what the layers add up to.
+
+Scheduling uses a seeded PRNG advanced only inside the animation loop, so runs
+are reproducible, `Reset` restarts the schedule exactly, `Pause` freezes it,
+and nothing random happens during render.
+
+**Behaviour** toggles the micro-behaviours (leaving the neutral pose plus
+ambient); **Idle** toggles the ambient layer. Both off is a completely static
+calibrated pose.
 
 ## Adding a state's animation
 

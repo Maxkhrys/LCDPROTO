@@ -12,6 +12,7 @@ import {
 } from "@/lib/blobCalibration";
 import type { FaceLayerId } from "@/lib/blobRig";
 import { DEFAULT_IDLE, IDLE_LIMITS, type IdleConfig } from "@/lib/blobIdle";
+import type { BehaviourId, BehaviourStatus } from "@/lib/blobBehaviour";
 import {
   DEFAULT_STATE,
   DEVICE_STATES,
@@ -41,6 +42,15 @@ export default function DeviceSimulator() {
   );
   const [saved, setSaved] = useState<string | null>(null);
   const [idle, setIdle] = useState<IdleConfig>(DEFAULT_IDLE);
+  const [behaviourEnabled, setBehaviourEnabled] = useState(true);
+  const [trigger, setTrigger] = useState<{ id: BehaviourId; nonce: number } | null>(
+    null
+  );
+  const [status, setStatus] = useState<BehaviourStatus | null>(null);
+  const fire = useCallback(
+    (id: BehaviourId) => setTrigger((t) => ({ id, nonce: (t?.nonce ?? 0) + 1 })),
+    []
+  );
   const [showCalibration, setShowCalibration] = useState(false);
   /** When true the panel rasterises at exactly 240x240 — real hardware pixels. */
   const [nativePixels, setNativePixels] = useState(false);
@@ -76,6 +86,8 @@ export default function DeviceSimulator() {
     setNativePixels(false);
     setCalibration(DEFAULT_FACE_CALIBRATION);
     setIdle(DEFAULT_IDLE);
+    setBehaviourEnabled(true);
+    setTrigger(null);
     setSaved(null);
     setRunId((n) => n + 1);
   }, []);
@@ -110,6 +122,9 @@ export default function DeviceSimulator() {
             calibration={calibration}
             renderScale={renderScale}
             idle={idle}
+            behaviourEnabled={behaviourEnabled}
+            triggerRequest={trigger}
+            onBehaviourStatus={setStatus}
           />
         </DeviceBezel>
       </div>
@@ -169,6 +184,13 @@ export default function DeviceSimulator() {
         </DevButton>
 
         <DevButton
+          active={behaviourEnabled}
+          onClick={() => setBehaviourEnabled((v) => !v)}
+        >
+          Behaviour
+        </DevButton>
+
+        <DevButton
           active={nativePixels}
           onClick={() => setNativePixels((v) => !v)}
         >
@@ -182,6 +204,15 @@ export default function DeviceSimulator() {
           Calibrate
         </DevButton>
       </div>
+
+      {showCalibration && (
+        <BehaviourPanel
+          status={status}
+          enabled={behaviourEnabled}
+          onToggle={() => setBehaviourEnabled((v) => !v)}
+          onTrigger={fire}
+        />
+      )}
 
       {showCalibration && (
         <IdlePanel value={idle} onChange={setIdle} onReset={() => setIdle(DEFAULT_IDLE)} />
@@ -219,6 +250,12 @@ export default function DeviceSimulator() {
           /
         </span>
         <span>{idle.enabled ? "idle on" : "idle off"}</span>
+        <span aria-hidden className="text-white/10">
+          /
+        </span>
+        <span className="text-white/40">
+          {behaviourEnabled ? (status?.id ?? "REST") : "neutral"}
+        </span>
         <span aria-hidden className="text-white/10">
           /
         </span>
@@ -511,5 +548,78 @@ function Slider({
         {format(value)}
       </span>
     </label>
+  );
+}
+
+/** Behaviour ids exposed as manual dev triggers. */
+const TRIGGERS: { id: BehaviourId; label: string }[] = [
+  { id: "NORMAL_BLINK", label: "Blink" },
+  { id: "DOUBLE_BLINK", label: "Double blink" },
+  { id: "GLANCE_LEFT", label: "Glance left" },
+  { id: "GLANCE_RIGHT", label: "Glance right" },
+  { id: "LOOK_UP", label: "Look up" },
+  { id: "BODY_SETTLE", label: "Settle" },
+  { id: "TINY_SQUISH", label: "Squish" },
+  { id: "MOUTH_RELAX", label: "Mouth relax" },
+  { id: "MOUTH_TWITCH", label: "Mouth twitch" },
+];
+
+/**
+ * Temporary window onto the HOME behaviour scheduler: what is running now, and
+ * a way to fire each behaviour on demand for inspection.
+ */
+function BehaviourPanel({
+  status,
+  enabled,
+  onToggle,
+  onTrigger,
+}: {
+  status: BehaviourStatus | null;
+  enabled: boolean;
+  onToggle: () => void;
+  onTrigger: (id: BehaviourId) => void;
+}) {
+  const resting = !status || status.id === "REST";
+  return (
+    <div className="flex w-full max-w-md flex-col gap-3 rounded-lg border border-white/[0.06] bg-white/[0.015] p-4">
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/30">
+          home behaviour
+        </span>
+        <button
+          type="button"
+          onClick={onToggle}
+          className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/40 transition-colors hover:text-white/80"
+        >
+          {enabled ? "On" : "Off"}
+        </button>
+      </div>
+
+      <div className="flex items-baseline justify-between gap-3 rounded-md border border-white/[0.06] bg-black/40 px-3 py-2">
+        <span
+          className={`font-mono text-[11px] tracking-[0.12em] ${
+            resting ? "text-white/35" : "text-[#b295ff]"
+          }`}
+        >
+          {enabled ? (status?.id ?? "REST") : "NEUTRAL"}
+        </span>
+        <span className="font-mono text-[10px] tabular-nums text-white/25">
+          {enabled && status ? `${(status.remainingMs / 1000).toFixed(1)}s left` : "—"}
+        </span>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        {TRIGGERS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => onTrigger(t.id)}
+            className="rounded-md border border-white/[0.07] px-2.5 py-1 text-[10px] tracking-wide text-white/40 transition-colors hover:border-white/20 hover:text-white/80"
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

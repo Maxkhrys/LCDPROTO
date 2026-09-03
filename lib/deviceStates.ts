@@ -1,5 +1,6 @@
 import type { FaceCalibration } from "./blobCalibration";
 import type { IdleConfig } from "./blobIdle";
+import type { BehaviourId, BehaviourStatus } from "./blobBehaviour";
 
 /**
  * The device's interaction states. Each one will eventually own a full
@@ -56,6 +57,12 @@ export interface StateViewProps {
   calibration: FaceCalibration;
   /** Procedural idle motion settings from the dev controls. */
   idle: IdleConfig;
+  /** HOME micro-behaviour system on/off. Off shows the neutral calibrated pose. */
+  behaviourEnabled: boolean;
+  /** Dev request to run a behaviour now; a new nonce fires it. */
+  triggerRequest: { id: BehaviourId; nonce: number } | null;
+  /** Reports the running behaviour back to the dev readout. */
+  onBehaviourStatus?: (s: BehaviourStatus) => void;
   /**
    * Pixels rasterised per 240-space pixel. Layout and animation always work in
    * 240-space; this only controls sampling fidelity so artwork stays sharp when
