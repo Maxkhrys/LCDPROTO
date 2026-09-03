@@ -305,13 +305,15 @@ export default function BlobCharacter({
         ctx.save();
         ctx.globalAlpha = t.opacity;
         applyBodySurface(ctx, center, bw, bh, bt);
-        ctx.translate(socketX, socketY);
-        ellipsePath(ctx, 0, 0, socketWidth / 2, socketHeight / 2);
+        // Keep body image and socket in the same body-space coordinate system.
+        // Translating to socket before drawing made the lid sample pixels from
+        // the eye centre instead of repainting the body underneath the eye.
+        ellipsePath(ctx, socketX, socketY, socketWidth / 2, socketHeight / 2);
         ctx.clip();
         ctx.beginPath();
         ctx.rect(
-          -socketWidth / 2,
-          -socketHeight / 2,
+          socketX - socketWidth / 2,
+          socketY - socketHeight / 2,
           socketWidth,
           coverHeight
         );
