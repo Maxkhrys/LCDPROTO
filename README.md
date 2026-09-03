@@ -115,30 +115,29 @@ starving natural eye activity; a due blink waits for the current pose to settle.
 | --- | --- | --- |
 | NORMAL_BLINK | timed | 180 ms |
 | DOUBLE_BLINK | 14% of blink events | 510 ms |
-| GLANCE_LEFT / GLANCE_RIGHT | 14 each | 1450 ms |
-| BODY_SETTLE | 16 | 1080 ms |
-| TINY_SQUISH | 14 | 820 ms |
-| LOOK_UP | 10 | 1550 ms |
-| SOFT_SWAY_LEFT / SOFT_SWAY_RIGHT | 8 each | 1600 ms |
-| MOUTH_RELAX | 9 | 1550 ms |
-| MOUTH_TWITCH | 7 | 620 ms |
+| gaze | glances, look up/down, curious left/right tilts | 1.45-1.85 s |
+| eyes | soft squint, independent one-eye squints, curious wide | 1.35-1.75 s |
+| mouth | relax, twitch, rounded O, 180-degree expression flip | 0.62-2.1 s |
+| body | settle, tiny squish, side squish, sway, tall stretch, twist | 0.82-1.6 s |
 
 A non-blink behaviour never repeats back to back. Default action starts average
-about 2.6s apart in a five-minute 30 FPS deterministic run. Blink events average
-9/minute, with double blinks bringing visible lid closures to about 10.2/minute.
+about 2.19s apart in a five-minute 30 FPS deterministic run. Blink events average
+9/minute, with double blinks bringing visible lid closures to about 10.4/minute.
 
 ### Face and body stay connected
 
-Glances move the eyes first and the body follows about 102ms later, leaning 1.1
-degrees and shifting 1.15px. The eyes begin returning before the body, and body
-settles last. Body deformation is applied to the **whole character**, so the
-face is never left sliding across the body.
+Glances move the eyes first and body follows about 90-115ms later. Eyes begin
+returning before body, then secondary silhouette mass settles last. Whole-rig
+deformation is shared 20/80 between face and body; separate body deformation
+then moves underneath the facial plane. This keeps eyes and mouth crisp while
+making them feel suspended inside soft material.
 
-**Jelly physics** (`lib/blobPhysics.ts`) filters translation, rotation, and
-squash targets through five underdamped scalar springs. The body trails, passes
-its target once, then loses energy quickly. Spring integration uses small
-substeps so 30 and 60 FPS previews have matching motion. It is directly portable
-to embedded code and needs no mesh, blur, shader, video, or sprite sequence.
+**Jelly physics** (`lib/blobPhysics.ts`) filters whole-character and secondary
+body translation, rotation, and squash through ten underdamped scalar springs.
+The body trails, passes its target once, then loses energy. Spring integration
+uses small substeps so 30 and 60 FPS previews have matching motion. It remains
+directly portable to embedded code and needs no mesh, blur, shader, video, or
+sprite sequence.
 
 ### Interruption
 
@@ -146,8 +145,8 @@ to embedded code and needs no mesh, blur, shader, video, or sprite sequence.
 `cancel()` abandons whatever is running and returns to REST, and `trigger(id)`
 cuts in immediately. Every behaviour is a delta on the neutral pose, so a
 future device state can take the rig over on any frame without inheriting a
-half-finished glance. Total body deformation is clamped to +/-2% regardless
-of what the layers add up to.
+half-finished glance. Whole-rig deformation is clamped to +/-7%; independent
+secondary body deformation is clamped to +/-4.5%.
 
 Scheduling uses a seeded PRNG advanced only inside the animation loop, so runs
 are reproducible, `Reset` restarts the schedule exactly, `Pause` freezes it,
@@ -155,7 +154,8 @@ and nothing random happens during render.
 
 **Behaviour** toggles the micro-behaviours (leaving the neutral pose plus
 ambient); **Idle** toggles the ambient layer. Both off is a completely static
-calibrated pose.
+calibrated pose. **Light** changes the complete simulator UI and LCD preview to
+a light usability theme; hardware/default view remains dark.
 
 ## Adding a state's animation
 

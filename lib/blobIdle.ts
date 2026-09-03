@@ -29,11 +29,11 @@ export const DEFAULT_IDLE: IdleConfig = {
   enabled: true,
   floatPx: 2,
   breathAmount: 0.014,
-  squashAmount: 0.028,
+  squashAmount: 0.032,
   blinkInterval: 5.9,
   gazeDriftPx: 3.5,
   rotationDeg: 0.6,
-  activityPace: 1,
+  activityPace: 0.82,
 };
 
 export const IDLE_LIMITS = {

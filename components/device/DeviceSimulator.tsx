@@ -58,6 +58,13 @@ export default function DeviceSimulator() {
   const [dpr, setDpr] = useState(1);
 
   useEffect(() => {
+    document.documentElement.dataset.simulatorTheme = displayMode;
+    return () => {
+      delete document.documentElement.dataset.simulatorTheme;
+    };
+  }, [displayMode]);
+
+  useEffect(() => {
     const read = () => setDpr(window.devicePixelRatio || 1);
     read();
     window.addEventListener("resize", read);
@@ -107,7 +114,7 @@ export default function DeviceSimulator() {
       );
 
   return (
-    <div className="flex w-full flex-col items-center gap-7 sm:gap-8">
+    <div className="sim-ui flex w-full flex-col items-center gap-7 sm:gap-8">
       <div
         ref={frameRef}
         className="aspect-square w-full"
@@ -204,7 +211,7 @@ export default function DeviceSimulator() {
           active={displayMode === "light"}
           onClick={() => setDisplayMode((v) => (v === "dark" ? "light" : "dark"))}
         >
-          Light
+          {displayMode === "dark" ? "Light" : "Dark"}
         </DevButton>
 
         <DevButton
@@ -590,14 +597,27 @@ const TRIGGERS: { id: BehaviourId; label: string }[] = [
   { id: "GLANCE_LEFT", label: "Glance left" },
   { id: "GLANCE_RIGHT", label: "Glance right" },
   { id: "LOOK_UP", label: "Look up" },
+  { id: "LOOK_DOWN", label: "Look down" },
+  { id: "CURIOUS_TILT_LEFT", label: "Curious left" },
+  { id: "CURIOUS_TILT_RIGHT", label: "Curious right" },
   { id: "BODY_SETTLE", label: "Settle" },
   { id: "TINY_SQUISH", label: "Squish" },
   { id: "SOFT_SWAY_LEFT", label: "Sway left" },
   { id: "SOFT_SWAY_RIGHT", label: "Sway right" },
+  { id: "SIDE_SQUISH_LEFT", label: "Side squish left" },
+  { id: "SIDE_SQUISH_RIGHT", label: "Side squish right" },
+  { id: "TALL_STRETCH", label: "Tall stretch" },
+  { id: "JELLY_TWIST_LEFT", label: "Twist left" },
+  { id: "JELLY_TWIST_RIGHT", label: "Twist right" },
   { id: "SOFT_SQUINT", label: "Soft squint" },
+  { id: "ONE_EYE_SQUINT_LEFT", label: "Left squint" },
+  { id: "ONE_EYE_SQUINT_RIGHT", label: "Right squint" },
+  { id: "CURIOUS_WIDE", label: "Curious wide" },
   { id: "BREATH_STRETCH", label: "Breath stretch" },
   { id: "MOUTH_RELAX", label: "Mouth relax" },
   { id: "MOUTH_TWITCH", label: "Mouth twitch" },
+  { id: "MOUTH_O", label: "Mouth O" },
+  { id: "MOUTH_FLIP", label: "Mouth flip" },
 ];
 
 /**

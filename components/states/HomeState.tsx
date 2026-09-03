@@ -14,11 +14,18 @@ import { NEUTRAL_BLOB, NEUTRAL_ELEMENT, type BlobRig } from "@/lib/blobRig";
 import type { StateViewProps } from "@/lib/deviceStates";
 
 /** Safety cap on total body deformation, whatever the layers add up to. */
-const MAX_DEFORM = 0.045;
-const FACE_DEFORM_SHARE = 0.28;
-const BODY_DEFORM_SHARE = 0.72;
+const MAX_DEFORM = 0.07;
+const MAX_BODY_DEFORM = 0.045;
+const FACE_DEFORM_SHARE = 0.2;
+const BODY_DEFORM_SHARE = 0.8;
 const clampDeform = (v: number) =>
   v < -MAX_DEFORM ? -MAX_DEFORM : v > MAX_DEFORM ? MAX_DEFORM : v;
+const clampBodyDeform = (v: number) =>
+  v < -MAX_BODY_DEFORM
+    ? -MAX_BODY_DEFORM
+    : v > MAX_BODY_DEFORM
+      ? MAX_BODY_DEFORM
+      : v;
 
 const ZERO_AMBIENT = {
   x: 0,
@@ -117,6 +124,11 @@ export default function HomeState({
       rotation: 0,
       scaleX: 0,
       scaleY: 0,
+      bodyX: 0,
+      bodyY: 0,
+      bodyRotation: 0,
+      bodyScaleX: 0,
+      bodyScaleY: 0,
     };
     const frameInterval = 1000 / fps;
 
@@ -141,18 +153,17 @@ export default function HomeState({
       jellyTarget.rotation = amb.rotation + (active ? d.blobRotation : 0);
       jellyTarget.scaleX = clampDeform(dsx);
       jellyTarget.scaleY = clampDeform(dsy);
+      jellyTarget.bodyX = active ? d.bodyX : 0;
+      jellyTarget.bodyY = active ? d.bodyY : 0;
+      jellyTarget.bodyRotation = active ? d.bodyRotation : 0;
+      jellyTarget.bodyScaleX = active ? clampBodyDeform(d.bodyScaleX) : 0;
+      jellyTarget.bodyScaleY = active ? clampBodyDeform(d.bodyScaleY) : 0;
       const physical = physics.current.update(dt, jellyTarget);
 
       latestIdleX = amb.x;
       latestIdleY = amb.y;
       latestRotation = physical.rotation;
       latestEyeLid = active ? d.eyeLid : 1;
-
-      const eye = {
-        ...NEUTRAL_ELEMENT,
-        x: active ? d.eyeX : 0,
-        y: active ? d.eyeY : 0,
-      };
 
       const deformX = clampDeform(physical.scaleX);
       const deformY = clampDeform(physical.scaleY);
@@ -175,16 +186,33 @@ export default function HomeState({
           // to the body instead of sliding across it.
           body: {
             ...NEUTRAL_ELEMENT,
-            scaleX: 1 + deformX * BODY_DEFORM_SHARE,
-            scaleY: 1 + deformY * BODY_DEFORM_SHARE,
+            x: physical.bodyX,
+            y: physical.bodyY,
+            rotation: physical.bodyRotation,
+            scaleX:
+              1 + deformX * BODY_DEFORM_SHARE + clampBodyDeform(physical.bodyScaleX),
+            scaleY:
+              1 + deformY * BODY_DEFORM_SHARE + clampBodyDeform(physical.bodyScaleY),
           },
           leftEye: {
-            ...eye,
-            scaleY: active ? d.eyeLid * d.leftEyeTension : 1,
+            ...NEUTRAL_ELEMENT,
+            x: active ? d.eyeX + d.leftEyeX : 0,
+            y: active ? d.eyeY + d.leftEyeY : 0,
+            scaleX: 1 + (active ? d.leftEyeScaleX : 0),
+            scaleY:
+              (active ? d.eyeLid * d.leftEyeTension : 1) +
+              (active ? d.leftEyeScaleY : 0),
+            rotation: active ? d.leftEyeRotation : 0,
           },
           rightEye: {
-            ...eye,
-            scaleY: active ? d.eyeLid * d.rightEyeTension : 1,
+            ...NEUTRAL_ELEMENT,
+            x: active ? d.eyeX + d.rightEyeX : 0,
+            y: active ? d.eyeY + d.rightEyeY : 0,
+            scaleX: 1 + (active ? d.rightEyeScaleX : 0),
+            scaleY:
+              (active ? d.eyeLid * d.rightEyeTension : 1) +
+              (active ? d.rightEyeScaleY : 0),
+            rotation: active ? d.rightEyeRotation : 0,
           },
           mouth: {
             ...NEUTRAL_ELEMENT,

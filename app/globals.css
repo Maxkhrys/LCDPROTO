@@ -2,13 +2,81 @@
 
 :root {
   color-scheme: dark;
+  --simulator-bg: #050506;
+  --simulator-ink: #f5f5f7;
+}
+
+html[data-simulator-theme="light"] {
+  color-scheme: light;
+  --simulator-bg: #f2eff6;
+  --simulator-ink: #1d1724;
 }
 
 html,
 body {
-  background: #050506;
-  color: #f5f5f7;
+  background: var(--simulator-bg);
+  color: var(--simulator-ink);
   -webkit-font-smoothing: antialiased;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+/* Dev-only whole-page contrast mode. Exact opacity tiers preserve hierarchy
+   while flipping every simulator control, panel and readout to light UI. */
+html[data-simulator-theme="light"] [class~="text-white"] {
+  color: #1d1724 !important;
+}
+html[data-simulator-theme="light"] [class~="text-white/10"] {
+  color: rgb(29 23 36 / 0.14) !important;
+}
+html[data-simulator-theme="light"] [class~="text-white/25"] {
+  color: rgb(29 23 36 / 0.38) !important;
+}
+html[data-simulator-theme="light"] [class~="text-white/30"] {
+  color: rgb(29 23 36 / 0.44) !important;
+}
+html[data-simulator-theme="light"] [class~="text-white/35"] {
+  color: rgb(29 23 36 / 0.5) !important;
+}
+html[data-simulator-theme="light"] [class~="text-white/40"] {
+  color: rgb(29 23 36 / 0.56) !important;
+}
+html[data-simulator-theme="light"] [class~="text-white/50"] {
+  color: rgb(29 23 36 / 0.64) !important;
+}
+html[data-simulator-theme="light"] [class~="text-white/60"] {
+  color: rgb(29 23 36 / 0.72) !important;
+}
+html[data-simulator-theme="light"] [class~="text-white/65"] {
+  color: rgb(29 23 36 / 0.76) !important;
+}
+html[data-simulator-theme="light"] [class~="text-white/70"] {
+  color: rgb(29 23 36 / 0.82) !important;
+}
+html[data-simulator-theme="light"] [class~="text-white/80"] {
+  color: rgb(29 23 36 / 0.9) !important;
+}
+html[data-simulator-theme="light"] [class*="border-white"] {
+  border-color: rgb(43 32 52 / 0.13) !important;
+}
+html[data-simulator-theme="light"] [class~="border-white/20"],
+html[data-simulator-theme="light"] [class~="border-white/25"] {
+  border-color: rgb(43 32 52 / 0.24) !important;
+}
+html[data-simulator-theme="light"] [class~="bg-white/[0.015]"] {
+  background-color: rgb(255 255 255 / 0.72) !important;
+}
+html[data-simulator-theme="light"] [class~="bg-white/[0.06]"],
+html[data-simulator-theme="light"] [class~="bg-white/[0.07]"] {
+  background-color: rgb(43 32 52 / 0.08) !important;
+}
+html[data-simulator-theme="light"] [class~="bg-white/10"] {
+  background-color: rgb(43 32 52 / 0.13) !important;
+}
+html[data-simulator-theme="light"] [class~="bg-black/40"] {
+  background-color: rgb(255 255 255 / 0.78) !important;
+}
+html[data-simulator-theme="light"] [class~="text-[#b295ff]"] {
+  color: #6840b6 !important;
 }
 
 /* The panel is a fixed-resolution render surface: never let the browser

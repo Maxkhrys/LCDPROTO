@@ -22,14 +22,27 @@ export type BehaviourId =
   | "GLANCE_LEFT"
   | "GLANCE_RIGHT"
   | "LOOK_UP"
+  | "LOOK_DOWN"
+  | "CURIOUS_TILT_LEFT"
+  | "CURIOUS_TILT_RIGHT"
   | "BODY_SETTLE"
   | "TINY_SQUISH"
   | "SOFT_SWAY_LEFT"
   | "SOFT_SWAY_RIGHT"
+  | "SIDE_SQUISH_LEFT"
+  | "SIDE_SQUISH_RIGHT"
+  | "TALL_STRETCH"
+  | "JELLY_TWIST_LEFT"
+  | "JELLY_TWIST_RIGHT"
   | "SOFT_SQUINT"
+  | "ONE_EYE_SQUINT_LEFT"
+  | "ONE_EYE_SQUINT_RIGHT"
+  | "CURIOUS_WIDE"
   | "BREATH_STRETCH"
   | "MOUTH_RELAX"
-  | "MOUTH_TWITCH";
+  | "MOUTH_TWITCH"
+  | "MOUTH_O"
+  | "MOUTH_FLIP";
 
 /** Additive deltas on the neutral pose. Scales are deviations from 1. */
 export interface PoseDelta {
@@ -38,8 +51,24 @@ export interface PoseDelta {
   blobRotation: number;
   blobScaleX: number;
   blobScaleY: number;
+  /** Secondary silhouette mass; face does not inherit these values. */
+  bodyX: number;
+  bodyY: number;
+  bodyRotation: number;
+  bodyScaleX: number;
+  bodyScaleY: number;
   eyeX: number;
   eyeY: number;
+  leftEyeX: number;
+  leftEyeY: number;
+  leftEyeScaleX: number;
+  leftEyeScaleY: number;
+  leftEyeRotation: number;
+  rightEyeX: number;
+  rightEyeY: number;
+  rightEyeScaleX: number;
+  rightEyeScaleY: number;
+  rightEyeRotation: number;
   /** Multiplier on eye scaleY, for lid closure. */
   eyeLid: number;
   /** Independent resting lid tension; multiplied by eyeLid. */
@@ -58,8 +87,23 @@ export const NEUTRAL_DELTA: PoseDelta = {
   blobRotation: 0,
   blobScaleX: 0,
   blobScaleY: 0,
+  bodyX: 0,
+  bodyY: 0,
+  bodyRotation: 0,
+  bodyScaleX: 0,
+  bodyScaleY: 0,
   eyeX: 0,
   eyeY: 0,
+  leftEyeX: 0,
+  leftEyeY: 0,
+  leftEyeScaleX: 0,
+  leftEyeScaleY: 0,
+  leftEyeRotation: 0,
+  rightEyeX: 0,
+  rightEyeY: 0,
+  rightEyeScaleX: 0,
+  rightEyeScaleY: 0,
+  rightEyeRotation: 0,
   eyeLid: 1,
   leftEyeTension: 1,
   rightEyeTension: 1,
@@ -148,8 +192,72 @@ function softSway(dir: 1 | -1): BehaviourDef["evaluate"] {
     out.blobRotation = dir * 1.0 * body;
     out.blobScaleX = cfg.squash * 0.72 * body;
     out.blobScaleY = -cfg.squash * 0.55 * body;
+    out.bodyX = dir * 1.1 * body;
+    out.bodyRotation = dir * 0.75 * body;
+    out.bodyScaleX = cfg.squash * 0.32 * body;
+    out.bodyScaleY = -cfg.squash * 0.24 * body;
     out.mouthX = dir * 0.42 * face;
     out.mouthRotation = dir * 0.8 * face;
+  };
+}
+
+function curiousTilt(dir: 1 | -1): BehaviourDef["evaluate"] {
+  return (p, cfg, out) => {
+    const face = envelope(p, 0.16, 0.38);
+    const body = envelope(p, 0.25, 0.27, BODY_LAG);
+    out.eyeX = dir * cfg.gazePx * 0.72 * face;
+    out.eyeY = -cfg.gazePx * 0.28 * face;
+    out.leftEyeScaleY = (dir < 0 ? 0.07 : 0.02) * face;
+    out.rightEyeScaleY = (dir > 0 ? 0.07 : 0.02) * face;
+    out.leftEyeRotation = dir * 1.4 * face;
+    out.rightEyeRotation = dir * 1.1 * face;
+    out.mouthX = dir * 0.55 * face;
+    out.mouthY = -0.18 * face;
+    out.mouthRotation = dir * 6 * face;
+    out.blobX = dir * 1.2 * body;
+    out.blobRotation = dir * 1.25 * body;
+    out.bodyX = dir * 1.1 * body;
+    out.bodyY = 0.35 * body;
+    out.bodyRotation = dir * 1.1 * body;
+    out.bodyScaleX = cfg.squash * 0.55 * body;
+    out.bodyScaleY = -cfg.squash * 0.4 * body;
+  };
+}
+
+function sideSquish(dir: 1 | -1): BehaviourDef["evaluate"] {
+  return (p, cfg, out) => {
+    const face = envelope(p, 0.13, 0.45);
+    const body = envelope(p, 0.2, 0.24, BODY_LAG);
+    out.eyeX = dir * 1.25 * face;
+    out.leftEyeTension = 1 - 0.045 * face;
+    out.rightEyeTension = 1 - 0.035 * face;
+    out.mouthX = dir * 0.6 * face;
+    out.mouthRotation = dir * 3.5 * face;
+    out.blobX = dir * 1.8 * body;
+    out.blobRotation = dir * 0.8 * body;
+    out.blobScaleX = cfg.squash * 1.05 * body;
+    out.blobScaleY = -cfg.squash * 0.7 * body;
+    out.bodyX = dir * 2.2 * body;
+    out.bodyRotation = dir * 1.6 * body;
+    out.bodyScaleX = cfg.squash * 0.82 * body;
+    out.bodyScaleY = -cfg.squash * 0.58 * body;
+  };
+}
+
+function jellyTwist(dir: 1 | -1): BehaviourDef["evaluate"] {
+  return (p, cfg, out) => {
+    const face = envelope(p, 0.15, 0.4);
+    const body = envelope(p, 0.24, 0.22, BODY_LAG);
+    out.eyeX = dir * 1.0 * face;
+    out.leftEyeY = -dir * 0.25 * face;
+    out.rightEyeY = dir * 0.25 * face;
+    out.mouthRotation = dir * 5 * face;
+    out.blobRotation = dir * 1.15 * body;
+    out.bodyX = dir * 1.45 * body;
+    out.bodyY = 0.45 * body;
+    out.bodyRotation = dir * 2.6 * body;
+    out.bodyScaleX = cfg.squash * 0.52 * body;
+    out.bodyScaleY = -cfg.squash * 0.34 * body;
   };
 }
 
@@ -194,6 +302,29 @@ export const BEHAVIOURS: Record<BehaviourId, BehaviourDef> = {
     },
   },
 
+  LOOK_DOWN: {
+    duration: 1450,
+    weight: 9,
+    evaluate: (p, cfg, out) => {
+      const face = envelope(p, 0.15, 0.38);
+      const body = envelope(p, 0.24, 0.27, BODY_LAG);
+      out.eyeY = cfg.gazePx * 0.62 * face;
+      out.leftEyeTension = 1 - 0.075 * face;
+      out.rightEyeTension = 1 - 0.06 * face;
+      out.mouthY = 0.42 * face;
+      out.mouthScaleX = 0.035 * face;
+      out.blobY = 0.85 * body;
+      out.blobScaleX = cfg.squash * 0.55 * body;
+      out.blobScaleY = -cfg.squash * 0.48 * body;
+      out.bodyY = 0.85 * body;
+      out.bodyScaleX = cfg.squash * 0.4 * body;
+      out.bodyScaleY = -cfg.squash * 0.32 * body;
+    },
+  },
+
+  CURIOUS_TILT_LEFT: { duration: 1850, weight: 10, evaluate: curiousTilt(-1) },
+  CURIOUS_TILT_RIGHT: { duration: 1850, weight: 10, evaluate: curiousTilt(1) },
+
   BODY_SETTLE: {
     duration: 1080,
     weight: 16,
@@ -207,6 +338,9 @@ export const BEHAVIOURS: Record<BehaviourId, BehaviourDef> = {
       out.rightEyeTension = 1 - 0.045 * drop;
       out.mouthScaleX = 0.035 * drop;
       out.mouthScaleY = -0.05 * drop;
+      out.bodyY = 1.2 * drop;
+      out.bodyScaleX = cfg.squash * 0.5 * drop;
+      out.bodyScaleY = -cfg.squash * 0.44 * drop;
     },
   },
 
@@ -225,11 +359,40 @@ export const BEHAVIOURS: Record<BehaviourId, BehaviourDef> = {
       out.rightEyeTension = 1 - 0.045 * Math.max(0, s);
       out.mouthScaleX = 0.045 * s;
       out.mouthScaleY = -0.06 * s;
+      out.bodyY = 0.65 * Math.max(0, s);
+      out.bodyScaleX = cfg.squash * 0.58 * s;
+      out.bodyScaleY = -cfg.squash * 0.52 * s;
     },
   },
 
   SOFT_SWAY_LEFT: { duration: 1600, weight: 8, evaluate: softSway(-1) },
   SOFT_SWAY_RIGHT: { duration: 1600, weight: 8, evaluate: softSway(1) },
+  SIDE_SQUISH_LEFT: { duration: 1350, weight: 11, evaluate: sideSquish(-1) },
+  SIDE_SQUISH_RIGHT: { duration: 1350, weight: 11, evaluate: sideSquish(1) },
+
+  TALL_STRETCH: {
+    duration: 1350,
+    weight: 11,
+    evaluate: (p, cfg, out) => {
+      const face = envelope(p, 0.14, 0.44);
+      const body = envelope(p, 0.2, 0.23, BODY_LAG);
+      out.eyeY = -1.15 * face;
+      out.leftEyeScaleY = 0.055 * face;
+      out.rightEyeScaleY = 0.045 * face;
+      out.mouthY = -0.55 * face;
+      out.mouthScaleX = -0.1 * face;
+      out.mouthScaleY = 0.12 * face;
+      out.blobY = -1.45 * body;
+      out.blobScaleX = -cfg.squash * 1.2 * body;
+      out.blobScaleY = cfg.squash * 1.55 * body;
+      out.bodyY = -1.2 * body;
+      out.bodyScaleX = -cfg.squash * 0.65 * body;
+      out.bodyScaleY = cfg.squash * 0.88 * body;
+    },
+  },
+
+  JELLY_TWIST_LEFT: { duration: 1500, weight: 9, evaluate: jellyTwist(-1) },
+  JELLY_TWIST_RIGHT: { duration: 1500, weight: 9, evaluate: jellyTwist(1) },
 
   SOFT_SQUINT: {
     duration: 1750,
@@ -248,6 +411,54 @@ export const BEHAVIOURS: Record<BehaviourId, BehaviourDef> = {
     },
   },
 
+  ONE_EYE_SQUINT_LEFT: {
+    duration: 1350,
+    weight: 7,
+    evaluate: (p, _cfg, out) => {
+      const face = envelope(p, 0.2, 0.38);
+      out.leftEyeTension = 1 - 0.35 * face;
+      out.rightEyeTension = 1 - 0.04 * face;
+      out.leftEyeRotation = -1.8 * face;
+      out.mouthX = -0.35 * face;
+      out.mouthRotation = -4.5 * face;
+    },
+  },
+
+  ONE_EYE_SQUINT_RIGHT: {
+    duration: 1350,
+    weight: 7,
+    evaluate: (p, _cfg, out) => {
+      const face = envelope(p, 0.2, 0.38);
+      out.rightEyeTension = 1 - 0.35 * face;
+      out.leftEyeTension = 1 - 0.04 * face;
+      out.rightEyeRotation = 1.8 * face;
+      out.mouthX = 0.35 * face;
+      out.mouthRotation = 4.5 * face;
+    },
+  },
+
+  CURIOUS_WIDE: {
+    duration: 1550,
+    weight: 10,
+    evaluate: (p, cfg, out) => {
+      const face = envelope(p, 0.13, 0.43);
+      const body = envelope(p, 0.24, 0.25, BODY_LAG);
+      out.leftEyeScaleX = 0.045 * face;
+      out.leftEyeScaleY = 0.12 * face;
+      out.rightEyeScaleX = 0.045 * face;
+      out.rightEyeScaleY = 0.12 * face;
+      out.eyeY = -0.45 * face;
+      out.mouthScaleX = -0.22 * face;
+      out.mouthScaleY = 0.16 * face;
+      out.mouthY = -0.25 * face;
+      out.blobY = -0.55 * body;
+      out.blobScaleX = -cfg.squash * 0.35 * body;
+      out.blobScaleY = cfg.squash * 0.48 * body;
+      out.bodyY = -0.4 * body;
+      out.bodyScaleY = cfg.squash * 0.28 * body;
+    },
+  },
+
   BREATH_STRETCH: {
     duration: 1900,
     weight: 11,
@@ -262,6 +473,9 @@ export const BEHAVIOURS: Record<BehaviourId, BehaviourDef> = {
       out.blobY = -0.8 * body;
       out.blobScaleX = -cfg.squash * 0.92 * body;
       out.blobScaleY = cfg.squash * 1.18 * body;
+      out.bodyY = -0.65 * body;
+      out.bodyScaleX = -cfg.squash * 0.35 * body;
+      out.bodyScaleY = cfg.squash * 0.5 * body;
     },
   },
 
@@ -286,21 +500,73 @@ export const BEHAVIOURS: Record<BehaviourId, BehaviourDef> = {
       out.mouthScaleX = 0.025 * s;
     },
   },
+
+  MOUTH_O: {
+    duration: 1500,
+    weight: 9,
+    evaluate: (p, cfg, out) => {
+      const face = envelope(p, 0.16, 0.42);
+      const body = envelope(p, 0.27, 0.25, BODY_LAG);
+      // Existing mouth artwork becomes a tiny rounded "o" through transform
+      // only; no replacement art or crossfade.
+      out.mouthScaleX = -0.62 * face;
+      out.mouthScaleY = -0.04 * face;
+      out.mouthY = -0.15 * face;
+      out.leftEyeScaleY = 0.065 * face;
+      out.rightEyeScaleY = 0.065 * face;
+      out.blobScaleX = -cfg.squash * 0.3 * body;
+      out.blobScaleY = cfg.squash * 0.42 * body;
+      out.bodyY = -0.35 * body;
+      out.bodyScaleY = cfg.squash * 0.28 * body;
+    },
+  },
+
+  MOUTH_FLIP: {
+    duration: 2100,
+    weight: 6,
+    evaluate: (p, cfg, out) => {
+      const face = envelope(p, 0.2, 0.4);
+      const body = envelope(p, 0.29, 0.25, BODY_LAG);
+      out.mouthRotation = 180 * face;
+      out.mouthY = 0.25 * face;
+      out.mouthScaleX = -0.08 * face;
+      out.leftEyeTension = 1 - 0.12 * face;
+      out.rightEyeTension = 1 - 0.1 * face;
+      out.eyeY = 0.45 * face;
+      out.blobY = 0.45 * body;
+      out.bodyY = 0.4 * body;
+      out.bodyScaleX = cfg.squash * 0.22 * body;
+      out.bodyScaleY = -cfg.squash * 0.18 * body;
+    },
+  },
 };
 
 /** Stable authored order keeps the seeded schedule varied from its first run. */
 const PICKABLE: readonly BehaviourId[] = [
   "BODY_SETTLE",
   "GLANCE_LEFT",
+  "CURIOUS_TILT_RIGHT",
+  "MOUTH_O",
+  "SIDE_SQUISH_LEFT",
   "MOUTH_RELAX",
   "SOFT_SWAY_RIGHT",
+  "ONE_EYE_SQUINT_LEFT",
   "TINY_SQUISH",
   "GLANCE_RIGHT",
   "LOOK_UP",
+  "JELLY_TWIST_RIGHT",
   "SOFT_SQUINT",
+  "CURIOUS_WIDE",
+  "SIDE_SQUISH_RIGHT",
   "MOUTH_TWITCH",
+  "LOOK_DOWN",
   "SOFT_SWAY_LEFT",
   "BREATH_STRETCH",
+  "CURIOUS_TILT_LEFT",
+  "TALL_STRETCH",
+  "ONE_EYE_SQUINT_RIGHT",
+  "JELLY_TWIST_LEFT",
+  "MOUTH_FLIP",
 ];
 
 /** Small, fast, deterministic PRNG. */
