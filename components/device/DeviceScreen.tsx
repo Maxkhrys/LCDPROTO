@@ -54,7 +54,7 @@ export default function DeviceScreen({
       style={{
         width: screenSize,
         height: screenSize,
-        background: displayMode === "light" ? "#eeeaf4" : "#000",
+        background: displayMode === "warm" ? "#cfc3b4" : "#000",
       }}
     >
       <div

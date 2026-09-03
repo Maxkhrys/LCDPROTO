@@ -71,7 +71,7 @@ export interface StateViewProps {
    */
   renderScale: number;
   /** Dev-only panel contrast preview. Hardware/default remains dark. */
-  displayMode: "dark" | "light";
+  displayMode: "dark" | "warm";
   /** Dev-only rig colour preview; every colour uses identical transforms. */
   blobColour: BlobColour;
 }

@@ -158,8 +158,13 @@ and nothing random happens during render.
 
 **Behaviour** toggles the micro-behaviours (leaving the neutral pose plus
 ambient); **Idle** toggles the ambient layer. Both off is a completely static
-calibrated pose. **Light** changes the complete simulator UI and LCD preview to
-a light usability theme; hardware/default view remains dark.
+calibrated pose. **Warm** changes the complete simulator UI and LCD preview to
+a low-glare warm testing theme; hardware/default view remains dark.
+
+The fixed **Expressions** tab exposes the authored catalogue without changing
+the animation architecture. HOME is grouped into Gaze, Lids & eyes, Jelly body
+and Mouth. Future state catalogues are added in `lib/expressionCatalog.ts` and
+appear under their own state filter when authored.
 
 ## Adding a state's animation
 

@@ -33,7 +33,7 @@ type Images = Record<LayerId, HTMLImageElement>;
  * their attachment points still move like skin.
  */
 const FACE_ART_SURFACE_INHERIT = 0.56;
-const SKIN_INTEGRATION_ALPHA = 0.09;
+const SKIN_INTEGRATION_ALPHA = 0.12;
 
 const clamp = (value: number, min: number, max: number) =>
   value < min ? min : value > max ? max : value;
@@ -72,17 +72,64 @@ function ellipsePath(
   ctx.ellipse(x, y, radiusX, radiusY, 0, 0, Math.PI * 2);
 }
 
+function eyeSocketPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+) {
+  // Slightly organic rather than perfectly geometric. This follows the old
+  // glossy eye silhouette while keeping the aperture deterministic.
+  ctx.beginPath();
+  ctx.moveTo(x, y - height * 0.5);
+  ctx.bezierCurveTo(
+    x - width * 0.35,
+    y - height * 0.52,
+    x - width * 0.51,
+    y - height * 0.2,
+    x - width * 0.49,
+    y + height * 0.16
+  );
+  ctx.bezierCurveTo(
+    x - width * 0.47,
+    y + height * 0.42,
+    x - width * 0.22,
+    y + height * 0.52,
+    x,
+    y + height * 0.5
+  );
+  ctx.bezierCurveTo(
+    x + width * 0.28,
+    y + height * 0.48,
+    x + width * 0.5,
+    y + height * 0.25,
+    x + width * 0.47,
+    y - height * 0.02
+  );
+  ctx.bezierCurveTo(
+    x + width * 0.44,
+    y - height * 0.35,
+    x + width * 0.2,
+    y - height * 0.5,
+    x,
+    y - height * 0.5
+  );
+  ctx.closePath();
+}
+
 function drawMouthShape(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
   curve: number,
-  oAmount: number
+  oAmount: number,
+  colour: BlobColour
 ) {
   const o = clamp(oAmount, 0, 1);
   const lineHalf = Math.max(0.85, height * 0.23) * (1 - o);
-  const ovalHalf = Math.max(1.7, height * 0.48) * o;
-  const mouthWidth = width * (1 - o * 0.2);
+  const ovalHalf = Math.max(2.1, height * 0.58) * o;
+  const mouthWidth = width * (1 - o * 0.36);
   const centerY = curve * height * 1.05 * (1 - o);
   const topEnd = -lineHalf;
   const bottomEnd = lineHalf;
@@ -114,20 +161,67 @@ function drawMouthShape(
   );
   ctx.quadraticCurveTo(-halfWidth, bottomEnd, -halfWidth, bottomEnd - corner);
   ctx.closePath();
-  ctx.fillStyle = "#050506";
+  const palette = eyePalette(colour);
+  const mouthSurface = ctx.createLinearGradient(0, -height, 0, height);
+  mouthSurface.addColorStop(0, "#020203");
+  mouthSurface.addColorStop(0.7, "#050506");
+  mouthSurface.addColorStop(1, palette.shade);
+  ctx.fillStyle = mouthSurface;
   ctx.fill();
+
+  // Round the two mouth ends as soft tissue, especially at native 240px where
+  // a pointed endpoint reads like a drawn line instead of a small mouth.
+  if (o < 0.9) {
+    ctx.beginPath();
+    ctx.ellipse(-halfWidth, 0, lineHalf, lineHalf, 0, 0, Math.PI * 2);
+    ctx.ellipse(halfWidth, 0, lineHalf, lineHalf, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 function eyeIrisColour(colour: BlobColour) {
   switch (colour) {
     case "teal":
-      return "#6ce9e4";
+      return "#54d9d4";
     case "yellow":
-      return "#ffe08a";
+      return "#e4b94e";
     case "green":
-      return "#a8f28f";
+      return "#79d96a";
     default:
-      return "#9b82ff";
+      return "#8969e8";
+  }
+}
+
+function eyePalette(colour: BlobColour) {
+  switch (colour) {
+    case "teal":
+      return {
+        shade: "#06383e",
+        rim: "#147d83",
+        wash: "rgba(26, 207, 205, 0.42)",
+        washEdge: "rgba(26, 207, 205, 0)",
+      };
+    case "yellow":
+      return {
+        shade: "#3d2c0b",
+        rim: "#9b711b",
+        wash: "rgba(242, 190, 55, 0.38)",
+        washEdge: "rgba(242, 190, 55, 0)",
+      };
+    case "green":
+      return {
+        shade: "#123e1d",
+        rim: "#348b32",
+        wash: "rgba(108, 217, 75, 0.38)",
+        washEdge: "rgba(108, 217, 75, 0)",
+      };
+    default:
+      return {
+        shade: "#1b0c42",
+        rim: "#6529c5",
+        wash: "rgba(127, 67, 235, 0.42)",
+        washEdge: "rgba(127, 67, 235, 0)",
+      };
   }
 }
 
@@ -142,42 +236,81 @@ function drawProceduralEye(
 ) {
   // The socket is the eye's stable dark mass. Everything else is drawn inside
   // it, so gaze moves the iris rather than dragging a glossy eye sticker.
-  ellipsePath(ctx, 0, 0, width / 2, height / 2);
-  ctx.fillStyle = "#030405";
+  const palette = eyePalette(colour);
+  eyeSocketPath(ctx, 0, 0, width, height);
+  const surface = ctx.createLinearGradient(0, -height / 2, 0, height / 2);
+  surface.addColorStop(0, "#07080a");
+  surface.addColorStop(0.58, "#020304");
+  surface.addColorStop(0.86, palette.shade);
+  surface.addColorStop(1, palette.rim);
+  ctx.fillStyle = surface;
+  ctx.fill();
+
+  const bottomWash = ctx.createRadialGradient(
+    -width * 0.12,
+    height * 0.32,
+    0,
+    -width * 0.02,
+    height * 0.25,
+    height * 0.75
+  );
+  bottomWash.addColorStop(0, palette.wash);
+  bottomWash.addColorStop(0.58, palette.washEdge);
+  eyeSocketPath(ctx, 0, 0, width, height);
+  ctx.fillStyle = bottomWash;
   ctx.fill();
 
   const irisX = gazeX * 0.72 + eyeBias;
   const irisY = gazeY * 0.66;
-  const irisWidth = width * 0.19;
-  const irisHeight = height * 0.27;
+  const irisWidth = width * 0.17;
+  const irisHeight = height * 0.23;
 
   ellipsePath(ctx, irisX, irisY, irisWidth, irisHeight);
-  ctx.fillStyle = eyeIrisColour(colour);
+  const iris = ctx.createRadialGradient(
+    irisX - width * 0.06,
+    irisY - height * 0.1,
+    width * 0.03,
+    irisX,
+    irisY,
+    irisHeight * 1.2
+  );
+  iris.addColorStop(0, eyeIrisColour(colour));
+  iris.addColorStop(0.55, palette.shade);
+  iris.addColorStop(1, "#020304");
+  ctx.fillStyle = iris;
   ctx.fill();
 
-  ellipsePath(ctx, irisX, irisY + height * 0.012, width * 0.085, height * 0.16);
+  ellipsePath(ctx, irisX, irisY + height * 0.012, width * 0.065, height * 0.12);
   ctx.fillStyle = "#010203";
   ctx.fill();
 
-  // Solid highlights keep the eye alive at native size without glow or blur.
+  // Solid highlights keep the eye alive at native size without filters.
+  ctx.save();
+  ctx.translate(irisX - width * 0.045, irisY - height * 0.115);
+  ctx.rotate(-0.28);
   ellipsePath(
     ctx,
-    irisX - width * 0.065,
-    irisY - height * 0.105,
-    width * 0.052,
-    height * 0.075
+    0,
+    0,
+    width * 0.12,
+    height * 0.17
   );
   ctx.fillStyle = "#f3ffff";
   ctx.fill();
+  ctx.restore();
 
   ellipsePath(
     ctx,
     irisX + width * 0.08,
     irisY + height * 0.11,
-    width * 0.026,
-    height * 0.04
+    width * 0.04,
+    height * 0.052
   );
   ctx.fillStyle = "#9edbdc";
+  ctx.fill();
+
+  ellipsePath(ctx, -width * 0.16, -height * 0.28, width * 0.018, height * 0.018);
+  ctx.fillStyle = "#d8ffff";
   ctx.fill();
 }
 
@@ -369,12 +502,13 @@ export default function BlobCharacter({
         // Clip is created before texture translation, so the socket does not
         // travel with a glance. The aperture follows the eye's oval silhouette.
         ctx.translate(socketX, socketY);
-        ellipsePath(ctx, 0, 0, socketWidth / 2, socketHeight / 2);
+        eyeSocketPath(ctx, 0, 0, socketWidth, socketHeight);
         ctx.clip();
         ctx.beginPath();
         ctx.rect(-socketWidth / 2, visibleTop, socketWidth, visibleBottom - visibleTop);
         ctx.clip();
 
+        ctx.rotate((t.rotation * Math.PI) / 180);
         drawProceduralEye(
           ctx,
           socketWidth,
@@ -398,7 +532,7 @@ export default function BlobCharacter({
         // Keep body image and socket in the same body-space coordinate system.
         // Translating to socket before drawing made the lid sample pixels from
         // the eye centre instead of repainting the body underneath the eye.
-        ellipsePath(ctx, socketX, socketY, socketWidth / 2, socketHeight / 2);
+        eyeSocketPath(ctx, socketX, socketY, socketWidth, socketHeight);
         ctx.clip();
         ctx.beginPath();
         const coverTop = -socketHeight / 2;
@@ -433,10 +567,11 @@ export default function BlobCharacter({
       ctx.scale(faceCompensationX, faceCompensationY);
       drawMouthShape(
         ctx,
-        a.width * 0.78 * clamp(t.scaleX, 0.62, 1.18),
-        a.height * 0.9 * clamp(t.scaleY, 0.7, 1.24),
+        a.width * 0.88 * clamp(t.scaleX, 0.62, 1.18),
+        a.height * 1.02 * clamp(t.scaleY, 0.7, 1.24),
         clamp(t.mouthCurve, -1, 1),
-        clamp(t.mouthO, 0, 1)
+        clamp(t.mouthO, 0, 1),
+        colour
       );
       ctx.restore();
     };

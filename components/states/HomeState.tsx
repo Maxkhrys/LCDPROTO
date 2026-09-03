@@ -287,7 +287,7 @@ export default function HomeState({
   return (
     <div
       className="relative h-full w-full"
-      style={{ background: displayMode === "light" ? "#eeeaf4" : "#000" }}
+      style={{ background: displayMode === "warm" ? "#cfc3b4" : "#000" }}
     >
       <BlobCharacter
         size={size}

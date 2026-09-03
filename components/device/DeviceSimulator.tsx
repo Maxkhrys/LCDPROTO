@@ -18,6 +18,12 @@ import {
 import { DEFAULT_IDLE, IDLE_LIMITS, type IdleConfig } from "@/lib/blobIdle";
 import type { BehaviourId, HomeActivityStatus } from "@/lib/blobBehaviour";
 import {
+  EXPRESSION_FILTERS,
+  EXPRESSION_GROUPS_BY_STATE,
+  HOME_EXPRESSION_GROUPS,
+  type ExpressionFilter,
+} from "@/lib/expressionCatalog";
+import {
   DEFAULT_STATE,
   DEVICE_STATES,
   getStateMeta,
@@ -38,7 +44,7 @@ export default function DeviceSimulator() {
   const [fps, setFps] = useState<Fps>(60);
   const [speed, setSpeed] = useState<Speed>(1);
   const [runId, setRunId] = useState(0);
-  const [displayMode, setDisplayMode] = useState<"dark" | "light">("dark");
+  const [displayMode, setDisplayMode] = useState<"dark" | "warm">("dark");
   const [blobColour, setBlobColour] = useState<BlobColour>("teal");
 
   // Temporary facial-layer alignment controls. The measured anchors in
@@ -58,6 +64,9 @@ export default function DeviceSimulator() {
     []
   );
   const [showCalibration, setShowCalibration] = useState(false);
+  const [showExpressions, setShowExpressions] = useState(false);
+  const [expressionFilter, setExpressionFilter] =
+    useState<ExpressionFilter>("ALL");
   /** When true the panel rasterises at exactly 240x240 — real hardware pixels. */
   const [nativePixels, setNativePixels] = useState(false);
   const [dpr, setDpr] = useState(1);
@@ -104,6 +113,8 @@ export default function DeviceSimulator() {
     setBehaviourEnabled(true);
     setTrigger(null);
     setSaved(null);
+    setShowExpressions(false);
+    setExpressionFilter("ALL");
     setRunId((n) => n + 1);
   }, []);
 
@@ -120,7 +131,7 @@ export default function DeviceSimulator() {
       );
 
   return (
-    <div className="sim-ui flex w-full flex-col items-center gap-7 sm:gap-8">
+    <div className="sim-ui relative flex w-full flex-col items-center gap-7 sm:gap-8">
       <div
         ref={frameRef}
         className="aspect-square w-full"
@@ -227,10 +238,10 @@ export default function DeviceSimulator() {
         </DevButton>
 
         <DevButton
-          active={displayMode === "light"}
-          onClick={() => setDisplayMode((v) => (v === "dark" ? "light" : "dark"))}
+          active={displayMode === "warm"}
+          onClick={() => setDisplayMode((v) => (v === "dark" ? "warm" : "dark"))}
         >
-          {displayMode === "dark" ? "Light" : "Dark"}
+          {displayMode === "dark" ? "Warm" : "Dark"}
         </DevButton>
 
         <DevButton
@@ -310,6 +321,19 @@ export default function DeviceSimulator() {
         </span>
         <span>{playing ? "running" : "paused"}</span>
       </div>
+
+      <ExpressionDrawer
+        open={showExpressions}
+        state={state}
+        filter={expressionFilter}
+        onToggle={() => setShowExpressions((v) => !v)}
+        onStateChange={(next) => {
+          setState(next);
+          setExpressionFilter("ALL");
+        }}
+        onFilterChange={setExpressionFilter}
+        onTrigger={fire}
+      />
     </div>
   );
 }
@@ -613,36 +637,6 @@ function Slider({
   );
 }
 
-/** Behaviour ids exposed as manual dev triggers. */
-const TRIGGERS: { id: BehaviourId; label: string }[] = [
-  { id: "NORMAL_BLINK", label: "Blink" },
-  { id: "DOUBLE_BLINK", label: "Double blink" },
-  { id: "GLANCE_LEFT", label: "Glance left" },
-  { id: "GLANCE_RIGHT", label: "Glance right" },
-  { id: "LOOK_UP", label: "Look up" },
-  { id: "LOOK_DOWN", label: "Look down" },
-  { id: "CURIOUS_TILT_LEFT", label: "Curious left" },
-  { id: "CURIOUS_TILT_RIGHT", label: "Curious right" },
-  { id: "BODY_SETTLE", label: "Settle" },
-  { id: "TINY_SQUISH", label: "Squish" },
-  { id: "SOFT_SWAY_LEFT", label: "Sway left" },
-  { id: "SOFT_SWAY_RIGHT", label: "Sway right" },
-  { id: "SIDE_SQUISH_LEFT", label: "Side squish left" },
-  { id: "SIDE_SQUISH_RIGHT", label: "Side squish right" },
-  { id: "TALL_STRETCH", label: "Tall stretch" },
-  { id: "JELLY_TWIST_LEFT", label: "Twist left" },
-  { id: "JELLY_TWIST_RIGHT", label: "Twist right" },
-  { id: "SOFT_SQUINT", label: "Soft squint" },
-  { id: "ONE_EYE_SQUINT_LEFT", label: "Left squint" },
-  { id: "ONE_EYE_SQUINT_RIGHT", label: "Right squint" },
-  { id: "CURIOUS_WIDE", label: "Curious wide" },
-  { id: "BREATH_STRETCH", label: "Breath stretch" },
-  { id: "MOUTH_RELAX", label: "Mouth relax" },
-  { id: "MOUTH_TWITCH", label: "Mouth twitch" },
-  { id: "MOUTH_O", label: "Mouth O" },
-  { id: "MOUTH_FLIP", label: "Mouth flip" },
-];
-
 /**
  * Temporary window onto the HOME behaviour scheduler: what is running now, and
  * a way to fire each behaviour on demand for inspection.
@@ -691,17 +685,241 @@ function BehaviourPanel({
         </span>
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        {TRIGGERS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => onTrigger(t.id)}
-            className="rounded-md border border-white/[0.07] px-2.5 py-1 text-[10px] tracking-wide text-white/40 transition-colors hover:border-white/20 hover:text-white/80"
-          >
-            {t.label}
-          </button>
+      <div className="flex flex-col gap-3">
+        <div>
+          <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/25">
+            neutral
+          </span>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => onTrigger("REST")}
+              className="rounded-md border border-white/[0.07] px-2.5 py-1 text-[10px] tracking-wide text-white/40 transition-colors hover:border-white/20 hover:text-white/80"
+            >
+              Return to neutral
+            </button>
+          </div>
+        </div>
+        {HOME_EXPRESSION_GROUPS.map((group) => (
+          <div key={group.id}>
+            <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/25">
+              {group.label}
+            </span>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {group.entries.map((entry) => (
+                <button
+                  key={entry.id}
+                  type="button"
+                  onClick={() => onTrigger(entry.id)}
+                  className="rounded-md border border-white/[0.07] px-2.5 py-1 text-[10px] tracking-wide text-white/40 transition-colors hover:border-white/20 hover:text-white/80"
+                >
+                  {entry.label}
+                </button>
+              ))}
+            </div>
+          </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function ExpressionDrawer({
+  open,
+  state,
+  filter,
+  onToggle,
+  onStateChange,
+  onFilterChange,
+  onTrigger,
+}: {
+  open: boolean;
+  state: DeviceState;
+  filter: ExpressionFilter;
+  onToggle: () => void;
+  onStateChange: (state: DeviceState) => void;
+  onFilterChange: (filter: ExpressionFilter) => void;
+  onTrigger: (id: BehaviourId) => void;
+}) {
+  const groups = EXPRESSION_GROUPS_BY_STATE[state] ?? [];
+  const visibleGroups =
+    filter === "ALL" ? groups : groups.filter((group) => group.id === filter);
+  const meta = getStateMeta(state);
+
+  return (
+    <div className="pointer-events-none fixed inset-y-0 right-0 z-50 flex items-center">
+      <div
+        className="pointer-events-auto flex items-stretch transition-transform duration-200 ease-out"
+        style={{
+          transform: open ? "translateX(0)" : "translateX(calc(100% - 2.6rem))",
+        }}
+      >
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          aria-controls="expression-library"
+          className="flex h-36 w-10 shrink-0 items-center justify-center rounded-l-xl border border-r-0 border-white/[0.1] bg-black/40 text-white/55 shadow-xl transition-colors hover:text-white"
+        >
+          <span
+            className="font-mono text-[9px] uppercase tracking-[0.2em]"
+            style={{ writingMode: "vertical-rl" }}
+          >
+            Expressions
+          </span>
+        </button>
+
+        <aside
+          id="expression-library"
+          aria-label="Expression library"
+          className="expression-drawer flex h-[min(78vh,680px)] w-[min(350px,calc(100vw-52px))] flex-col rounded-l-xl border border-white/[0.1] shadow-2xl"
+          style={{
+            background: "var(--dev-panel-bg)",
+            borderColor: "var(--dev-panel-border)",
+          }}
+        >
+          <div className="flex items-start justify-between gap-3 border-b border-white/[0.07] px-4 py-4">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/70">
+                Expression library
+              </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-white/35">
+                Tap any cue to preview this state’s behaviour.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onToggle}
+              aria-label="Close expression library"
+              className="rounded-md px-1.5 text-lg leading-none text-white/35 transition-colors hover:text-white/80"
+            >
+              ×
+            </button>
+          </div>
+
+          <div className="border-b border-white/[0.07] px-3 py-3">
+            <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.16em] text-white/25">
+              State
+            </p>
+            <div className="flex gap-1 overflow-x-auto pb-1">
+              {DEVICE_STATES.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => onStateChange(item.id)}
+                  aria-pressed={item.id === state}
+                  className={
+                    item.id === state
+                      ? "shrink-0 rounded-md border border-white/20 bg-white/[0.07] px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-white/80 transition-colors"
+                      : "shrink-0 rounded-md border border-white/[0.06] px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-white/30 transition-colors hover:border-white/15 hover:text-white/65"
+                  }
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-b border-white/[0.07] px-3 py-3">
+            <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.16em] text-white/25">
+              Filter
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {EXPRESSION_FILTERS.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => onFilterChange(item)}
+                  aria-pressed={item === filter}
+                  className={
+                    item === filter
+                      ? "rounded-md border border-white/20 bg-white/[0.07] px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-white/80 transition-colors"
+                      : "rounded-md border border-white/[0.06] px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-white/30 transition-colors hover:border-white/15 hover:text-white/65"
+                  }
+                >
+                  {item === "ALL" ? "All" : item}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+            {groups.length === 0 ? (
+              <div className="rounded-lg border border-white/[0.07] bg-black/10 px-3 py-4">
+                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/45">
+                  {meta.label}
+                </p>
+                <p className="mt-1 text-[11px] leading-relaxed text-white/30">
+                  No expressions authored yet. This slot is ready for the next
+                  state pass.
+                </p>
+              </div>
+            ) : visibleGroups.length === 0 ? (
+              <p className="px-1 py-4 text-[11px] text-white/35">
+                No cues in this filter.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-4">
+                <section>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <h2 className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/35">
+                      Neutral
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onTrigger("REST")}
+                    className="group flex w-full items-center justify-between gap-3 rounded-lg border border-white/[0.06] px-3 py-2 text-left transition-colors hover:border-white/20 hover:bg-white/[0.05]"
+                  >
+                    <span className="text-[11px] text-white/65 group-hover:text-white/90">
+                      Return to neutral
+                    </span>
+                    <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.1em] text-white/25">
+                      reset cues
+                    </span>
+                  </button>
+                </section>
+                {visibleGroups.map((group) => (
+                  <section key={group.id}>
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <h2 className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/35">
+                        {group.label}
+                      </h2>
+                      <span className="font-mono text-[9px] tabular-nums text-white/20">
+                        {group.entries.length}
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      {group.entries.map((entry) => (
+                        <button
+                          key={entry.id}
+                          type="button"
+                          onClick={() => onTrigger(entry.id)}
+                          className="group flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] px-3 py-2 text-left transition-colors hover:border-white/20 hover:bg-white/[0.05]"
+                        >
+                          <span className="min-w-0 text-[11px] text-white/65 group-hover:text-white/90">
+                            {entry.label}
+                          </span>
+                          <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.1em] text-white/25">
+                            {entry.hint}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="border-t border-white/[0.07] px-4 py-3">
+            <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-white/25">
+              {groups.length > 0
+                ? meta.label + " catalogue · preview buttons fire controller cues"
+                : meta.label + " catalogue · not authored"}
+            </p>
+          </div>
+        </aside>
       </div>
     </div>
   );
