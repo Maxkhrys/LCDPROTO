@@ -73,6 +73,37 @@ function ellipsePath(
   ctx.ellipse(x, y, radiusX, radiusY, 0, 0, Math.PI * 2);
 }
 
+function drawRippleBody(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLCanvasElement,
+  width: number,
+  height: number,
+  transform: ElementTransform
+) {
+  const bands = [
+    { top: -height / 2, height: height * 0.25, shift: transform.rippleTop },
+    { top: -height * 0.27, height: height * 0.27, shift: transform.rippleUpper },
+    { top: height * 0.0, height: height * 0.28, shift: transform.rippleLower },
+    { top: height * 0.25, height: height * 0.27, shift: transform.rippleBottom },
+  ];
+
+  // The normal draw remains the crisp silhouette. These overlapping bands
+  // reuse the locked body pixels at low alpha to create a brief internal wave
+  // without mesh deformation, blur, or any new artwork.
+  ctx.save();
+  ctx.globalAlpha *= 0.32;
+  for (const band of bands) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(-width / 2 - 2, band.top - 2, width + 4, band.height + 4);
+    ctx.clip();
+    ctx.translate(band.shift, 0);
+    ctx.drawImage(image, -width / 2, -height / 2, width, height);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
 /**
  * Renders the Blob as independent layers: the locked body, then each facial
  * element drawn separately so it can be moved, scaled, rotated and faded on
@@ -212,6 +243,7 @@ export default function BlobCharacter({
     ctx.globalAlpha = bt.opacity;
     applyBodySurface(ctx, center, bw, bh, bt);
     ctx.drawImage(layers.body, -bw / 2, -bh / 2, bw, bh);
+    drawRippleBody(ctx, layers.body, bw, bh, bt);
     ctx.restore();
 
     // The surface carries the full body deformation. The face artwork gets a

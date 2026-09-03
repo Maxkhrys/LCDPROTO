@@ -250,6 +250,11 @@ export interface ElementTransform {
   eyeOpen: number;
   eyeSocketScaleX: number;
   eyeSocketScaleY: number;
+  /** Body-only surface ripple offsets, in 240-space pixels. */
+  rippleTop: number;
+  rippleUpper: number;
+  rippleLower: number;
+  rippleBottom: number;
 }
 
 /** Transform applied to the whole character; everything inherits it. */
@@ -288,6 +293,10 @@ export const NEUTRAL_ELEMENT: ElementTransform = {
   eyeOpen: 1,
   eyeSocketScaleX: 1,
   eyeSocketScaleY: 1,
+  rippleTop: 0,
+  rippleUpper: 0,
+  rippleLower: 0,
+  rippleBottom: 0,
 };
 
 export const NEUTRAL_BLOB: BlobTransform = {
