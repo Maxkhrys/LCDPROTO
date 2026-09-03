@@ -127,39 +127,40 @@ function drawMouthShape(
   colour: BlobColour
 ) {
   const o = clamp(oAmount, 0, 1);
-  const lineHalf = Math.max(0.85, height * 0.23) * (1 - o);
-  const ovalHalf = Math.max(2.1, height * 0.58) * o;
-  const mouthWidth = width * (1 - o * 0.36);
-  const centerY = curve * height * 1.05 * (1 - o);
-  const topEnd = -lineHalf;
-  const bottomEnd = lineHalf;
-  const topCenter = centerY - lineHalf - ovalHalf;
-  const bottomCenter = centerY + lineHalf + ovalHalf;
-  const halfWidth = mouthWidth / 2;
-  const corner = Math.min(halfWidth * 0.2, Math.max(0.8, height * 0.18));
+  const halfWidth = width * (0.5 - o * 0.1);
+  const thickness = Math.max(1.15, height * (0.16 + o * 0.025));
+  const loopDepth = height * 0.38 * o;
+  const bend = curve * height * 0.46 * (1 - o);
+  const endY = -curve * height * 0.1 * (1 - o);
+  const topEnd = endY - thickness;
+  const bottomEnd = endY + thickness;
+  const topCenter = endY + bend - thickness - loopDepth;
+  const bottomCenter = endY + bend + thickness + loopDepth;
+  const capReach = Math.max(1.2, thickness * 1.35);
 
-  // One filled path morphs between a curved mouth and a rounded O. No asset
-  // swap, opacity trick, or rotation is used at any point in the transition.
+  // One continuous filled contour. At zero O it is a soft, round-ended bar.
+  // As O rises, that same contour opens vertically and closes into one oval.
+  // There are no end dots, added blobs, asset swaps, or rotation tricks.
   ctx.beginPath();
-  ctx.moveTo(-halfWidth + corner, topEnd);
+  ctx.moveTo(-halfWidth, topEnd);
+  ctx.quadraticCurveTo(0, topCenter, halfWidth, topEnd);
   ctx.bezierCurveTo(
-    -halfWidth * 0.72,
-    topCenter,
-    halfWidth * 0.7,
-    topCenter,
-    halfWidth - corner,
-    topEnd
-  );
-  ctx.quadraticCurveTo(halfWidth, topEnd, halfWidth, topEnd + corner);
-  ctx.bezierCurveTo(
-    halfWidth * 0.72,
-    bottomCenter,
-    -halfWidth * 0.72,
-    bottomCenter,
-    -halfWidth + corner,
+    halfWidth + capReach,
+    topEnd,
+    halfWidth + capReach,
+    bottomEnd,
+    halfWidth,
     bottomEnd
   );
-  ctx.quadraticCurveTo(-halfWidth, bottomEnd, -halfWidth, bottomEnd - corner);
+  ctx.quadraticCurveTo(0, bottomCenter, -halfWidth, bottomEnd);
+  ctx.bezierCurveTo(
+    -halfWidth - capReach,
+    bottomEnd,
+    -halfWidth - capReach,
+    topEnd,
+    -halfWidth,
+    topEnd
+  );
   ctx.closePath();
   const palette = eyePalette(colour);
   const mouthSurface = ctx.createLinearGradient(0, -height, 0, height);
@@ -168,15 +169,6 @@ function drawMouthShape(
   mouthSurface.addColorStop(1, palette.shade);
   ctx.fillStyle = mouthSurface;
   ctx.fill();
-
-  // Round the two mouth ends as soft tissue, especially at native 240px where
-  // a pointed endpoint reads like a drawn line instead of a small mouth.
-  if (o < 0.9) {
-    ctx.beginPath();
-    ctx.ellipse(-halfWidth, 0, lineHalf, lineHalf, 0, 0, Math.PI * 2);
-    ctx.ellipse(halfWidth, 0, lineHalf, lineHalf, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
 }
 
 function eyeIrisColour(colour: BlobColour) {
@@ -563,12 +555,13 @@ export default function BlobCharacter({
       ctx.globalAlpha = t.opacity;
       applyBodySurface(ctx, center, bw, bh, bt);
       ctx.translate(a.x - center + t.x, a.y - center + t.y);
-      ctx.rotate((t.rotation * Math.PI) / 180);
+      // Mouth orientation stays upright. Smile, frown and O are all shape
+      // changes on one path, so expression changes never spin the mouth.
       ctx.scale(faceCompensationX, faceCompensationY);
       drawMouthShape(
         ctx,
-        a.width * 0.88 * clamp(t.scaleX, 0.62, 1.18),
-        a.height * 1.02 * clamp(t.scaleY, 0.7, 1.24),
+        a.width * 0.95 * clamp(t.scaleX, 0.62, 1.18),
+        a.height * 1.08 * clamp(t.scaleY, 0.7, 1.24),
         clamp(t.mouthCurve, -1, 1),
         clamp(t.mouthO, 0, 1),
         colour
