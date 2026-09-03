@@ -85,6 +85,10 @@ export interface StateViewProps {
   screenColour: string;
   /** Opens floating Blob edit orbs after a double tap. */
   onOpenBlobTools?: () => void;
+  /** Closes floating Blob edit orbs after a single tap on Blob. */
+  onCloseBlobTools?: () => void;
+  /** Lets Blob shift below the tools and look up at them. */
+  blobToolsOpen?: boolean;
   /** Optional mood override; null keeps automatic mood changes. */
   mood: HomeMood | null;
   /** Shows a small light pupil inside each procedural eye. */

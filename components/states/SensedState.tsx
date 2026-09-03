@@ -94,6 +94,8 @@ export default function SensedState({
   onBehaviourStatus,
   screenColour,
   onOpenBlobTools,
+  onCloseBlobTools,
+  blobToolsOpen,
   mood,
   showPupils,
   blobColour,
@@ -351,6 +353,8 @@ export default function SensedState({
           rig={rig}
           colour={blobColour}
           onOpenTools={onOpenBlobTools}
+          onCloseTools={onCloseBlobTools}
+          settingsOpen={blobToolsOpen}
           showPupils={showPupils}
         />
       </div>

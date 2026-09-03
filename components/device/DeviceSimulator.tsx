@@ -175,9 +175,16 @@ export default function DeviceSimulator() {
                   displayMode={displayMode}
                   screenColour={screenColour}
                   onOpenBlobTools={() => {
-                    setBlobToolsOpen((value) => !value);
+                    if (!blobToolsOpen) {
+                      setBlobToolsOpen(true);
+                      setActiveBlobTool(null);
+                    }
+                  }}
+                  onCloseBlobTools={() => {
+                    setBlobToolsOpen(false);
                     setActiveBlobTool(null);
                   }}
+                  blobToolsOpen={blobToolsOpen}
                   mood={mood}
                   showPupils={showPupils}
                   blobColour={blobColour}
@@ -473,9 +480,9 @@ function BlobToolOrbs({
 }) {
   if (!open) return null;
   const orbSize = Math.max(34, Math.min(52, screenSize * 0.14));
-  const orbStyle = (left: string) => ({
+  const orbStyle = (left: string, top: number) => ({
     left,
-    top: screenSize * 0.085,
+    top: screenSize * top,
     width: orbSize,
     height: orbSize,
     transform: "translateX(-50%)",
@@ -485,20 +492,20 @@ function BlobToolOrbs({
     <div className="pointer-events-none absolute inset-0 z-30">
       <div
         className="pointer-events-auto absolute"
-        style={{ ...orbStyle("25%"), transform: "translateX(-50%) rotate(-12deg)" }}
+        style={{ ...orbStyle("25%", 0.13), transform: "translateX(-50%) rotate(-12deg)" }}
       >
         <OrbButton active={active === "colour"} label="Blob colour" onClick={() => onSelect("colour")}>
           <span className="h-4 w-4 rounded-full border border-white/70" style={{ background: blobColourSwatch(blobColour) }} />
         </OrbButton>
       </div>
-      <div className="pointer-events-auto absolute" style={orbStyle("50%")}>
+      <div className="pointer-events-auto absolute" style={orbStyle("50%", 0.055)}>
         <OrbButton active={active === "face"} label="Eyes and mouth settings" onClick={() => onSelect("face")}>
           <span className="text-[17px] leading-none">☺</span>
         </OrbButton>
       </div>
       <div
         className="pointer-events-auto absolute"
-        style={{ ...orbStyle("75%"), transform: "translateX(-50%) rotate(12deg)" }}
+        style={{ ...orbStyle("75%", 0.13), transform: "translateX(-50%) rotate(12deg)" }}
       >
         <OrbButton active={active === "pupils"} label={showPupils ? "Hide pupils" : "Show pupils"} onClick={() => onSelect("pupils")}>
           <span className="relative block h-4 w-4 rounded-full border border-white/75">

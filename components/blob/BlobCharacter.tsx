@@ -25,6 +25,10 @@ interface BlobCharacterProps {
   colour?: BlobColour;
   /** Opens the floating Blob tool orbs after a deliberate double tap. */
   onOpenTools?: () => void;
+  /** Closes floating tools after a single tap while they are open. */
+  onCloseTools?: () => void;
+  /** Moves Blob under the tools and makes his gaze follow them. */
+  settingsOpen?: boolean;
   /** Dev-only pupil preview. */
   showPupils?: boolean;
 }
@@ -314,6 +318,8 @@ export default function BlobCharacter({
   rig = NEUTRAL_RIG,
   colour = "purple",
   onOpenTools,
+  onCloseTools,
+  settingsOpen = false,
   showPupils = false,
 }: BlobCharacterProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -407,7 +413,8 @@ export default function BlobCharacter({
     ctx.globalAlpha = blob.opacity;
     // Whole-character transform: the surface and every facial layer move
     // together before any local expression is applied.
-    ctx.translate(center + blob.x, center + blob.y);
+    const settingsDrop = settingsOpen ? size * 0.075 : 0;
+    ctx.translate(center + blob.x, center + blob.y + settingsDrop);
     ctx.rotate((blob.rotation * Math.PI) / 180);
     ctx.scale(blob.scale * blob.scaleX, blob.scale * blob.scaleY);
     ctx.translate(-center, -center);
@@ -453,7 +460,11 @@ export default function BlobCharacter({
       // “top half disappears, bottom half stays open” blink failure.
       const openingY = apertureHeight * 0.12 * (1 - open);
       const gazeX = clamp(t.x, -socketWidth * 0.2, socketWidth * 0.2);
-      const gazeY = clamp(t.y, -socketHeight * 0.12, socketHeight * 0.12);
+      const gazeY = clamp(
+        t.y - (settingsOpen ? socketHeight * 0.2 : 0),
+        -socketHeight * 0.2,
+        socketHeight * 0.12
+      );
 
       // Brows are part of the facial surface, not a separate floating asset.
       // They rise with curiosity, lower with squinting, and inherit the same
@@ -519,14 +530,14 @@ export default function BlobCharacter({
     ctx.restore();
 
     ctx.restore();
-  }, [layers, size, renderScale, rig, colour, showPupils]);
+  }, [layers, size, renderScale, rig, colour, showPupils, settingsOpen]);
 
   const isBlobHit = (event: MouseEvent<HTMLCanvasElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const px = ((event.clientX - rect.left) / rect.width) * size;
     const py = ((event.clientY - rect.top) / rect.height) * size;
     const blobX = size / 2 + rig.blob.x;
-    const blobY = size / 2 + rig.blob.y;
+    const blobY = size / 2 + rig.blob.y + (settingsOpen ? size * 0.075 : 0);
     return Math.hypot(px - blobX, py - blobY) <= size * BODY_FRACTION * 0.62;
   };
 
@@ -536,8 +547,11 @@ export default function BlobCharacter({
       width={size * renderScale}
       height={size * renderScale}
       className="block"
+      onClick={(event) => {
+        if (settingsOpen && onCloseTools && isBlobHit(event)) onCloseTools();
+      }}
       onDoubleClick={(event) => {
-        if (onOpenTools && isBlobHit(event)) onOpenTools();
+        if (!settingsOpen && onOpenTools && isBlobHit(event)) onOpenTools();
       }}
       style={{
         width: size,

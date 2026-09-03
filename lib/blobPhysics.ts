@@ -171,32 +171,32 @@ export class BlobJellyPhysics {
         // weight instead of a rigid icon translated on a screen.
         const bodyLagX = Math.max(
           -2.8,
-          Math.min(2.8, -this.x.velocity * 0.075 * jellyAmount)
+          Math.min(3.6, -this.x.velocity * 0.11 * jellyAmount)
         );
         const bodyLagY = Math.max(
           -3.2,
-          Math.min(3.2, -this.y.velocity * 0.095 * jellyAmount)
+          Math.min(4.2, -this.y.velocity * 0.13 * jellyAmount)
         );
         const bodyLagRotation = Math.max(
           -1.4,
-          Math.min(1.4, -this.x.velocity * 0.065 * jellyAmount)
+          Math.min(1.9, -this.x.velocity * 0.09 * jellyAmount)
         );
         const bodyLagScaleY = Math.max(
           -0.035,
           Math.min(
-            0.035,
-            -this.y.velocity * 0.0022 * jellyAmount +
-              Math.abs(this.x.velocity) * 0.0008 * jellyAmount
+            0.045,
+            -this.y.velocity * 0.0032 * jellyAmount +
+              Math.abs(this.x.velocity) * 0.00115 * jellyAmount
           )
         );
         const bodyLagScaleX = 1 / (1 + bodyLagScaleY) - 1;
         const bodyLagSkewX = Math.max(
           -1.8,
-          Math.min(1.8, -this.x.velocity * 0.085 * jellyAmount)
+          Math.min(2.4, -this.x.velocity * 0.12 * jellyAmount)
         );
         const bodyLagSkewY = Math.max(
           -1.4,
-          Math.min(1.4, this.y.velocity * 0.045 * jellyAmount)
+          Math.min(1.9, this.y.velocity * 0.06 * jellyAmount)
         );
         // Secondary mass is intentionally softer and later than the main pose.
         // One controlled overshoot makes the artwork feel gelatinous without
@@ -323,19 +323,39 @@ export class BlobJellyPhysics {
     );
     this.pose.rippleTop = Math.max(
       -3.2,
-      Math.min(3.2, this.rippleTop.value * rippleAmount)
+      Math.min(
+        3.2,
+        this.rippleTop.value * rippleAmount +
+          motionY * 0.018 * rippleAmount +
+          motionX * 0.009 * rippleAmount
+      )
     );
     this.pose.rippleUpper = Math.max(
       -2.55,
-      Math.min(2.55, this.rippleUpper.value * rippleAmount)
+      Math.min(
+        2.55,
+        this.rippleUpper.value * rippleAmount +
+          motionY * 0.012 * rippleAmount +
+          motionX * 0.006 * rippleAmount
+      )
     );
     this.pose.rippleLower = Math.max(
       -2.15,
-      Math.min(2.15, this.rippleLower.value * rippleAmount)
+      Math.min(
+        2.15,
+        this.rippleLower.value * rippleAmount -
+          motionY * 0.009 * rippleAmount -
+          motionX * 0.004 * rippleAmount
+      )
     );
     this.pose.rippleBottom = Math.max(
       -1.75,
-      Math.min(1.75, this.rippleBottom.value * rippleAmount)
+      Math.min(
+        1.75,
+        this.rippleBottom.value * rippleAmount -
+          motionY * 0.006 * rippleAmount -
+          motionX * 0.003 * rippleAmount
+      )
     );
     return this.pose;
   }

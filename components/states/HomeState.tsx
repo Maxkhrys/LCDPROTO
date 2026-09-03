@@ -62,6 +62,8 @@ export default function HomeState({
   onBehaviourStatus,
   screenColour,
   onOpenBlobTools,
+  onCloseBlobTools,
+  blobToolsOpen,
   mood,
   showPupils,
   blobColour,
@@ -317,6 +319,8 @@ export default function HomeState({
         rig={rig}
         colour={blobColour}
         onOpenTools={onOpenBlobTools}
+        onCloseTools={onCloseBlobTools}
+        settingsOpen={blobToolsOpen}
         showPupils={showPupils}
       />
     </div>
