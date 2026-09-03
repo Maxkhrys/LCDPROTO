@@ -250,6 +250,8 @@ export interface ElementTransform {
   eyeOpen: number;
   eyeSocketScaleX: number;
   eyeSocketScaleY: number;
+  /** Expression-only eyebrow lift; deliberately independent from blink. */
+  browLift: number;
   /** Procedural mouth shape controls. */
   mouthCurve: number;
   mouthO: number;
@@ -296,6 +298,7 @@ export const NEUTRAL_ELEMENT: ElementTransform = {
   eyeOpen: 1,
   eyeSocketScaleX: 1,
   eyeSocketScaleY: 1,
+  browLift: 0,
   mouthCurve: 0,
   mouthO: 0,
   rippleTop: 0,

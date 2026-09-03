@@ -15,7 +15,7 @@ import type { StateViewProps } from "@/lib/deviceStates";
 
 /** Safety cap on total body deformation, whatever the layers add up to. */
 const MAX_DEFORM = 0.1;
-const MAX_BODY_DEFORM = 0.04;
+const MAX_BODY_DEFORM = 0.05;
 const clampDeform = (v: number) =>
   v < -MAX_DEFORM ? -MAX_DEFORM : v > MAX_DEFORM ? MAX_DEFORM : v;
 const clampBodyDeform = (v: number) =>
@@ -131,6 +131,8 @@ export default function HomeState({
       bodySkewY: 0,
       bodyOriginX: 0,
       bodyOriginY: 0.82,
+      jellyAmount: 1,
+      rippleAmount: 1,
     };
     const frameInterval = 1000 / fps;
 
@@ -164,6 +166,8 @@ export default function HomeState({
       jellyTarget.bodySkewY = active ? d.bodySkewY : 0;
       jellyTarget.bodyOriginX = active ? d.bodyOriginX : 0;
       jellyTarget.bodyOriginY = active ? d.bodyOriginY : 0.82;
+      jellyTarget.jellyAmount = cfgIdle.jellyAmount;
+      jellyTarget.rippleAmount = cfgIdle.rippleAmount;
       const physical = physics.current.update(dt, jellyTarget);
 
       latestIdleX = amb.x;
@@ -212,6 +216,7 @@ export default function HomeState({
             eyeOpen: active ? d.eyeLid * d.leftEyeTension : 1,
             eyeSocketScaleX: 1 + (active ? d.leftEyeScaleX : 0),
             eyeSocketScaleY: 1 + (active ? d.leftEyeScaleY : 0),
+            browLift: active ? d.leftEyeTension - 1 : 0,
             scaleX: 1 + (active ? d.leftEyeScaleX : 0),
             scaleY: 1 + (active ? d.leftEyeScaleY : 0),
             rotation: active ? d.leftEyeRotation : 0,
@@ -223,6 +228,7 @@ export default function HomeState({
             eyeOpen: active ? d.eyeLid * d.rightEyeTension : 1,
             eyeSocketScaleX: 1 + (active ? d.rightEyeScaleX : 0),
             eyeSocketScaleY: 1 + (active ? d.rightEyeScaleY : 0),
+            browLift: active ? d.rightEyeTension - 1 : 0,
             scaleX: 1 + (active ? d.rightEyeScaleX : 0),
             scaleY: 1 + (active ? d.rightEyeScaleY : 0),
             rotation: active ? d.rightEyeRotation : 0,

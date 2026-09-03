@@ -22,6 +22,10 @@ export interface JellyTarget {
   bodySkewY: number;
   bodyOriginX: number;
   bodyOriginY: number;
+  /** User-tunable multiplier for secondary mass follow-through. */
+  jellyAmount: number;
+  /** User-tunable multiplier for the internal ripple response. */
+  rippleAmount: number;
 }
 
 export interface JellyPose extends JellyTarget {
@@ -37,6 +41,10 @@ export interface JellyPose extends JellyTarget {
 class DampedAxis {
   value = 0;
   velocity = 0;
+
+  constructor(initial = 0) {
+    this.value = initial;
+  }
 
   reset(initial = 0) {
     this.value = initial;
@@ -67,7 +75,7 @@ export class BlobJellyPhysics {
   private readonly bodySkewX = new DampedAxis();
   private readonly bodySkewY = new DampedAxis();
   private readonly bodyOriginX = new DampedAxis();
-  private readonly bodyOriginY = new DampedAxis();
+  private readonly bodyOriginY = new DampedAxis(0.82);
   private readonly rippleTop = new DampedAxis();
   private readonly rippleUpper = new DampedAxis();
   private readonly rippleLower = new DampedAxis();
@@ -89,6 +97,8 @@ export class BlobJellyPhysics {
     bodySkewY: 0,
     bodyOriginX: 0,
     bodyOriginY: 0.82,
+    jellyAmount: 1,
+    rippleAmount: 1,
     bodySpeed: 0,
     rippleTop: 0,
     rippleUpper: 0,
@@ -132,6 +142,8 @@ export class BlobJellyPhysics {
       bodySkewY: 0,
       bodyOriginX: 0,
       bodyOriginY: 0.82,
+      jellyAmount: 1,
+      rippleAmount: 1,
       bodySpeed: 0,
       rippleTop: 0,
       rippleUpper: 0,
@@ -148,21 +160,79 @@ export class BlobJellyPhysics {
       const steps = Math.max(1, Math.ceil(seconds * 120));
       const dt = seconds / steps;
       for (let i = 0; i < steps; i += 1) {
-        this.x.step(target.x, dt, 2.6, 0.64);
-        this.y.step(target.y, dt, 2.7, 0.61);
+        this.x.step(target.x, dt, 2.8, 0.58);
+        this.y.step(target.y, dt, 2.9, 0.56);
         this.rotation.step(target.rotation, dt, 2.5, 0.6);
         this.scaleX.step(target.scaleX, dt, 3.05, 0.48);
         this.scaleY.step(target.scaleY, dt, 3.05, 0.48);
+        const jellyAmount = Math.max(0.5, Math.min(1.6, target.jellyAmount));
+        // The secondary mass trails the whole character as well as named body
+        // cues. That is what makes a slow float feel like a soft object with
+        // weight instead of a rigid icon translated on a screen.
+        const bodyLagX = Math.max(
+          -2.8,
+          Math.min(2.8, -this.x.velocity * 0.075 * jellyAmount)
+        );
+        const bodyLagY = Math.max(
+          -3.2,
+          Math.min(3.2, -this.y.velocity * 0.095 * jellyAmount)
+        );
+        const bodyLagRotation = Math.max(
+          -1.4,
+          Math.min(1.4, -this.x.velocity * 0.065 * jellyAmount)
+        );
+        const bodyLagScaleY = Math.max(
+          -0.035,
+          Math.min(
+            0.035,
+            -this.y.velocity * 0.0022 * jellyAmount +
+              Math.abs(this.x.velocity) * 0.0008 * jellyAmount
+          )
+        );
+        const bodyLagScaleX = 1 / (1 + bodyLagScaleY) - 1;
+        const bodyLagSkewX = Math.max(
+          -1.8,
+          Math.min(1.8, -this.x.velocity * 0.085 * jellyAmount)
+        );
+        const bodyLagSkewY = Math.max(
+          -1.4,
+          Math.min(1.4, this.y.velocity * 0.045 * jellyAmount)
+        );
         // Secondary mass is intentionally softer and later than the main pose.
         // One controlled overshoot makes the artwork feel gelatinous without
         // turning the character into a bouncing game sprite.
-        this.bodyX.step(target.bodyX, dt, 2.1, 0.36);
-        this.bodyY.step(target.bodyY, dt, 2.15, 0.34);
-        this.bodyRotation.step(target.bodyRotation, dt, 2.25, 0.45);
-        this.bodyScaleX.step(target.bodyScaleX, dt, 2.45, 0.33);
-        this.bodyScaleY.step(target.bodyScaleY, dt, 2.45, 0.33);
-        this.bodySkewX.step(target.bodySkewX, dt, 2.35, 0.38);
-        this.bodySkewY.step(target.bodySkewY, dt, 2.35, 0.38);
+        this.bodyX.step(target.bodyX + bodyLagX, dt, 2.35, 0.3);
+        this.bodyY.step(target.bodyY + bodyLagY, dt, 2.4, 0.28);
+        this.bodyRotation.step(
+          target.bodyRotation + bodyLagRotation,
+          dt,
+          2.4,
+          0.39
+        );
+        this.bodyScaleX.step(
+          target.bodyScaleX + bodyLagScaleX,
+          dt,
+          2.7,
+          0.28
+        );
+        this.bodyScaleY.step(
+          target.bodyScaleY + bodyLagScaleY,
+          dt,
+          2.7,
+          0.28
+        );
+        this.bodySkewX.step(
+          target.bodySkewX + bodyLagSkewX,
+          dt,
+          2.6,
+          0.33
+        );
+        this.bodySkewY.step(
+          target.bodySkewY + bodyLagSkewY,
+          dt,
+          2.6,
+          0.33
+        );
         this.bodyOriginX.step(target.bodyOriginX, dt, 4.2, 0.78);
         this.bodyOriginY.step(target.bodyOriginY, dt, 4.2, 0.78);
       }
@@ -177,18 +247,28 @@ export class BlobJellyPhysics {
     // Spring velocity is in 240-space pixels/second. The previous ripple
     // impulse was sub-pixel, so it could not survive native-size sampling.
     // This is still capped tightly: one visible wave, then decay.
-    const impactKick = Math.min(
-      36,
-      motionDelta * 0.9 + Math.abs(motionY) * 0.75 + Math.abs(motionX) * 0.45
+    const rippleAmount = Math.max(0, Math.min(2, target.rippleAmount));
+    const motionSpeed = Math.hypot(motionX, motionY);
+    const previousSpeed = Math.hypot(
+      this.previousMotionX,
+      this.previousMotionY
     );
-    if (impactKick > 1) {
+    const speedChange = Math.abs(motionSpeed - previousSpeed);
+    const impactKick = Math.min(
+      52,
+      (motionDelta * 2.1 + speedChange * 0.8) *
+        (0.65 + rippleAmount * 0.35)
+    );
+    if (impactKick > 0.55) {
       const direction = motionY >= 0 ? 1 : -1;
       this.rippleTop.velocity += direction * impactKick * 1.15;
       this.rippleUpper.velocity += direction * impactKick * 0.8;
       this.rippleLower.velocity -= direction * impactKick * 0.55;
       this.rippleBottom.velocity -= direction * impactKick * 0.3;
-      this.rippleTop.velocity += motionX * 0.0018;
-      this.rippleUpper.velocity += motionX * 0.0011;
+      this.rippleTop.velocity += motionX * 0.035 * rippleAmount;
+      this.rippleUpper.velocity += motionX * 0.022 * rippleAmount;
+      this.rippleLower.velocity -= motionX * 0.014 * rippleAmount;
+      this.rippleBottom.velocity -= motionX * 0.009 * rippleAmount;
     }
     const rippleDt = seconds > 0 ? seconds : 1 / 60;
     this.rippleTop.step(0, rippleDt, 3.8, 0.42);
@@ -200,14 +280,24 @@ export class BlobJellyPhysics {
 
     // Movement itself deforms the jelly. A new downward target compresses the
     // mass; travel stretches it; the authored axis preserves approximate area.
-    const impact = Math.max(-0.022, Math.min(0.022, (this.y.value - target.y) * 0.006));
+    const jellyAmount = Math.max(0.5, Math.min(1.6, target.jellyAmount));
+    const impact = Math.max(
+      -0.03,
+      Math.min(0.03, (this.y.value - target.y) * 0.007 * jellyAmount)
+    );
     const travel = Math.max(
-      -0.018,
-      Math.min(0.018, -(this.y.velocity + this.bodyY.velocity * 0.55) * 0.0009)
+      -0.026,
+      Math.min(
+        0.026,
+        -(this.y.velocity + this.bodyY.velocity * 0.65) * 0.00115 * jellyAmount
+      )
     );
     const dynamicY = Math.max(
-      -0.032,
-      Math.min(0.032, impact * 1.35 + travel * 1.25)
+      -0.048,
+      Math.min(
+        0.048,
+        (impact * 1.5 + travel * 1.45) * (0.8 + jellyAmount * 0.2)
+      )
     );
     const dynamicX = 1 / (1 + dynamicY) - 1;
 
@@ -225,14 +315,28 @@ export class BlobJellyPhysics {
     this.pose.bodySkewY = this.bodySkewY.value;
     this.pose.bodyOriginX = this.bodyOriginX.value;
     this.pose.bodyOriginY = this.bodyOriginY.value;
+    this.pose.jellyAmount = target.jellyAmount;
+    this.pose.rippleAmount = target.rippleAmount;
     this.pose.bodySpeed = Math.hypot(
       this.x.velocity + this.bodyX.velocity,
       this.y.velocity + this.bodyY.velocity
     );
-    this.pose.rippleTop = Math.max(-2.2, Math.min(2.2, this.rippleTop.value));
-    this.pose.rippleUpper = Math.max(-1.8, Math.min(1.8, this.rippleUpper.value));
-    this.pose.rippleLower = Math.max(-1.5, Math.min(1.5, this.rippleLower.value));
-    this.pose.rippleBottom = Math.max(-1.2, Math.min(1.2, this.rippleBottom.value));
+    this.pose.rippleTop = Math.max(
+      -3.2,
+      Math.min(3.2, this.rippleTop.value * rippleAmount)
+    );
+    this.pose.rippleUpper = Math.max(
+      -2.55,
+      Math.min(2.55, this.rippleUpper.value * rippleAmount)
+    );
+    this.pose.rippleLower = Math.max(
+      -2.15,
+      Math.min(2.15, this.rippleLower.value * rippleAmount)
+    );
+    this.pose.rippleBottom = Math.max(
+      -1.75,
+      Math.min(1.75, this.rippleBottom.value * rippleAmount)
+    );
     return this.pose;
   }
 }

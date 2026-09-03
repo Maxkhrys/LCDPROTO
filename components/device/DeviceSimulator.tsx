@@ -132,160 +132,171 @@ export default function DeviceSimulator() {
 
   return (
     <div className="sim-ui relative flex w-full flex-col items-center gap-7 sm:gap-8">
-      <div
-        ref={frameRef}
-        className="aspect-square w-full"
-        style={{ width: `min(100%, ${MAX_OUTER}px, 50vh)` }}
-      >
-        <DeviceBezel screenSize={screenSize}>
-          <DeviceScreen
-            state={state}
-            screenSize={screenSize}
-            playing={playing}
-            speed={speed}
-            runId={runId}
-            fps={fps}
-            calibration={calibration}
-            renderScale={renderScale}
-            idle={idle}
-            behaviourEnabled={behaviourEnabled}
-            triggerRequest={trigger}
-            onBehaviourStatus={setStatus}
-            displayMode={displayMode}
-            blobColour={blobColour}
-          />
-        </DeviceBezel>
-      </div>
+      <div className="flex w-full max-w-[920px] flex-col items-center gap-7 lg:flex-row lg:items-start lg:justify-center lg:gap-8">
+        <div className="flex shrink-0 flex-col items-center">
+          <div
+            ref={frameRef}
+            className="aspect-square w-full"
+            style={{ width: `min(100%, ${MAX_OUTER}px, 50vh)` }}
+          >
+            <DeviceBezel screenSize={screenSize}>
+              <DeviceScreen
+                state={state}
+                screenSize={screenSize}
+                playing={playing}
+                speed={speed}
+                runId={runId}
+                fps={fps}
+                calibration={calibration}
+                renderScale={renderScale}
+                idle={idle}
+                behaviourEnabled={behaviourEnabled}
+                triggerRequest={trigger}
+                onBehaviourStatus={setStatus}
+                displayMode={displayMode}
+                blobColour={blobColour}
+              />
+            </DeviceBezel>
+          </div>
 
-      {/* State selector */}
-      <div className="flex w-full max-w-2xl flex-wrap justify-center gap-1.5">
-        {DEVICE_STATES.map((s) => {
-          const active = s.id === state;
-          return (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => setState(s.id)}
-              aria-pressed={active}
-              className={`rounded-full border px-3.5 py-1.5 text-[11px] uppercase tracking-[0.14em] transition-colors duration-200 ${
-                active
-                  ? "border-white/20 bg-white/[0.07] text-white"
-                  : "border-white/[0.07] text-white/40 hover:border-white/15 hover:text-white/70"
-              }`}
-            >
-              {s.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Developer controls — deliberately secondary */}
-      <div className="flex w-full max-w-2xl flex-wrap items-center justify-center gap-x-6 gap-y-3 border-t border-white/[0.06] pt-5">
-        <div className="flex items-center gap-1.5">
-          <DevButton onClick={() => setPlaying((p) => !p)}>
-            {playing ? "Pause" : "Play"}
-          </DevButton>
-          <DevButton onClick={reset}>Reset</DevButton>
+          {/* State selector stays visually tied to the device. */}
+          <div className="mt-7 flex w-full max-w-2xl flex-wrap justify-center gap-1.5">
+            {DEVICE_STATES.map((s) => {
+              const active = s.id === state;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setState(s.id)}
+                  aria-pressed={active}
+                  className={`rounded-full border px-3.5 py-1.5 text-[11px] uppercase tracking-[0.14em] transition-colors duration-200 ${
+                    active
+                      ? "border-white/20 bg-white/[0.07] text-white"
+                      : "border-white/[0.07] text-white/40 hover:border-white/15 hover:text-white/70"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        <DevGroup label="FPS">
-          {DEVICE_CONFIG.fpsOptions.map((f) => (
-            <DevButton key={f} active={f === fps} onClick={() => setFps(f)}>
-              {f}
-            </DevButton>
-          ))}
-        </DevGroup>
+        {/* The tuning rail stays beside Blob on desktop so edits are visible. */}
+        <aside className="flex w-full max-w-md shrink-0 flex-col gap-4 lg:max-h-[min(80vh,720px)] lg:overflow-y-auto lg:pr-1">
+          {/* Developer controls — deliberately secondary */}
+          <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border border-white/[0.06] bg-white/[0.015] p-4">
+            <div className="flex items-center gap-1.5">
+              <DevButton onClick={() => setPlaying((p) => !p)}>
+                {playing ? "Pause" : "Play"}
+              </DevButton>
+              <DevButton onClick={reset}>Reset</DevButton>
+            </div>
 
-        <DevGroup label="Speed">
-          {DEVICE_CONFIG.speedOptions.map((s) => (
-            <DevButton key={s} active={s === speed} onClick={() => setSpeed(s)}>
-              {s}x
-            </DevButton>
-          ))}
-        </DevGroup>
+            <DevGroup label="FPS">
+              {DEVICE_CONFIG.fpsOptions.map((f) => (
+                <DevButton key={f} active={f === fps} onClick={() => setFps(f)}>
+                  {f}
+                </DevButton>
+              ))}
+            </DevGroup>
 
-        <DevGroup label="Blob">
-          {BLOB_COLOURS.map((colour) => (
+            <DevGroup label="Speed">
+              {DEVICE_CONFIG.speedOptions.map((s) => (
+                <DevButton key={s} active={s === speed} onClick={() => setSpeed(s)}>
+                  {s}x
+                </DevButton>
+              ))}
+            </DevGroup>
+
+            <DevGroup label="Blob">
+              {BLOB_COLOURS.map((colour) => (
+                <DevButton
+                  key={colour.id}
+                  active={blobColour === colour.id}
+                  onClick={() => setBlobColour(colour.id)}
+                >
+                  {colour.label}
+                </DevButton>
+              ))}
+            </DevGroup>
+
             <DevButton
-              key={colour.id}
-              active={blobColour === colour.id}
-              onClick={() => setBlobColour(colour.id)}
+              active={idle.enabled}
+              onClick={() => setIdle((v) => ({ ...v, enabled: !v.enabled }))}
             >
-              {colour.label}
+              Idle
             </DevButton>
-          ))}
-        </DevGroup>
 
-        <DevButton
-          active={idle.enabled}
-          onClick={() => setIdle((v) => ({ ...v, enabled: !v.enabled }))}
-        >
-          Idle
-        </DevButton>
+            <DevButton
+              active={behaviourEnabled}
+              onClick={() => setBehaviourEnabled((v) => !v)}
+            >
+              Behaviour
+            </DevButton>
 
-        <DevButton
-          active={behaviourEnabled}
-          onClick={() => setBehaviourEnabled((v) => !v)}
-        >
-          Behaviour
-        </DevButton>
+            <DevButton
+              active={nativePixels}
+              onClick={() => setNativePixels((v) => !v)}
+            >
+              1:1
+            </DevButton>
 
-        <DevButton
-          active={nativePixels}
-          onClick={() => setNativePixels((v) => !v)}
-        >
-          1:1
-        </DevButton>
+            <DevButton
+              active={displayMode === "warm"}
+              onClick={() => setDisplayMode((v) => (v === "dark" ? "warm" : "dark"))}
+            >
+              {displayMode === "dark" ? "Warm" : "Dark"}
+            </DevButton>
 
-        <DevButton
-          active={displayMode === "warm"}
-          onClick={() => setDisplayMode((v) => (v === "dark" ? "warm" : "dark"))}
-        >
-          {displayMode === "dark" ? "Warm" : "Dark"}
-        </DevButton>
+            <DevButton
+              active={showCalibration}
+              onClick={() => setShowCalibration((v) => !v)}
+            >
+              Tune
+            </DevButton>
+          </div>
 
-        <DevButton
-          active={showCalibration}
-          onClick={() => setShowCalibration((v) => !v)}
-        >
-          Calibrate
-        </DevButton>
+          {state === "HOME" && (
+            <ActivityReadout
+              status={status}
+              playing={playing}
+              behaviourEnabled={behaviourEnabled}
+              idleEnabled={idle.enabled}
+            />
+          )}
+
+          {showCalibration && (
+            <BehaviourPanel
+              status={status}
+              enabled={behaviourEnabled}
+              onToggle={() => setBehaviourEnabled((v) => !v)}
+              onTrigger={fire}
+            />
+          )}
+
+          {showCalibration && (
+            <IdlePanel
+              value={idle}
+              onChange={setIdle}
+              onReset={() => setIdle(DEFAULT_IDLE)}
+            />
+          )}
+
+          {showCalibration && (
+            <CalibrationPanel
+              value={calibration}
+              onChange={setCalibration}
+              onReset={() => {
+                setCalibration(DEFAULT_FACE_CALIBRATION);
+                setSaved(null);
+              }}
+              saved={saved}
+              onSave={() => setSaved(formatCalibration(calibration))}
+            />
+          )}
+        </aside>
       </div>
-
-      {state === "HOME" && (
-        <ActivityReadout
-          status={status}
-          playing={playing}
-          behaviourEnabled={behaviourEnabled}
-          idleEnabled={idle.enabled}
-        />
-      )}
-
-      {showCalibration && (
-        <BehaviourPanel
-          status={status}
-          enabled={behaviourEnabled}
-          onToggle={() => setBehaviourEnabled((v) => !v)}
-          onTrigger={fire}
-        />
-      )}
-
-      {showCalibration && (
-        <IdlePanel value={idle} onChange={setIdle} onReset={() => setIdle(DEFAULT_IDLE)} />
-      )}
-
-      {showCalibration && (
-        <CalibrationPanel
-          value={calibration}
-          onChange={setCalibration}
-          onReset={() => {
-            setCalibration(DEFAULT_FACE_CALIBRATION);
-            setSaved(null);
-          }}
-          saved={saved}
-          onSave={() => setSaved(formatCalibration(calibration))}
-        />
-      )}
 
       {/* Dev readout — outside the device, never inside the panel */}
       <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 font-mono text-[10px] uppercase tracking-[0.18em] text-white/25">
@@ -426,6 +437,13 @@ function IdlePanel({
         onChange={(floatPx) => onChange({ ...value, floatPx })}
       />
       <Slider
+        label="Drift"
+        {...IDLE_LIMITS.driftSpeed}
+        value={value.driftSpeed}
+        format={(v) => `${v.toFixed(2)}x`}
+        onChange={(driftSpeed) => onChange({ ...value, driftSpeed })}
+      />
+      <Slider
         label="Breath"
         {...IDLE_LIMITS.breathAmount}
         value={value.breathAmount}
@@ -438,6 +456,20 @@ function IdlePanel({
         value={value.squashAmount}
         format={(v) => `${(v * 100).toFixed(2)}%`}
         onChange={(squashAmount) => onChange({ ...value, squashAmount })}
+      />
+      <Slider
+        label="Jelly"
+        {...IDLE_LIMITS.jellyAmount}
+        value={value.jellyAmount}
+        format={(v) => `${v.toFixed(2)}x`}
+        onChange={(jellyAmount) => onChange({ ...value, jellyAmount })}
+      />
+      <Slider
+        label="Ripple"
+        {...IDLE_LIMITS.rippleAmount}
+        value={value.rippleAmount}
+        format={(v) => `${v.toFixed(2)}x`}
+        onChange={(rippleAmount) => onChange({ ...value, rippleAmount })}
       />
       <Slider
         label="Blink"

@@ -11,10 +11,16 @@ export interface IdleConfig {
   enabled: boolean;
   /** Vertical wander amplitude either side of centre, in 240-space pixels. */
   floatPx: number;
+  /** Multiplier for the broad gravity-like drift clock. */
+  driftSpeed: number;
   /** Total breathing scale range (0.012 = 1.2% peak to peak). */
   breathAmount: number;
   /** Reference squash magnitude; behaviours scale their deformation by it. */
   squashAmount: number;
+  /** Multiplier for the body lag and spring response. */
+  jellyAmount: number;
+  /** Multiplier for the internal surface ripple response. */
+  rippleAmount: number;
   /** Mean seconds between scheduled blinks, before deterministic jitter. */
   blinkInterval: number;
   /** Peak eye travel for a glance, in 240-space pixels. */
@@ -27,19 +33,27 @@ export interface IdleConfig {
 
 export const DEFAULT_IDLE: IdleConfig = {
   enabled: true,
-  floatPx: 2,
-  breathAmount: 0.014,
-  squashAmount: 0.032,
+  // Blob now travels through a small, safe orbit around the display instead
+  // of only breathing in place. The spring layer keeps the movement soft.
+  floatPx: 6.5,
+  driftSpeed: 1,
+  breathAmount: 0.018,
+  squashAmount: 0.046,
+  jellyAmount: 1.35,
+  rippleAmount: 1.25,
   blinkInterval: 5.9,
   gazeDriftPx: 3.5,
   rotationDeg: 0.6,
-  activityPace: 0.82,
+  activityPace: 0.78,
 };
 
 export const IDLE_LIMITS = {
-  floatPx: { min: 0, max: 4, step: 0.1 },
-  breathAmount: { min: 0, max: 0.02, step: 0.0005 },
-  squashAmount: { min: 0, max: 0.05, step: 0.0005 },
+  floatPx: { min: 0, max: 12, step: 0.1 },
+  driftSpeed: { min: 0.35, max: 1.6, step: 0.05 },
+  breathAmount: { min: 0, max: 0.024, step: 0.0005 },
+  squashAmount: { min: 0, max: 0.055, step: 0.0005 },
+  jellyAmount: { min: 0.5, max: 1.6, step: 0.05 },
+  rippleAmount: { min: 0, max: 2, step: 0.05 },
   blinkInterval: { min: 4, max: 10, step: 0.1 },
   gazeDriftPx: { min: 0, max: 4, step: 0.1 },
   rotationDeg: { min: 0, max: 1, step: 0.05 },
@@ -51,16 +65,21 @@ const BREATH_PERIOD_B = 8700;
 const SHAPE_PERIOD_A = 7600;
 const SHAPE_PERIOD_B = 11300;
 /** Milliseconds between broad centre-of-mass changes. */
-const WANDER_MIN = 3200;
-const WANDER_MAX = 6000;
-/** Horizontal wander remains inside roughly +/-1.0-1.5 authored pixels. */
-const HORIZONTAL_RATIO = 0.72;
-const HORIZONTAL_MAX = 1.5;
+const WANDER_MIN = 2200;
+const WANDER_MAX = 4200;
+/** Horizontal travel is slightly narrower than vertical travel. */
+const HORIZONTAL_RATIO = 0.84;
+const HORIZONTAL_MAX = 10;
+/** Small current layered over the broad path prevents dead plateaus. */
+const MICRO_WANDER_MIN = 650;
+const MICRO_WANDER_MAX = 1250;
+const MICRO_X_RATIO = 0.12;
+const MICRO_Y_RATIO = 0.085;
 /** Time constant for the body trailing its own movement. */
-const JELLY_TAU = 210;
+const JELLY_TAU = 165;
 /** Deformation per pixel of lead, and the cap on it. */
-const JELLY_GAIN = 0.006;
-const JELLY_MAX = 0.009;
+const JELLY_GAIN = 0.009;
+const JELLY_MAX = 0.018;
 
 const TAU = Math.PI * 2;
 /** Smootherstep — zero first and second derivative at both ends. */
@@ -108,6 +127,12 @@ export class AmbientDrift {
   private toRotation = 0;
   private legStart = 0;
   private legDuration = WANDER_MIN;
+  private microFromX = 0;
+  private microFromY = 0;
+  private microToX = 0;
+  private microToY = 0;
+  private microLegStart = 0;
+  private microLegDuration = MICRO_WANDER_MIN;
   private initialized = false;
   /** Lagged copy of the character's vertical position. */
   private lagY = 0;
@@ -127,6 +152,9 @@ export class AmbientDrift {
     this.fromRotation = this.toRotation = 0;
     this.legStart = 0;
     this.legDuration = WANDER_MIN;
+    this.microFromX = this.microFromY = this.microToX = this.microToY = 0;
+    this.microLegStart = 0;
+    this.microLegDuration = MICRO_WANDER_MIN;
     this.initialized = false;
     this.lagY = 0;
   }
@@ -155,25 +183,50 @@ export class AmbientDrift {
     this.legDuration = WANDER_MIN + this.rand() * (WANDER_MAX - WANDER_MIN);
   }
 
+  private beginMicroLeg(cfg: IdleConfig) {
+    const xAmplitude = Math.min(1.05, 0.35 + cfg.floatPx * MICRO_X_RATIO);
+    const yAmplitude = Math.min(0.78, 0.24 + cfg.floatPx * MICRO_Y_RATIO);
+    this.microFromX = this.microToX;
+    this.microFromY = this.microToY;
+    this.microToX = this.target(xAmplitude, this.microFromX);
+    this.microToY = this.target(yAmplitude, this.microFromY);
+    this.microLegStart = this.clock;
+    this.microLegDuration =
+      MICRO_WANDER_MIN + this.rand() * (MICRO_WANDER_MAX - MICRO_WANDER_MIN);
+  }
+
   /**
    * @param behaviourY vertical contribution from the active micro-behaviour.
    *                   Ambient y is added internally before calculating lag.
    */
   update(dt: number, cfg: IdleConfig, behaviourY: number): AmbientPose {
-    this.clock += dt;
+    const driftSpeed = Math.max(0.35, Math.min(1.6, cfg.driftSpeed));
+    const motionDt = Math.max(0, dt) * driftSpeed;
+    this.clock += motionDt;
 
     if (!this.initialized) {
       this.initialized = true;
       this.beginLeg(cfg);
+      this.beginMicroLeg(cfg);
     }
 
     if (this.clock - this.legStart >= this.legDuration) {
       this.beginLeg(cfg);
     }
+    if (this.clock - this.microLegStart >= this.microLegDuration) {
+      this.beginMicroLeg(cfg);
+    }
 
     const t = ease((this.clock - this.legStart) / this.legDuration);
-    this.pose.x = this.fromX + (this.toX - this.fromX) * t;
-    this.pose.y = this.fromY + (this.toY - this.fromY) * t;
+    const microT = ease(
+      (this.clock - this.microLegStart) / this.microLegDuration
+    );
+    const broadX = this.fromX + (this.toX - this.fromX) * t;
+    const broadY = this.fromY + (this.toY - this.fromY) * t;
+    this.pose.x =
+      broadX + (this.microFromX + (this.microToX - this.microFromX) * microT);
+    this.pose.y =
+      broadY + (this.microFromY + (this.microToY - this.microFromY) * microT);
     this.pose.rotation =
       this.fromRotation + (this.toRotation - this.fromRotation) * t;
 
@@ -187,17 +240,23 @@ export class AmbientDrift {
     const shapeWave =
       Math.sin((this.clock / SHAPE_PERIOD_A) * TAU) * 0.55 +
       Math.sin((this.clock / SHAPE_PERIOD_B) * TAU) * 0.45;
-    const shape = shapeWave * cfg.squashAmount * 0.5;
+    const jellyAmount = Math.max(0.5, Math.min(1.6, cfg.jellyAmount));
+    const shape = shapeWave * cfg.squashAmount * 0.5 * jellyAmount;
 
     // Soft-body lag: the body trails its own motion, so a downward move
     // compresses it slightly and it rebounds as it settles.
-    const k = 1 - Math.exp(-dt / JELLY_TAU);
+    const k =
+      1 -
+      Math.exp(-Math.max(0, dt) / (JELLY_TAU * (0.85 + jellyAmount * 0.2)));
     const bodyY = this.pose.y + behaviourY;
     this.lagY += (bodyY - this.lagY) * k;
     const lead = bodyY - this.lagY;
     const def = Math.max(
       -JELLY_MAX,
-      Math.min(JELLY_MAX, lead * JELLY_GAIN * (cfg.squashAmount / 0.014))
+      Math.min(
+        JELLY_MAX,
+        lead * JELLY_GAIN * jellyAmount * (cfg.squashAmount / 0.032)
+      )
     );
     this.pose.squashX = shape + def;
     this.pose.squashY = -shape * 0.8 - def;

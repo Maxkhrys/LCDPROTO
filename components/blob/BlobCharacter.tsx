@@ -61,17 +61,6 @@ function applyBodySurface(
   ctx.translate(-pivotX, -pivotY);
 }
 
-function ellipsePath(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  radiusX: number,
-  radiusY: number
-) {
-  ctx.beginPath();
-  ctx.ellipse(x, y, radiusX, radiusY, 0, 0, Math.PI * 2);
-}
-
 function eyeSocketPath(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -209,22 +198,67 @@ function drawProceduralEye(
   width: number,
   height: number,
   gazeX: number,
-  gazeY: number,
-  eyeBias: number
+  gazeY: number
 ) {
-  // Keep eye material deliberately simple at native size. The body already
-  // carries the rich lighting; the eye only needs one stable black mass and
-  // one readable white focal point.
-  eyeSocketPath(ctx, 0, 0, width, height);
+  // Keep the eye as one clean black mass. It is slightly smaller than the
+  // socket so the gaze can travel inside the surrounding body without a white
+  // dot or a pasted-on iris giving away the trick.
+  const eyeWidth = width * 0.94;
+  const eyeHeight = height * 0.96;
+  const eyeX = clamp(gazeX * 0.46, -width * 0.12, width * 0.12);
+  const eyeY = clamp(gazeY * 0.28, -height * 0.08, height * 0.08);
+  eyeSocketPath(ctx, eyeX, eyeY, eyeWidth, eyeHeight);
   ctx.fillStyle = "#010204";
   ctx.fill();
+}
 
-  // The dot is the gaze cue, not a second eye material. It travels inside the
-  // fixed black socket, while both lids are supplied by the body underneath.
-  const dotX = clamp(gazeX * 0.58 + eyeBias, -width * 0.23, width * 0.23);
-  const dotY = clamp(gazeY * 0.38, -height * 0.18, height * 0.18);
-  ellipsePath(ctx, dotX, dotY, width * 0.105, height * 0.12);
-  ctx.fillStyle = "#f5fbff";
+function drawEyebrow(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  browLift: number,
+  gazeY: number
+) {
+  const browWidth = width * 0.72;
+  const browY =
+    -height * 0.64 - browLift * height * 0.28 - gazeY * 0.04;
+  const arch = clamp((browLift + 0.04) * height * 0.3, -1.1, 1.1);
+  const thickness = clamp(width * 0.095, 1.25, 2.2);
+  const halfThickness = thickness / 2;
+  const halfWidth = browWidth / 2;
+  const controlY = browY - arch;
+  ctx.beginPath();
+  // Filled contour rather than a canvas stroke keeps the brow crisp when the
+  // whole character is rasterised at true hardware pixels.
+  ctx.moveTo(-halfWidth, browY - halfThickness);
+  ctx.quadraticCurveTo(0, controlY - halfThickness, halfWidth, browY - halfThickness);
+  ctx.quadraticCurveTo(
+    halfWidth + halfThickness,
+    browY - halfThickness,
+    halfWidth + halfThickness,
+    browY
+  );
+  ctx.quadraticCurveTo(
+    halfWidth + halfThickness,
+    browY + halfThickness,
+    halfWidth,
+    browY + halfThickness
+  );
+  ctx.quadraticCurveTo(0, controlY + halfThickness, -halfWidth, browY + halfThickness);
+  ctx.quadraticCurveTo(
+    -halfWidth - halfThickness,
+    browY + halfThickness,
+    -halfWidth - halfThickness,
+    browY
+  );
+  ctx.quadraticCurveTo(
+    -halfWidth - halfThickness,
+    browY - halfThickness,
+    -halfWidth,
+    browY - halfThickness
+  );
+  ctx.closePath();
+  ctx.fillStyle = "#010204";
   ctx.fill();
 }
 
@@ -241,13 +275,22 @@ function drawRippleBody(
     { top: height * 0.0, height: height * 0.28, shift: transform.rippleLower },
     { top: height * 0.25, height: height * 0.27, shift: transform.rippleBottom },
   ];
+  const rippleEnergy = Math.max(
+    Math.abs(transform.rippleTop),
+    Math.abs(transform.rippleUpper),
+    Math.abs(transform.rippleLower),
+    Math.abs(transform.rippleBottom)
+  );
+  if (rippleEnergy < 0.06) return;
 
   // The normal draw remains the crisp silhouette. These overlapping bands
   // reuse the locked body pixels at low alpha to create a brief internal wave
   // without mesh deformation, blur, or any new artwork.
   ctx.save();
-  ctx.globalAlpha *= 0.32;
+  ctx.globalAlpha *= Math.min(0.4, rippleEnergy * 0.24);
+  ctx.globalCompositeOperation = "source-atop";
   for (const band of bands) {
+    if (Math.abs(band.shift) < 0.06) continue;
     ctx.save();
     ctx.beginPath();
     ctx.rect(-width / 2 - 2, band.top - 2, width + 4, band.height + 4);
@@ -265,7 +308,7 @@ function drawRippleBody(
  * remains attached to the body's surface. The body is never touched by facial
  * transforms.
  *
- * Drawing order is body -> left eye -> right eye -> mouth.
+ * Drawing order is body -> brows/eyes -> mouth -> subtle skin integration.
  */
 export default function BlobCharacter({
   size,
@@ -404,7 +447,17 @@ export default function BlobCharacter({
       const openingY = socketHeight * 0.025 * (1 - open);
       const gazeX = clamp(t.x, -socketWidth * 0.2, socketWidth * 0.2);
       const gazeY = clamp(t.y, -socketHeight * 0.14, socketHeight * 0.14);
-      const eyeBias = id === "leftEye" ? -socketWidth * 0.012 : socketWidth * 0.012;
+
+      // Brows are part of the facial surface, not a separate floating asset.
+      // They rise with curiosity, lower with squinting, and inherit the same
+      // body transform and tiny eye tilt as the socket beneath them.
+      ctx.save();
+      ctx.globalAlpha = t.opacity * 0.88;
+      applyBodySurface(ctx, center, bw, bh, bt);
+      ctx.translate(socketX, socketY);
+      ctx.rotate((t.rotation * Math.PI) / 180);
+      drawEyebrow(ctx, socketWidth, socketHeight, t.browLift, gazeY);
+      ctx.restore();
 
       if (open > 0.001) {
         ctx.save();
@@ -423,8 +476,7 @@ export default function BlobCharacter({
           socketWidth,
           socketHeight,
           gazeX,
-          gazeY,
-          eyeBias
+          gazeY
         );
         ctx.restore();
       }

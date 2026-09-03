@@ -106,10 +106,11 @@ correction; the layers are drawn exactly as supplied.
 
 HOME is a small character behaviour system, not a loop. Three stages compose:
 
-**Ambient** (`lib/blobIdle.ts`) runs continuously — a weightless centre-of-mass
-drift that eases between seeded targets every 3.2-6s, composite breathing,
-sub-degree rotation, and slow silhouette deformation. It starts travelling on
-the first frame rather than sitting at zero for its first leg.
+**Ambient** (`lib/blobIdle.ts`) runs continuously — a gravity-like centre-of-mass
+drift that eases between seeded waypoints every 2.2-4.2s, with a smaller
+650-1250ms current layered over the broad path. It also provides composite
+breathing, sub-degree rotation, and slow silhouette deformation. It starts
+travelling on the first frame rather than sitting at zero for its first leg.
 
 **Behaviours** (`lib/blobBehaviour.ts`) are staged thought beats. A beat cues
 gaze or eyes first, mouth/lids 50-120ms later, then body mass last. Micro-saccades
@@ -130,18 +131,22 @@ independent and irregular; the mouth flip is deliberately rare.
 
 ### Face and body stay connected
 
-Glances move the eye texture inside a fixed body-space socket. The lower eye
-edge stays planted while the top clips down for blinks and squints. Eye and mouth
-anchors inherit the body's final pivot, scale, skew, rotation, and translation;
-their artwork receives partial scale compensation to stay crisp. A 9% re-render
-of the same body texture crosses the facial region, softening the cut-out edge.
+Glances move one clean black eye mass inside a fixed body-space socket; there is
+no white pupil dot. The lower eye edge stays planted while the aperture closes
+for blinks and squints. Small filled eyebrows inherit the socket transform and
+follow expression tension without dropping during a blink. Eye and mouth anchors
+inherit the body's final pivot, scale, skew, rotation, and translation; their
+artwork receives partial scale compensation to stay crisp. A 9% re-render of
+the same body texture crosses the facial region, softening the cut-out edge.
 
 **Jelly physics** (`lib/blobPhysics.ts`) filters whole-character and secondary
-body translation, rotation, and squash through ten underdamped scalar springs.
-The body trails, passes its target once, then loses energy. Spring integration
-uses small substeps so 30 and 60 FPS previews have matching motion. It remains
-directly portable to embedded code and needs no mesh, blur, shader, video, or
-sprite sequence.
+body translation, rotation, skew, and squash through underdamped scalar springs.
+The secondary mass automatically trails the broad float, then passes its target
+once and loses energy. Acceleration feeds four decaying surface bands, creating
+short internal ripples without mesh deformation. Spring integration uses small
+substeps so 30 and 60 FPS previews have matching motion. It remains directly
+portable to embedded code and needs no mesh, blur, shader, video, or sprite
+sequence.
 
 ### Interruption
 
@@ -150,7 +155,7 @@ sprite sequence.
 cuts in immediately. Every behaviour is a delta on the neutral pose, so a
 future device state can take the rig over on any frame without inheriting a
 half-finished glance. Primary deformation is clamped to +/-10%; independent
-secondary body deformation is clamped to +/-4%.
+secondary body deformation is clamped to +/-5%.
 
 Scheduling uses a seeded PRNG advanced only inside the animation loop, so runs
 are reproducible, `Reset` restarts the schedule exactly, `Pause` freezes it,
@@ -158,8 +163,10 @@ and nothing random happens during render.
 
 **Behaviour** toggles the micro-behaviours (leaving the neutral pose plus
 ambient); **Idle** toggles the ambient layer. Both off is a completely static
-calibrated pose. **Warm** changes the complete simulator UI and LCD preview to
-a low-glare warm testing theme; hardware/default view remains dark.
+calibrated pose. The side tuning rail exposes Float, Drift, Breath, Squash,
+Jelly, Ripple, Blink, Gaze, Rotate, and Activity controls beside the device so
+changes can be judged live. **Warm** changes the complete simulator UI and LCD
+preview to a low-glare warm testing theme; hardware/default view remains dark.
 
 The fixed **Expressions** tab exposes the authored catalogue without changing
 the animation architecture. HOME is grouped into Gaze, Lids & eyes, Jelly body
