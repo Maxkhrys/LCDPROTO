@@ -46,6 +46,7 @@ export function applyCalibration(rig: BlobRig, cal: FaceCalibration): BlobRig {
   });
   return {
     blob: rig.blob,
+    body: rig.body,
     leftEye: merge(rig.leftEye, cal.leftEye),
     rightEye: merge(rig.rightEye, cal.rightEye),
     mouth: merge(rig.mouth, cal.mouth),
@@ -60,6 +61,7 @@ export function rigFromCalibration(
   return applyCalibration(
     {
       blob,
+      body: { ...NEUTRAL_ELEMENT },
       leftEye: { ...NEUTRAL_ELEMENT },
       rightEye: { ...NEUTRAL_ELEMENT },
       mouth: { ...NEUTRAL_ELEMENT },

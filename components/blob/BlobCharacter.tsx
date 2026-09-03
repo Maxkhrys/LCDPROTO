@@ -90,6 +90,8 @@ export default function BlobCharacter({
     // Body: exported as RGB on black, so key its alpha from luminance. Without
     // this it would paint an opaque black square over the screen instead of
     // letting its glow fall off into the background.
+    // The body PNG carries real alpha from the extraction, so nothing is keyed
+    // here — it is simply resampled once to its on-screen size.
     const bs = bodyScale(size) * renderScale;
     const bodyCanvas = buffer(BODY_LAYER.width * bs, BODY_LAYER.height * bs);
     const bctx = bodyCanvas.getContext("2d");
@@ -104,14 +106,6 @@ export default function BlobCharacter({
         bodyCanvas.width,
         bodyCanvas.height
       );
-      const data = bctx.getImageData(0, 0, bodyCanvas.width, bodyCanvas.height);
-      const px = data.data;
-      for (let i = 0; i < px.length; i += 4) {
-        const lum = (px[i] + px[i + 1] + px[i + 2]) / 3;
-        // Fully opaque above ~25 luminance, fading to clear at black.
-        px[i + 3] = Math.max(0, Math.min(255, Math.round(((lum - 3) / 22) * 255)));
-      }
-      bctx.putImageData(data, 0, 0);
     }
 
     // Facial layers already carry alpha; bake them at their neutral size.
@@ -158,15 +152,18 @@ export default function BlobCharacter({
     ctx.scale(blob.scale * blob.scaleX, blob.scale * blob.scaleY);
     ctx.translate(-center, -center);
 
-    // 1. Body — never transformed by facial controls.
+    // 1. Body — has its own transform, but is never touched by facial controls.
     const bs = bodyScale(size);
-    ctx.drawImage(
-      layers.body,
-      center - BODY_LAYER.centerX * bs,
-      center - BODY_LAYER.centerY * bs,
-      BODY_LAYER.width * bs,
-      BODY_LAYER.height * bs
-    );
+    const bw = BODY_LAYER.width * bs;
+    const bh = BODY_LAYER.height * bs;
+    const bt = rig.body;
+    ctx.save();
+    ctx.globalAlpha = blob.opacity * bt.opacity;
+    ctx.translate(center + bt.x, center + bt.y);
+    ctx.rotate((bt.rotation * Math.PI) / 180);
+    ctx.scale(bt.scaleX, bt.scaleY);
+    ctx.drawImage(layers.body, -bw / 2, -bh / 2, bw, bh);
+    ctx.restore();
 
     // 2-4. Facial layers, each independently transformable about its own centre.
     const drawFace = (id: FaceLayerId, t: ElementTransform) => {

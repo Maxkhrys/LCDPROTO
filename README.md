@@ -25,6 +25,7 @@ Vercel-ready: no env vars, no backend, fully static.
 app/                     page shell + global styles
 components/device/       DeviceSimulator, DeviceScreen, DeviceBezel
 components/blob/         BlobCharacter (layered rig renderer)
+scripts/                 extractBlobParts.mjs
 components/states/       one file per device state
 public/blob/             Blob-body.png + facial layers
 lib/deviceConfig.ts      resolution, bezel, fps/speed options
@@ -52,71 +53,66 @@ filtering.
 
 ## Blob character rig
 
-The Blob is a **layered rig**, not a set of pre-rendered state images.
+The Blob is a layered rig, never a pre-rendered image per state.
 
 ```
-public/blob/Blob-Body.png   permanent, locked body — never morphed or replaced
-public/blob/eye-left.png    tight crops lifted from the original master
-public/blob/eye-right.png
-public/blob/mouth-smile.png
+public/blob/rig/body.png         606x589  permanent, locked body
+public/blob/rig/eye-left.png     281x409
+public/blob/rig/eye-right.png    285x426
+public/blob/rig/mouth-home.png   440x176
 ```
 
-`components/blob/BlobCharacter.tsx` draws them in order — body, left eye, right
-eye, mouth — with every facial element independently transformable
-(x, y, scaleX, scaleY, rotation, opacity) and a whole-character transform
-(x, y, scale, rotation, opacity) on top. Facial transforms never touch the body.
+All four are produced from `public/blob/Blob-parts2.png` by
+`scripts/extractBlobParts.mjs` — rerun it any time the sheet changes:
 
-### Where the face sits
+```bash
+node scripts/extractBlobParts.mjs [sheet]
+```
 
-The facial PNGs are tight crops with no positioning information, so their
-placement was **recovered, not guessed**. FFT template matching located each
-crop's exact original position inside the master (`home.png`); re-compositing
-them back at those positions reproduces the master with **zero differing
-pixels**. Those positions are stored in `lib/blobRig.ts` as fractions of the
-master body width, so the face lands correctly at any render size.
+### How transparency is recovered
 
-Note the supplied body is *not* the master's body with the face erased — it is
-redrawn art, about 5% wider and 7% taller with a different silhouette. The
-reconstruction therefore matches the master's face placement exactly but not
-its outline.
+The eyes and mouth are largely black, so keying on darkness would hollow them
+out. Instead the background is identified by how far a pixel sits from the flat
+sheet background (luminance *and* chroma, since the background is achromatic),
+and a flood fill runs inward from the sheet border. Anything the fill cannot
+reach is artwork — which is what preserves black interiors and the white eye
+highlights alike.
 
-`Blob-Body.png` is exported as RGB on black with no alpha channel, so its
-transparency is keyed from luminance at load time; otherwise it would paint an
-opaque black square over the screen. Its filename is case-sensitive in
-production — note the capital B.
+The flood fill deliberately travels *through* the soft glow and stops only at
+solid artwork; stopping at the glow would mark every glow pixel "enclosed" and
+force it opaque, flattening the edges.
 
-If the body art is replaced, re-measure its solid bounding box (luminance > 100)
-and update `BODY_LAYER` in `lib/blobRig.ts`; the face anchors are defined
-against the master and do not change.
+The checkerboard is not recoverable — its contrast measures 4.6/255 against
+6.4/255 of compression noise — so it is treated as flat grey. Compositing the
+extracted layers back over that grey reproduces the sheet with mean error 4.78
+and no pixel off by more than 25, i.e. within the source's own noise.
+
+### Placement
+
+`FACE_PLACEMENT` in `lib/blobRig.ts` positions each facial layer as a fraction
+of the body's solid width, with a scale relative to the body's own — the parts
+are drawn far larger than life on the sheet. Values were chosen by rendering
+candidate grids and comparing at 240x240, not derived from the old artwork.
+
+Nothing in the render pipeline adds glow, stroke, shadow, blur or colour
+correction; the layers are drawn exactly as supplied.
 
 ## Idle motion
 
-`lib/blobIdle.ts` builds the idle pose as a **pure function of elapsed time** —
-no accumulated state and no random draws at runtime, so the same moment always
-produces the same pose and pausing freezes cleanly. It generates no artwork:
-everything is transforms on the existing layers.
+`lib/blobIdle.ts` builds the pose as a **pure function of elapsed time** — no
+accumulated state, no runtime randomness — so a moment always yields the same
+pose and pausing freezes cleanly. Float, breathing, squash, blink and gaze all
+run on different periods, so nothing loops in lockstep.
 
 | motion | default | effect |
 | --- | --- | --- |
 | Float | 1.4 px | whole character rises and falls |
 | Breath | 0.7% | slow uniform scale |
-| Squash | 0.6% | scaleX up while scaleY goes down, and back |
-| Blink | 5.5 s | 130 ms lid close, jittered so it is not metronomic |
+| Squash | 0.6% | scaleX up while scaleY goes down |
+| Blink | 5.5 s | 130 ms close, jittered per window |
+| Gaze | 1.3 px | gated drift that settles back to neutral |
 
-Eyes also drift together by up to 1.3px on a gated envelope, so they sit still
-most of the time and occasionally wander. The mouth rides the whole-character
-transform and nothing else.
-
-Float and breath are stated as **total travel**, squash as **maximum deviation**
-from 1 — the sliders read as the distance actually covered, not amplitude.
-**Idle** toggles the whole system off.
-
-### Calibration controls
-
-**Calibrate** exposes X / Y / Scale for each facial element. Offsets are in
-240-space pixels — 1 unit is one real pixel on the target panel. All default to
-0 / 0 / 1.000x because the measured anchors already reproduce the master.
-**Save calibration** prints the current numbers to copy back for hardcoding.
+Float and breath are stated as total travel, squash as maximum deviation.
 
 ## Adding a state's animation
 

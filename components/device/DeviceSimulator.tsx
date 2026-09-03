@@ -337,6 +337,13 @@ function IdlePanel({
         format={(v) => `${v.toFixed(1)} s`}
         onChange={(blinkInterval) => onChange({ ...value, blinkInterval })}
       />
+      <Slider
+        label="Gaze"
+        {...IDLE_LIMITS.gazeDriftPx}
+        value={value.gazeDriftPx}
+        format={(v) => `${v.toFixed(1)} px`}
+        onChange={(gazeDriftPx) => onChange({ ...value, gazeDriftPx })}
+      />
     </div>
   );
 }

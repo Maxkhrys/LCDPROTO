@@ -33,6 +33,8 @@ export interface IdleConfig {
   squashAmount: number;
   /** Mean seconds between blinks. */
   blinkInterval: number;
+  /** Peak shared eye drift, in 240-space pixels. */
+  gazeDriftPx: number;
 }
 
 /**
@@ -45,6 +47,7 @@ export const DEFAULT_IDLE: IdleConfig = {
   breathAmount: 0.007,
   squashAmount: 0.006,
   blinkInterval: 5.5,
+  gazeDriftPx: 1.3,
 };
 
 /** Periods are mutually prime-ish so the cycles never visibly line up. */
@@ -61,8 +64,6 @@ const BLINK_MS = 130;
 const BLINK_CLOSE = 0.4;
 /** How far the eye compresses at full closure. */
 const BLINK_MIN_SCALE_Y = 0.06;
-/** Peak eye drift, in 240-space pixels. */
-const DRIFT_PX = 1.6;
 
 const TAU = Math.PI * 2;
 const smoothstep = (t: number) => t * t * (3 - 2 * t);
@@ -104,11 +105,13 @@ function blinkAmount(t: number, intervalMs: number): number {
  * the time, then lets them wander a pixel or so together — the way eyes settle
  * rather than track something.
  */
-function eyeDrift(t: number): { x: number; y: number } {
+function eyeDrift(t: number, peakPx: number): { x: number; y: number } {
   const gate = Math.pow(Math.max(0, Math.sin((t / PERIOD.driftGate) * TAU)), 4);
   const dir = Math.sin((t / PERIOD.driftDirection) * TAU);
   const dirY = Math.sin((t / (PERIOD.driftDirection * 1.4)) * TAU + 2.1);
-  return { x: gate * dir * DRIFT_PX, y: gate * dirY * DRIFT_PX * 0.45 };
+  // The gate returns to zero between swells, so the gaze always settles back
+  // to neutral rather than drifting away.
+  return { x: gate * dir * peakPx, y: gate * dirY * peakPx * 0.45 };
 }
 
 /**
@@ -119,6 +122,7 @@ export function idleRig(t: number, cfg: IdleConfig): BlobRig {
   if (!cfg.enabled) {
     return {
       blob: { ...NEUTRAL_BLOB },
+      body: { ...NEUTRAL_ELEMENT },
       leftEye: { ...NEUTRAL_ELEMENT },
       rightEye: { ...NEUTRAL_ELEMENT },
       mouth: { ...NEUTRAL_ELEMENT },
@@ -132,7 +136,7 @@ export function idleRig(t: number, cfg: IdleConfig): BlobRig {
   // Inverse squash: wider as it flattens, narrower as it rises.
   const squash = Math.sin((t / PERIOD.squash) * TAU) * cfg.squashAmount;
 
-  const drift = eyeDrift(t);
+  const drift = eyeDrift(t, cfg.gazeDriftPx);
   const blink = blinkAmount(t, cfg.blinkInterval * 1000);
   const eyeScaleY = 1 - blink * (1 - BLINK_MIN_SCALE_Y);
 
@@ -151,6 +155,9 @@ export function idleRig(t: number, cfg: IdleConfig): BlobRig {
       scaleX: 1 + squash,
       scaleY: 1 - squash,
     },
+    // The body carries no motion of its own yet; it rides the whole-character
+    // transform, which is what keeps the face welded to it.
+    body: { ...NEUTRAL_ELEMENT },
     leftEye: { ...eye },
     rightEye: { ...eye },
     // The mouth rides the whole-character transform and nothing else.
@@ -164,4 +171,5 @@ export const IDLE_LIMITS = {
   breathAmount: { min: 0, max: 0.02, step: 0.0005 },
   squashAmount: { min: 0, max: 0.02, step: 0.0005 },
   blinkInterval: { min: 1.5, max: 15, step: 0.1 },
+  gazeDriftPx: { min: 0, max: 4, step: 0.1 },
 } as const;

@@ -1,117 +1,106 @@
 /**
  * Layered Blob character rig.
  *
- * body.png is the permanent, locked body. It is never morphed, regenerated or
- * swapped between states — every expression is produced by transforming the
- * facial layers that sit on top of it.
+ * All four layers are extracted from the parts sheet by
+ * scripts/extractBlobParts.mjs — see that file for how transparency is
+ * recovered. body.png is the permanent body: it is never morphed, regenerated
+ * or swapped between states. Expressions come only from transforming layers.
  *
- * All geometry below was measured, not guessed. The facial PNGs are tight
- * crops lifted pixel-for-pixel out of the original master (home.png): FFT
- * template matching recovered each crop's exact original position, and
- * re-compositing them back onto the master reproduces it with zero differing
- * pixels. Those positions are stored here as fractions of the master body
- * width, so the face lands in its original place at any render size.
+ * Geometry below is measured from the extracted PNGs. Placement is expressed
+ * relative to the body's solid width so it holds at any render size.
  */
-
-/** Master reference: solid-body bounding box of home.png (luminance > 100). */
-const MASTER = {
-  bodyWidth: 1027,
-  centerX: 647.0,
-  centerY: 612.0,
-} as const;
 
 export interface BlobLayerAsset {
   src: string;
   width: number;
   height: number;
-  /**
-   * Centre of this crop's rectangle in master-image coordinates. Using the
-   * crop rectangle (rather than its alpha bounds) keeps the pivot for scale
-   * and rotation deterministic.
-   */
+  /** Centre of the artwork's alpha bounds within the file, in source pixels. */
   centerX: number;
   centerY: number;
 }
 
-/**
- * The locked body. Exported as RGB on black with no alpha channel, so its
- * transparency is keyed from luminance at load time — see BlobCharacter.
- * centerX/centerY here are its own solid-bbox centre, used to sit it on the
- * screen centre.
- */
+/** The locked body. Carries real alpha; nothing is keyed at runtime. */
 export const BODY_LAYER = {
-  // Note the capital B — the filename is case-sensitive in production.
-  src: "/blob/Blob-Body.png",
-  width: 1254,
-  height: 1254,
-  centerX: 609.0,
-  centerY: 612.0,
-  /** Solid bbox width (luminance > 100), used to size it against the screen. */
-  solidWidth: 1089,
+  src: "/blob/rig/body.png",
+  width: 606,
+  height: 589,
+  centerX: 302.5,
+  centerY: 294.0,
+  /** Opaque-core width, used to size the body against the screen. */
+  solidWidth: 598,
 } as const;
 
-/** Facial layers, in paint order after the body. */
+/** Facial layers, painted after the body in FACE_ORDER. */
 export const FACE_LAYERS = {
   leftEye: {
-    src: "/blob/eye-left.png",
-    width: 160,
-    height: 220,
-    centerX: 410.0,
-    centerY: 645.0,
+    src: "/blob/rig/eye-left.png",
+    width: 281,
+    height: 409,
+    centerX: 139.5,
+    centerY: 204.0,
   },
   rightEye: {
-    src: "/blob/eye-right.png",
-    width: 180,
-    height: 220,
-    centerX: 735.0,
-    centerY: 650.0,
+    src: "/blob/rig/eye-right.png",
+    width: 285,
+    height: 426,
+    centerX: 142.5,
+    centerY: 212.5,
   },
   mouth: {
-    src: "/blob/mouth-smile.png",
-    width: 125,
-    height: 100,
-    centerX: 562.5,
-    centerY: 750.0,
+    src: "/blob/rig/mouth-home.png",
+    width: 440,
+    height: 176,
+    centerX: 220.0,
+    centerY: 88.0,
   },
 } as const satisfies Record<string, BlobLayerAsset>;
 
 export type FaceLayerId = keyof typeof FACE_LAYERS;
 
-/** Paint order: body first, then these, in this sequence. */
-export const FACE_ORDER: readonly FaceLayerId[] = [
-  "leftEye",
-  "rightEye",
-  "mouth",
-];
+export const FACE_ORDER: readonly FaceLayerId[] = ["leftEye", "rightEye", "mouth"];
 
-/** Share of the 240px screen diameter the body spans. */
+/** Share of the 240px screen diameter the body's solid core spans. */
 export const BODY_FRACTION = 0.68;
 
-/** Master pixels -> 240-space pixels. */
-export function masterUnit(screen: number): number {
-  return (screen * BODY_FRACTION) / MASTER.bodyWidth;
-}
+/**
+ * Neutral face placement, calibrated against the artwork.
+ *
+ * `dx`/`dy` are offsets from the screen centre as a fraction of the body's
+ * solid width. `scale` is relative to the body's own scale — the parts are
+ * drawn much larger than life on the sheet, so the face is reduced to sit
+ * correctly on the body.
+ */
+export const FACE_PLACEMENT: Record<
+  FaceLayerId,
+  { dx: number; dy: number; scale: number }
+> = {
+  leftEye: { dx: -0.17, dy: -0.02, scale: 0.305 },
+  rightEye: { dx: 0.17, dy: -0.02, scale: 0.305 },
+  mouth: { dx: 0.0, dy: 0.13, scale: 0.29 },
+};
 
-/** Neutral position of a facial layer's centre, in 240-space pixels. */
-export function faceAnchor(id: FaceLayerId, screen: number) {
-  const layer = FACE_LAYERS[id];
-  const unit = masterUnit(screen);
-  return {
-    x: screen / 2 + (layer.centerX - MASTER.centerX) * unit,
-    y: screen / 2 + (layer.centerY - MASTER.centerY) * unit,
-    width: layer.width * unit,
-    height: layer.height * unit,
-  };
-}
-
-/** Scale applied to the body image so its solid width matches the screen. */
+/** Scale applied to the body image so its solid core spans BODY_FRACTION. */
 export function bodyScale(screen: number): number {
   return (screen * BODY_FRACTION) / BODY_LAYER.solidWidth;
 }
 
+/** Neutral geometry of a facial layer in 240-space pixels. */
+export function faceAnchor(id: FaceLayerId, screen: number) {
+  const layer = FACE_LAYERS[id];
+  const p = FACE_PLACEMENT[id];
+  const bodyW = screen * BODY_FRACTION;
+  const s = bodyScale(screen) * p.scale;
+  return {
+    x: screen / 2 + p.dx * bodyW,
+    y: screen / 2 + p.dy * bodyW,
+    width: layer.width * s,
+    height: layer.height * s,
+  };
+}
+
 // --- Rig -------------------------------------------------------------------
 
-/** Independent transform available on every facial element. */
+/** Independent transform available on the body and every facial element. */
 export interface ElementTransform {
   /** Offset from the measured neutral position, in 240-space pixels. */
   x: number;
@@ -123,17 +112,12 @@ export interface ElementTransform {
   opacity: number;
 }
 
-/** Transform applied to the whole character, body included. */
+/** Transform applied to the whole character; everything inherits it. */
 export interface BlobTransform {
   x: number;
   y: number;
-  /** Uniform scale. */
   scale: number;
-  /**
-   * Non-uniform scale on top of `scale`, used for jelly squash and stretch.
-   * Driving these inversely (one up while the other goes down) keeps the
-   * character's apparent volume roughly constant.
-   */
+  /** Non-uniform scale on top of `scale`, for jelly squash and stretch. */
   scaleX: number;
   scaleY: number;
   rotation: number;
@@ -142,6 +126,7 @@ export interface BlobTransform {
 
 export interface BlobRig {
   blob: BlobTransform;
+  body: ElementTransform;
   leftEye: ElementTransform;
   rightEye: ElementTransform;
   mouth: ElementTransform;
@@ -166,9 +151,10 @@ export const NEUTRAL_BLOB: BlobTransform = {
   opacity: 1,
 };
 
-/** All-neutral rig — this is exactly the HOME appearance. */
+/** All-neutral rig — the calibrated HOME pose. */
 export const NEUTRAL_RIG: BlobRig = {
   blob: { ...NEUTRAL_BLOB },
+  body: { ...NEUTRAL_ELEMENT },
   leftEye: { ...NEUTRAL_ELEMENT },
   rightEye: { ...NEUTRAL_ELEMENT },
   mouth: { ...NEUTRAL_ELEMENT },
