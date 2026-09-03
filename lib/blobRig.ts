@@ -19,12 +19,13 @@ export interface BlobLayerAsset {
   centerY: number;
 }
 
-export type BlobColour = "purple" | "teal" | "yellow";
+export type BlobColour = "purple" | "teal" | "yellow" | "green";
 
 export const BLOB_COLOURS: readonly { id: BlobColour; label: string }[] = [
   { id: "purple", label: "Purple" },
   { id: "teal", label: "Teal" },
   { id: "yellow", label: "Yellow" },
+  { id: "green", label: "Green" },
 ] as const;
 
 /** The locked body. Carries real alpha; nothing is keyed at runtime. */
@@ -135,6 +136,39 @@ export const RIG_ASSETS = {
       },
     },
   },
+  green: {
+    body: {
+      src: "/blob/rig/green/body.png",
+      width: 593,
+      height: 591,
+      centerX: 296,
+      centerY: 295,
+      solidWidth: 585,
+    },
+    face: {
+      leftEye: {
+        src: "/blob/rig/green/eye-left.png",
+        width: 275,
+        height: 405,
+        centerX: 137,
+        centerY: 202,
+      },
+      rightEye: {
+        src: "/blob/rig/green/eye-right.png",
+        width: 279,
+        height: 421,
+        centerX: 139,
+        centerY: 210,
+      },
+      mouth: {
+        src: "/blob/rig/green/mouth-home.png",
+        width: 429,
+        height: 171,
+        centerX: 214,
+        centerY: 85,
+      },
+    },
+  },
 } as const;
 
 export type FaceLayerId = keyof typeof FACE_LAYERS;
@@ -209,6 +243,13 @@ export interface ElementTransform {
   originX: number;
   originY: number;
   opacity: number;
+  /** Body-space socket position; eye texture can move inside it while looking. */
+  socketX: number;
+  socketY: number;
+  /** Normalised opening and aperture size, used only by eye layers. */
+  eyeOpen: number;
+  eyeSocketScaleX: number;
+  eyeSocketScaleY: number;
 }
 
 /** Transform applied to the whole character; everything inherits it. */
@@ -242,6 +283,11 @@ export const NEUTRAL_ELEMENT: ElementTransform = {
   originX: 0,
   originY: 0,
   opacity: 1,
+  socketX: 0,
+  socketY: 0,
+  eyeOpen: 1,
+  eyeSocketScaleX: 1,
+  eyeSocketScaleY: 1,
 };
 
 export const NEUTRAL_BLOB: BlobTransform = {

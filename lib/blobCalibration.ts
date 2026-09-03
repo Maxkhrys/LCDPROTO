@@ -43,6 +43,10 @@ export function applyCalibration(rig: BlobRig, cal: FaceCalibration): BlobRig {
     y: t.y + c.y,
     scaleX: t.scaleX * c.scale,
     scaleY: t.scaleY * c.scale,
+    socketX: t.socketX + c.x,
+    socketY: t.socketY + c.y,
+    eyeSocketScaleX: t.eyeSocketScaleX * c.scale,
+    eyeSocketScaleY: t.eyeSocketScaleY * c.scale,
   });
   return {
     blob: rig.blob,

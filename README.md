@@ -61,10 +61,14 @@ public/blob/rig/body.png         606x589  permanent, locked body
 public/blob/rig/eye-left.png     281x409
 public/blob/rig/eye-right.png    285x426
 public/blob/rig/mouth-home.png   440x176
+public/blob/rig/green/body.png   593x591
+public/blob/rig/green/eye-left.png 275x405
+public/blob/rig/green/eye-right.png 279x421
+public/blob/rig/green/mouth-home.png 429x171
 ```
 
-All four are produced from `public/blob/Blob-parts2.png` by
-`scripts/extractBlobParts.mjs` — rerun it any time the sheet changes:
+All rigs are produced from their matching parts sheet by
+`scripts/extractBlobParts.mjs` — rerun it any time a sheet changes:
 
 ```bash
 node scripts/extractBlobParts.mjs [sheet]
@@ -107,9 +111,10 @@ drift that eases between seeded targets every 3.2-6s, composite breathing,
 sub-degree rotation, and slow silhouette deformation. It starts travelling on
 the first frame rather than sitting at zero for its first leg.
 
-**Behaviours** (`lib/blobBehaviour.ts`) fire one at a time with quiet gaps
-between them. A separate blink deadline prevents expressive actions from
-starving natural eye activity; a due blink waits for the current pose to settle.
+**Behaviours** (`lib/blobBehaviour.ts`) are staged thought beats. A beat cues
+gaze or eyes first, mouth/lids 50-120ms later, then body mass last. Micro-saccades
+and blinks remain independent overlays, so the face keeps living while the body
+settles.
 
 | behaviour | weight | duration |
 | --- | --- | --- |
@@ -120,17 +125,16 @@ starving natural eye activity; a due blink waits for the current pose to settle.
 | mouth | relax, twitch, rounded O, 180-degree expression flip | 0.62-2.1 s |
 | body | settle, tiny squish, side squish, sway, tall stretch, twist | 0.82-1.6 s |
 
-A non-blink behaviour never repeats back to back. Default action starts average
-about 2.19s apart in a five-minute 30 FPS deterministic run. Blink events average
-9/minute, with double blinks bringing visible lid closures to about 10.4/minute.
+A beat starts roughly every 2-4s, with no forced repeated pose. Blink events stay
+independent and irregular; the mouth flip is deliberately rare.
 
 ### Face and body stay connected
 
-Glances move the eyes first and body follows about 90-115ms later. Eyes begin
-returning before body, then secondary silhouette mass settles last. Whole-rig
-deformation is shared 20/80 between face and body; separate body deformation
-then moves underneath the facial plane. This keeps eyes and mouth crisp while
-making them feel suspended inside soft material.
+Glances move the eye texture inside a fixed body-space socket. The lower eye
+edge stays planted while the top clips down for blinks and squints. Eye and mouth
+anchors inherit the body's final pivot, scale, skew, rotation, and translation;
+their artwork receives partial scale compensation to stay crisp. A 9% re-render
+of the same body texture crosses the facial region, softening the cut-out edge.
 
 **Jelly physics** (`lib/blobPhysics.ts`) filters whole-character and secondary
 body translation, rotation, and squash through ten underdamped scalar springs.
@@ -145,8 +149,8 @@ sprite sequence.
 `cancel()` abandons whatever is running and returns to REST, and `trigger(id)`
 cuts in immediately. Every behaviour is a delta on the neutral pose, so a
 future device state can take the rig over on any frame without inheriting a
-half-finished glance. Whole-rig deformation is clamped to +/-7%; independent
-secondary body deformation is clamped to +/-4.5%.
+half-finished glance. Primary deformation is clamped to +/-10%; independent
+secondary body deformation is clamped to +/-4%.
 
 Scheduling uses a seeded PRNG advanced only inside the animation loop, so runs
 are reproducible, `Reset` restarts the schedule exactly, `Pause` freezes it,
@@ -161,4 +165,4 @@ a light usability theme; hardware/default view remains dark.
 
 Edit that state's file in `components/states/`. Each file is isolated — replace
 the `StatePlaceholder` body with the real animation and no other state changes.
-Only HOME is built so far; it renders the layered rig in its neutral pose.
+Only HOME is built so far; it renders the layered rig with concurrent idle motion.

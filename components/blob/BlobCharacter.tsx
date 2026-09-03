@@ -29,6 +29,62 @@ type LayerId = "body" | FaceLayerId;
 type Images = Record<LayerId, HTMLImageElement>;
 
 /**
+ * Facial features follow the body's complete surface transform. Only their
+ * artwork scale is partially compensated, so the features stay crisp while
+ * their attachment points still move like skin.
+ */
+const FACE_ART_SURFACE_INHERIT = 0.56;
+const SKIN_INTEGRATION_ALPHA = 0.09;
+
+const clamp = (value: number, min: number, max: number) =>
+  value < min ? min : value > max ? max : value;
+
+function applyBodySurface(
+  ctx: CanvasRenderingContext2D,
+  center: number,
+  bodyWidth: number,
+  bodyHeight: number,
+  transform: ElementTransform
+) {
+  const pivotX = transform.originX * (bodyWidth / 2);
+  const pivotY = transform.originY * (bodyHeight / 2);
+  ctx.translate(center + transform.x + pivotX, center + transform.y + pivotY);
+  ctx.rotate((transform.rotation * Math.PI) / 180);
+  ctx.transform(
+    1,
+    Math.tan((transform.skewY * Math.PI) / 180),
+    Math.tan((transform.skewX * Math.PI) / 180),
+    1,
+    0,
+    0
+  );
+  ctx.scale(transform.scaleX, transform.scaleY);
+  ctx.translate(-pivotX, -pivotY);
+}
+
+function roundedRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number
+) {
+  const r = Math.min(radius, Math.abs(width) / 2, Math.abs(height) / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+/**
  * Renders the Blob as independent layers: the locked body, then each facial
  * element drawn separately so it can be moved, scaled, rotated and faded on
  * its own. The body is never touched by facial transforms.
@@ -147,53 +203,111 @@ export default function BlobCharacter({
 
     const center = size / 2;
     const { blob } = rig;
-
-    ctx.save();
-    ctx.globalAlpha = blob.opacity;
-    // Whole-character transform: the body and every facial layer move together.
-    ctx.translate(center + blob.x, center + blob.y);
-    ctx.rotate((blob.rotation * Math.PI) / 180);
-    ctx.scale(blob.scale * blob.scaleX, blob.scale * blob.scaleY);
-    ctx.translate(-center, -center);
-
-    // 1. Body — has its own transform, but is never touched by facial controls.
     const bodyAsset = RIG_ASSETS[colour].body;
     const bs = bodyScale(size, colour);
     const bw = bodyAsset.width * bs;
     const bh = bodyAsset.height * bs;
     const bt = rig.body;
-    const pivotX = bt.originX * (bw / 2);
-    const pivotY = bt.originY * (bh / 2);
+
     ctx.save();
-    ctx.globalAlpha = blob.opacity * bt.opacity;
-    ctx.translate(center + bt.x + pivotX, center + bt.y + pivotY);
-    ctx.rotate((bt.rotation * Math.PI) / 180);
-    ctx.transform(
-      1,
-      Math.tan((bt.skewY * Math.PI) / 180),
-      Math.tan((bt.skewX * Math.PI) / 180),
-      1,
-      0,
-      0
-    );
-    ctx.scale(bt.scaleX, bt.scaleY);
-    ctx.translate(-pivotX, -pivotY);
+    ctx.globalAlpha = blob.opacity;
+    // Whole-character transform: the surface and every facial layer move
+    // together before any local expression is applied.
+    ctx.translate(center + blob.x, center + blob.y);
+    ctx.rotate((blob.rotation * Math.PI) / 180);
+    ctx.scale(blob.scale * blob.scaleX, blob.scale * blob.scaleY);
+    ctx.translate(-center, -center);
+
+    // 1. Body surface. This exact transform is reused for the facial anchors.
+    ctx.save();
+    ctx.globalAlpha = bt.opacity;
+    applyBodySurface(ctx, center, bw, bh, bt);
     ctx.drawImage(layers.body, -bw / 2, -bh / 2, bw, bh);
     ctx.restore();
 
-    // 2-4. Facial layers, each independently transformable about its own centre.
-    const drawFace = (id: FaceLayerId, t: ElementTransform) => {
+    // The surface carries the full body deformation. The face artwork gets a
+    // smaller share of scale deformation so eyes and mouth remain legible.
+    const faceSurfaceScaleX =
+      1 + (bt.scaleX - 1) * FACE_ART_SURFACE_INHERIT;
+    const faceSurfaceScaleY =
+      1 + (bt.scaleY - 1) * FACE_ART_SURFACE_INHERIT;
+    const faceCompensationX = faceSurfaceScaleX / Math.max(0.1, bt.scaleX);
+    const faceCompensationY = faceSurfaceScaleY / Math.max(0.1, bt.scaleY);
+
+    // Eyes are sockets in body space. Gaze offsets move the texture inside a
+    // fixed aperture; blink and squint clip from the top while the lower edge
+    // stays planted.
+    const drawEye = (id: FaceLayerId, t: ElementTransform) => {
       const a = faceAnchor(id, size, colour);
+      const socketX = a.x - center + t.socketX;
+      const socketY = a.y - center + t.socketY;
+      const textureX = a.x - center + t.x;
+      const textureY = a.y - center + t.y;
+      const socketScaleX = clamp(t.eyeSocketScaleX, 0.72, 1.35);
+      const socketScaleY = clamp(t.eyeSocketScaleY, 0.72, 1.35);
+      const socketWidth = a.width * socketScaleX;
+      const socketHeight = a.height * socketScaleY;
+      const open = clamp(t.eyeOpen, 0.035, 1.12);
+      const clipTop = socketHeight / 2 - socketHeight * open;
+      const clipHeight = socketHeight * open + 1.5;
+      const textureScaleX = Math.max(0.1, faceCompensationX * t.scaleX);
+      const textureScaleY = Math.max(0.1, faceCompensationY * t.scaleY);
+
       ctx.save();
-      ctx.globalAlpha = blob.opacity * t.opacity;
-      ctx.translate(a.x + t.x, a.y + t.y);
+      ctx.globalAlpha = t.opacity;
+      applyBodySurface(ctx, center, bw, bh, bt);
+
+      // Clip is created before texture translation, so the socket does not
+      // travel with a glance.
+      ctx.translate(socketX, socketY);
+      roundedRectPath(
+        ctx,
+        -socketWidth / 2,
+        clipTop,
+        socketWidth,
+        clipHeight,
+        Math.min(socketWidth * 0.42, clipHeight * 0.5)
+      );
+      ctx.clip();
+
+      ctx.translate(textureX - socketX, textureY - socketY);
       ctx.rotate((t.rotation * Math.PI) / 180);
-      ctx.scale(t.scaleX, t.scaleY);
+      ctx.scale(textureScaleX, textureScaleY);
+      // Re-anchor texture bottom after an expressive vertical scale.
+      ctx.translate(0, socketHeight / (2 * textureScaleY) - a.height / 2);
       ctx.drawImage(layers.face[id], -a.width / 2, -a.height / 2, a.width, a.height);
       ctx.restore();
     };
 
-    for (const id of FACE_ORDER) drawFace(id, rig[id]);
+    const drawMouth = (t: ElementTransform) => {
+      const a = faceAnchor("mouth", size, colour);
+      ctx.save();
+      ctx.globalAlpha = t.opacity;
+      applyBodySurface(ctx, center, bw, bh, bt);
+      ctx.translate(a.x - center + t.x, a.y - center + t.y);
+      ctx.rotate((t.rotation * Math.PI) / 180);
+      ctx.scale(
+        faceCompensationX * t.scaleX,
+        faceCompensationY * t.scaleY
+      );
+      ctx.drawImage(layers.face.mouth, -a.width / 2, -a.height / 2, a.width, a.height);
+      ctx.restore();
+    };
+
+    drawEye("leftEye", rig.leftEye);
+    drawEye("rightEye", rig.rightEye);
+    drawMouth(rig.mouth);
+
+    // A faint re-render of the same deformed body texture crosses the face.
+    // It preserves crisp artwork but removes the cut-out/decal edge.
+    ctx.save();
+    applyBodySurface(ctx, center, bw, bh, bt);
+    ctx.beginPath();
+    ctx.ellipse(0, 5, bw * 0.255, bh * 0.235, 0, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.globalAlpha = SKIN_INTEGRATION_ALPHA * bt.opacity;
+    ctx.drawImage(layers.body, -bw / 2, -bh / 2, bw, bh);
+    ctx.restore();
 
     ctx.restore();
   }, [layers, size, renderScale, rig, colour]);

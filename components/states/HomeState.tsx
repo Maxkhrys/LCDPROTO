@@ -16,8 +16,6 @@ import type { StateViewProps } from "@/lib/deviceStates";
 /** Safety cap on total body deformation, whatever the layers add up to. */
 const MAX_DEFORM = 0.1;
 const MAX_BODY_DEFORM = 0.04;
-const FACE_DEFORM_SHARE = 0.34;
-const BODY_DEFORM_SHARE = 0.66;
 const clampDeform = (v: number) =>
   v < -MAX_DEFORM ? -MAX_DEFORM : v > MAX_DEFORM ? MAX_DEFORM : v;
 const clampBodyDeform = (v: number) =>
@@ -182,16 +180,17 @@ export default function HomeState({
             x: physical.x,
             y: physical.y,
             scale: 1 + amb.breath,
-            // Face inherits only part of the deformation. Body mass moves more,
-            // making features feel suspended inside jelly instead of printed on it.
-            scaleX: 1 + deformX * FACE_DEFORM_SHARE,
-            scaleY: 1 + deformY * FACE_DEFORM_SHARE,
+            // Squash lives on the shared body surface. BlobCharacter applies
+            // that same transform to every face anchor, so features stay
+            // attached instead of preserving a separate screen-space grid.
+            scaleX: 1,
+            scaleY: 1,
             rotation: latestRotation,
             opacity: 1,
           },
-          // The body carries no transform of its own: lean and deformation are
-          // applied to the whole character, which is what keeps the face welded
-          // to the body instead of sliding across it.
+          // The body is the actual deforming surface. Facial anchors inherit
+          // this full transform in BlobCharacter; the face artwork itself is
+          // partially compensated there to stay crisp.
           body: {
             ...NEUTRAL_ELEMENT,
             x: physical.bodyX,
@@ -201,29 +200,31 @@ export default function HomeState({
             skewY: physical.bodySkewY,
             originX: physical.bodyOriginX,
             originY: physical.bodyOriginY,
-            scaleX:
-              1 + deformX * BODY_DEFORM_SHARE + clampBodyDeform(physical.bodyScaleX),
-            scaleY:
-              1 + deformY * BODY_DEFORM_SHARE + clampBodyDeform(physical.bodyScaleY),
+            scaleX: 1 + deformX + clampBodyDeform(physical.bodyScaleX),
+            scaleY: 1 + deformY + clampBodyDeform(physical.bodyScaleY),
           },
           leftEye: {
             ...NEUTRAL_ELEMENT,
             x: active ? d.eyeX + d.leftEyeX : 0,
             y: active ? d.eyeY + d.leftEyeY : 0,
+            // Gaze moves texture; socketX/socketY stay at the body-space
+            // anchor. eyeOpen drives an anchored top-down lid closure.
+            eyeOpen: active ? d.eyeLid * d.leftEyeTension : 1,
+            eyeSocketScaleX: 1 + (active ? d.leftEyeScaleX : 0),
+            eyeSocketScaleY: 1 + (active ? d.leftEyeScaleY : 0),
             scaleX: 1 + (active ? d.leftEyeScaleX : 0),
-            scaleY:
-              (active ? d.eyeLid * d.leftEyeTension : 1) +
-              (active ? d.leftEyeScaleY : 0),
+            scaleY: 1 + (active ? d.leftEyeScaleY : 0),
             rotation: active ? d.leftEyeRotation : 0,
           },
           rightEye: {
             ...NEUTRAL_ELEMENT,
             x: active ? d.eyeX + d.rightEyeX : 0,
             y: active ? d.eyeY + d.rightEyeY : 0,
+            eyeOpen: active ? d.eyeLid * d.rightEyeTension : 1,
+            eyeSocketScaleX: 1 + (active ? d.rightEyeScaleX : 0),
+            eyeSocketScaleY: 1 + (active ? d.rightEyeScaleY : 0),
             scaleX: 1 + (active ? d.rightEyeScaleX : 0),
-            scaleY:
-              (active ? d.eyeLid * d.rightEyeTension : 1) +
-              (active ? d.rightEyeScaleY : 0),
+            scaleY: 1 + (active ? d.rightEyeScaleY : 0),
             rotation: active ? d.rightEyeRotation : 0,
           },
           mouth: {

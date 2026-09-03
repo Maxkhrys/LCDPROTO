@@ -45,6 +45,33 @@ export type HomeMood =
   | "DISTRACTED"
   | "THOUGHTFUL";
 
+type GazeBehaviour =
+  | "GLANCE_LEFT"
+  | "GLANCE_RIGHT"
+  | "LOOK_UP"
+  | "LOOK_DOWN"
+  | "CURIOUS_TILT_LEFT"
+  | "CURIOUS_TILT_RIGHT";
+type ExpressionBehaviour =
+  | "SOFT_SQUINT"
+  | "ONE_EYE_SQUINT_LEFT"
+  | "ONE_EYE_SQUINT_RIGHT"
+  | "CURIOUS_WIDE";
+type MouthBehaviour =
+  | "MOUTH_RELAX"
+  | "MOUTH_TWITCH"
+  | "MOUTH_O"
+  | "MOUTH_FLIP";
+type BodyBehaviour = Exclude<
+  BehaviourId,
+  | "REST"
+  | "NORMAL_BLINK"
+  | "DOUBLE_BLINK"
+  | GazeBehaviour
+  | ExpressionBehaviour
+  | MouthBehaviour
+>;
+
 export interface BehaviourConfig {
   gazePx: number;
   squash: number;
@@ -302,6 +329,16 @@ export class BehaviourController {
   private nextExpressionAt = 0;
   private nextMouthAt = 0;
   private nextBodyAt = 0;
+  private nextBeatAt = 0;
+
+  /** One authored thought can cue several channels without random collisions. */
+  private beatUntil = 0;
+  private beatExpressionAt = 0;
+  private beatMouthAt = 0;
+  private beatBodyAt = 0;
+  private beatExpressionId: ExpressionBehaviour | null = null;
+  private beatMouthId: MouthBehaviour | null = null;
+  private beatBodyId: BodyBehaviour | null = null;
 
   private gazeAction = "RESTING";
   private lidAction = "OPEN";
@@ -377,6 +414,8 @@ export class BehaviourController {
     this.nextExpressionAt = 0;
     this.nextMouthAt = 0;
     this.nextBodyAt = 0;
+    this.nextBeatAt = 0;
+    this.clearBeatCues();
     this.gazeAction = "RESTING";
     this.lidAction = "OPEN";
     this.mouthAction = "SMILE";
@@ -425,6 +464,7 @@ export class BehaviourController {
 
   /** Future device states can take over every channel from the current pose. */
   cancel() {
+    this.clearBeatCues();
     this.gazeReleaseAt = this.expressionReleaseAt = this.mouthReleaseAt = 0;
     this.bodyReleaseAt = this.followAt = this.followReleaseAt = 0;
     this.baseGazeX = this.baseGazeY = this.microX = this.microY = 0;
@@ -434,10 +474,12 @@ export class BehaviourController {
     this.applyMoodTargets();
     this.activityId = "REST";
     this.activityUntil = this.clock;
+    this.nextBeatAt = this.clock + 900;
   }
 
   trigger(id: BehaviourId, cfg: BehaviourConfig) {
     this.ensureSchedule(cfg);
+    this.clearBeatCues();
     if (id === "REST") {
       this.cancel();
       return;
@@ -515,16 +557,12 @@ export class BehaviourController {
       this.followScaleYTarget = 0;
     }
 
+    this.runBeatCues(cfg);
+
     if (this.clock >= this.nextMoodAt) this.pickMood(cfg);
     if (this.clock >= this.nextMicroAt) this.pickMicro(cfg);
-    if (this.clock >= this.nextGazeAt && this.gazeReleaseAt === 0)
-      this.pickGaze(cfg);
-    if (this.clock >= this.nextExpressionAt && this.expressionReleaseAt === 0)
-      this.pickExpression(cfg);
-    if (this.clock >= this.nextMouthAt && this.mouthReleaseAt === 0)
-      this.pickMouth(cfg);
-    if (this.clock >= this.nextBodyAt && this.bodyReleaseAt === 0)
-      this.pickBody(cfg);
+    if (this.clock >= this.nextBeatAt && this.beatUntil === 0)
+      this.pickBeat(cfg);
     if (this.clock >= this.nextBlinkAt && this.blinkStartedAt < 0)
       this.startBlink(this.rand() < 0.14, cfg);
 
@@ -537,12 +575,135 @@ export class BehaviourController {
     this.initialized = true;
     this.nextMoodAt = 5600 + this.rand() * 2200;
     this.nextMicroAt = 260 + this.rand() * 280;
-    this.nextGazeAt = 850 + this.rand() * 650;
-    this.nextExpressionAt = 1500 + this.rand() * 1100;
-    this.nextMouthAt = 1100 + this.rand() * 900;
-    this.nextBodyAt = 650 + this.rand() * 800;
+    this.nextBeatAt = 1100 + this.rand() * 900;
+    this.nextGazeAt = this.nextBeatAt;
+    this.nextExpressionAt = this.nextBeatAt;
+    this.nextMouthAt = this.nextBeatAt;
+    this.nextBodyAt = this.nextBeatAt;
     this.nextBlinkAt = this.clock + this.blinkGap(cfg);
     this.applyMoodTargets();
+  }
+
+  private clearBeatCues() {
+    this.beatUntil = 0;
+    this.beatExpressionAt = 0;
+    this.beatMouthAt = 0;
+    this.beatBodyAt = 0;
+    this.beatExpressionId = null;
+    this.beatMouthId = null;
+    this.beatBodyId = null;
+  }
+
+  /** Deliver delayed cues in face-first, body-last order. */
+  private runBeatCues(cfg: BehaviourConfig) {
+    if (this.beatExpressionAt > 0 && this.clock >= this.beatExpressionAt) {
+      const id = this.beatExpressionId;
+      this.beatExpressionAt = 0;
+      this.beatExpressionId = null;
+      if (id) this.startExpression(id);
+    }
+    if (this.beatMouthAt > 0 && this.clock >= this.beatMouthAt) {
+      const id = this.beatMouthId;
+      this.beatMouthAt = 0;
+      this.beatMouthId = null;
+      if (id) this.startMouth(id);
+    }
+    if (this.beatBodyAt > 0 && this.clock >= this.beatBodyAt) {
+      const id = this.beatBodyId;
+      this.beatBodyAt = 0;
+      this.beatBodyId = null;
+      if (id) this.startBody(id, cfg);
+    }
+    if (
+      this.beatUntil > 0 &&
+      this.clock >= this.beatUntil &&
+      this.beatExpressionAt === 0 &&
+      this.beatMouthAt === 0 &&
+      this.beatBodyAt === 0
+    ) {
+      this.beatUntil = 0;
+    }
+  }
+
+  /**
+   * Pick one small thought and stage its channels. This replaces four
+   * unrelated random action clocks: eyes lead, expression follows, then the
+   * body answers. Blinks and micro-saccades remain independent overlays.
+   */
+  private pickBeat(cfg: BehaviourConfig) {
+    const side = this.rand() < 0.5 ? "LEFT" : "RIGHT";
+    const r = this.rand();
+    let gaze: GazeBehaviour | null = null;
+    let expression: ExpressionBehaviour | null = null;
+    let mouth: MouthBehaviour | null = null;
+    let body: BodyBehaviour | null = null;
+
+    if (r < 0.23) {
+      gaze = side === "LEFT" ? "GLANCE_LEFT" : "GLANCE_RIGHT";
+      expression =
+        this.rand() < 0.42
+          ? side === "LEFT"
+            ? "ONE_EYE_SQUINT_RIGHT"
+            : "ONE_EYE_SQUINT_LEFT"
+          : null;
+      mouth = this.rand() < 0.34 ? "MOUTH_TWITCH" : null;
+    } else if (r < 0.39) {
+      gaze = "LOOK_UP";
+      expression = "CURIOUS_WIDE";
+      mouth = this.rand() < 0.74 ? "MOUTH_O" : "MOUTH_TWITCH";
+    } else if (r < 0.53) {
+      gaze = "LOOK_DOWN";
+      expression = "SOFT_SQUINT";
+      mouth = "MOUTH_RELAX";
+    } else if (r < 0.68) {
+      gaze = side === "LEFT" ? "CURIOUS_TILT_LEFT" : "CURIOUS_TILT_RIGHT";
+      expression =
+        side === "LEFT" ? "ONE_EYE_SQUINT_LEFT" : "ONE_EYE_SQUINT_RIGHT";
+      mouth = "MOUTH_TWITCH";
+      body = side === "LEFT" ? "SOFT_SWAY_LEFT" : "SOFT_SWAY_RIGHT";
+    } else if (r < 0.82) {
+      expression = "SOFT_SQUINT";
+      mouth = "MOUTH_RELAX";
+      body = this.rand() < 0.52 ? "BODY_SETTLE" : "TINY_SQUISH";
+    } else if (r < 0.94) {
+      expression =
+        side === "LEFT" ? "ONE_EYE_SQUINT_LEFT" : "ONE_EYE_SQUINT_RIGHT";
+      mouth = "MOUTH_TWITCH";
+      body = side === "LEFT" ? "SIDE_SQUISH_LEFT" : "SIDE_SQUISH_RIGHT";
+    } else {
+      gaze = "LOOK_UP";
+      expression = "CURIOUS_WIDE";
+      mouth = "MOUTH_O";
+      body =
+        this.rand() < 0.58
+          ? "TALL_STRETCH"
+          : side === "LEFT"
+            ? "JELLY_TWIST_LEFT"
+            : "JELLY_TWIST_RIGHT";
+    }
+
+    // The inverted mouth is a rare readable beat, not a normal resting pose.
+    if (mouth && this.rand() < 0.14) mouth = "MOUTH_FLIP";
+
+    const expressionDelay = expression ? 48 + this.rand() * 35 : 0;
+    const mouthDelay = mouth ? 82 + this.rand() * 42 : 0;
+    const bodyDelay = body ? 106 + this.rand() * 24 : 0;
+    this.beatExpressionAt = expression ? this.clock + expressionDelay : 0;
+    this.beatMouthAt = mouth ? this.clock + mouthDelay : 0;
+    this.beatBodyAt = body ? this.clock + bodyDelay : 0;
+    this.beatExpressionId = expression;
+    this.beatMouthId = mouth;
+    this.beatBodyId = body;
+    this.beatUntil = this.clock + (body ? 2050 : gaze ? 1650 : 1400);
+
+    if (gaze) this.startGaze(gaze, cfg);
+
+    const next = this.clock + this.interval(1850, 3400, cfg);
+    this.nextBeatAt = Math.max(next, this.beatUntil + 260);
+    this.nextGazeAt = this.nextBeatAt;
+    this.nextExpressionAt = this.nextBeatAt;
+    this.nextMouthAt = this.nextBeatAt;
+    this.nextBodyAt = this.nextBeatAt;
   }
 
   private interval(min: number, max: number, cfg: BehaviourConfig) {
@@ -580,24 +741,6 @@ export class BehaviourController {
     this.nextMicroAt = this.clock + this.interval(350, 900, cfg);
   }
 
-  private pickGaze(cfg: BehaviourConfig) {
-    const r = this.rand();
-    const id: BehaviourId =
-      r < 0.25
-        ? "GLANCE_LEFT"
-        : r < 0.5
-          ? "GLANCE_RIGHT"
-          : r < 0.67
-            ? "LOOK_UP"
-            : r < 0.79
-              ? "LOOK_DOWN"
-              : r < 0.895
-                ? "CURIOUS_TILT_LEFT"
-                : "CURIOUS_TILT_RIGHT";
-    this.startGaze(id, cfg);
-    this.nextGazeAt = this.clock + this.interval(1800, 3800, cfg);
-  }
-
   private startGaze(id: BehaviourId, cfg: BehaviourConfig) {
     const amount = clamp(cfg.gazePx, 0, 4.5);
     let x = 0;
@@ -622,9 +765,15 @@ export class BehaviourController {
       x = bodyDir * amount * 0.72;
       y = -amount * 0.28;
       duration = 1050 + this.rand() * 520;
-      this.leftRotation.target = bodyDir * 1.6;
-      this.rightRotation.target = bodyDir * 1.15;
     }
+    this.leftRotation.target =
+      id === "CURIOUS_TILT_LEFT" || id === "CURIOUS_TILT_RIGHT"
+        ? bodyDir * 1.6
+        : 0;
+    this.rightRotation.target =
+      id === "CURIOUS_TILT_LEFT" || id === "CURIOUS_TILT_RIGHT"
+        ? bodyDir * 1.15
+        : 0;
     this.baseGazeX = x;
     this.baseGazeY = y;
     this.microX = 0;
@@ -646,20 +795,6 @@ export class BehaviourController {
     this.leftY.target = y;
     this.rightX.target = x * 0.965;
     this.rightY.target = y * 0.98;
-  }
-
-  private pickExpression(cfg: BehaviourConfig) {
-    const r = this.rand();
-    const id: BehaviourId =
-      r < 0.38
-        ? "SOFT_SQUINT"
-        : r < 0.58
-          ? "ONE_EYE_SQUINT_LEFT"
-          : r < 0.78
-            ? "ONE_EYE_SQUINT_RIGHT"
-            : "CURIOUS_WIDE";
-    this.startExpression(id);
-    this.nextExpressionAt = this.clock + this.interval(2400, 4800, cfg);
   }
 
   private startExpression(id: BehaviourId) {
@@ -693,20 +828,6 @@ export class BehaviourController {
     this.lidAction = id;
     this.expressionReleaseAt = this.clock + duration;
     this.mark(id, duration + 300);
-  }
-
-  private pickMouth(cfg: BehaviourConfig) {
-    const r = this.rand();
-    const id: BehaviourId =
-      r < 0.34
-        ? "MOUTH_RELAX"
-        : r < 0.62
-          ? "MOUTH_TWITCH"
-          : r < 0.86
-            ? "MOUTH_O"
-            : "MOUTH_FLIP";
-    this.startMouth(id);
-    this.nextMouthAt = this.clock + this.interval(1900, 4400, cfg);
   }
 
   private startMouth(id: BehaviourId) {
@@ -744,32 +865,6 @@ export class BehaviourController {
     this.mouthAction = id;
     this.mouthReleaseAt = this.clock + duration;
     this.mark(id, duration + 300);
-  }
-
-  private pickBody(cfg: BehaviourConfig) {
-    const r = this.rand();
-    const id: BehaviourId =
-      r < 0.18
-        ? "BODY_SETTLE"
-        : r < 0.34
-          ? "TINY_SQUISH"
-          : r < 0.46
-            ? "SOFT_SWAY_LEFT"
-            : r < 0.58
-              ? "SOFT_SWAY_RIGHT"
-              : r < 0.68
-                ? "SIDE_SQUISH_LEFT"
-                : r < 0.78
-                  ? "SIDE_SQUISH_RIGHT"
-                  : r < 0.86
-                    ? "TALL_STRETCH"
-                    : r < 0.92
-                      ? "BREATH_STRETCH"
-                      : r < 0.96
-                        ? "JELLY_TWIST_LEFT"
-                        : "JELLY_TWIST_RIGHT";
-    this.startBody(id, cfg);
-    this.nextBodyAt = this.clock + this.interval(1700, 3500, cfg);
   }
 
   private startBody(id: BehaviourId, cfg: BehaviourConfig) {
