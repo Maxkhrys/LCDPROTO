@@ -16,7 +16,7 @@ import {
   type FaceLayerId,
 } from "@/lib/blobRig";
 import { DEFAULT_IDLE, IDLE_LIMITS, type IdleConfig } from "@/lib/blobIdle";
-import type { BehaviourId, HomeActivityStatus } from "@/lib/blobBehaviour";
+import type { BehaviourId, HomeActivityStatus, HomeMood } from "@/lib/blobBehaviour";
 import {
   EXPRESSION_FILTERS,
   EXPRESSION_GROUPS_BY_STATE,
@@ -49,12 +49,10 @@ export default function DeviceSimulator() {
   const [displayMode, setDisplayMode] = useState<DisplayMode>("dark");
   const [screenColour, setScreenColour] = useState(DISPLAY_BACKGROUNDS.dark);
   const [blobColour, setBlobColour] = useState<BlobColour>("teal");
-  const cycleBlobColour = useCallback(() => {
-    setBlobColour((current) => {
-      const index = BLOB_COLOURS.findIndex((colour) => colour.id === current);
-      return BLOB_COLOURS[(index + 1) % BLOB_COLOURS.length].id;
-    });
-  }, []);
+  const [showPupils, setShowPupils] = useState(false);
+  const [blobToolsOpen, setBlobToolsOpen] = useState(false);
+  const [activeBlobTool, setActiveBlobTool] = useState<"colour" | "face" | "pupils" | null>(null);
+  const [mood, setMood] = useState<HomeMood | null>(null);
 
   // Temporary facial-layer alignment controls. The measured anchors in
   // lib/blobRig.ts already reproduce the master, so these start at 0/0/1x.
@@ -123,6 +121,10 @@ export default function DeviceSimulator() {
     setDisplayMode("dark");
     setScreenColour(DISPLAY_BACKGROUNDS.dark);
     setBlobColour("teal");
+    setShowPupils(false);
+    setBlobToolsOpen(false);
+    setActiveBlobTool(null);
+    setMood(null);
     setCalibration(DEFAULT_FACE_CALIBRATION);
     setIdle(DEFAULT_IDLE);
     setAutoBehaviourEnabled(true);
@@ -156,48 +158,47 @@ export default function DeviceSimulator() {
             style={{ width: `min(100%, ${MAX_OUTER}px, 50vh)` }}
           >
             <DeviceBezel screenSize={screenSize}>
-              <DeviceScreen
-                state={state}
-                screenSize={screenSize}
-                playing={playing}
-                speed={speed}
-                runId={runId}
-                fps={fps}
-                calibration={calibration}
-                renderScale={renderScale}
-                idle={idle}
-                autoBehaviourEnabled={autoBehaviourEnabled}
-                triggerRequest={trigger}
-                onBehaviourStatus={setStatus}
-                displayMode={displayMode}
-                screenColour={screenColour}
-                onBlobColourCycle={cycleBlobColour}
-                blobColour={blobColour}
-              />
+              <div className="relative">
+                <DeviceScreen
+                  state={state}
+                  screenSize={screenSize}
+                  playing={playing}
+                  speed={speed}
+                  runId={runId}
+                  fps={fps}
+                  calibration={calibration}
+                  renderScale={renderScale}
+                  idle={idle}
+                  autoBehaviourEnabled={autoBehaviourEnabled}
+                  triggerRequest={trigger}
+                  onBehaviourStatus={setStatus}
+                  displayMode={displayMode}
+                  screenColour={screenColour}
+                  onOpenBlobTools={() => {
+                    setBlobToolsOpen((value) => !value);
+                    setActiveBlobTool(null);
+                  }}
+                  mood={mood}
+                  showPupils={showPupils}
+                  blobColour={blobColour}
+                />
+                <BlobToolOrbs
+                  open={blobToolsOpen}
+                  active={activeBlobTool}
+                  screenSize={screenSize}
+                  blobColour={blobColour}
+                  showPupils={showPupils}
+                  onSelect={(tool) => {
+                    setActiveBlobTool(tool);
+                    if (tool === "face") setShowExpressions(true);
+                    if (tool === "pupils") setShowPupils((value) => !value);
+                  }}
+                  onColourChange={setBlobColour}
+                />
+              </div>
             </DeviceBezel>
           </div>
 
-          {/* State selector stays visually tied to the device. */}
-          <div className="mt-7 flex w-full max-w-2xl flex-wrap justify-center gap-1.5">
-            {DEVICE_STATES.map((s) => {
-              const active = s.id === state;
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setState(s.id)}
-                  aria-pressed={active}
-                  className={`rounded-full border px-3.5 py-1.5 text-[11px] uppercase tracking-[0.14em] transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50 ${
-                    active
-                      ? "border-white/20 bg-white/[0.07] text-white"
-                      : "border-white/[0.07] text-white/40 hover:border-white/15 hover:text-white/70"
-                  }`}
-                >
-                  {s.label}
-                </button>
-              );
-            })}
-          </div>
         </div>
 
         {/* The tuning rail stays beside Blob on desktop so edits are visible. */}
@@ -252,6 +253,23 @@ export default function DeviceSimulator() {
             >
               Auto
             </DevButton>
+
+            <DevGroup label="Mood">
+              <DevButton active={mood === null} onClick={() => setMood(null)}>
+                Auto
+              </DevButton>
+              {(["CONTENT", "CURIOUS", "SLEEPY", "AMUSED", "DISTRACTED", "THOUGHTFUL"] as const).map(
+                (option) => (
+                  <DevButton
+                    key={option}
+                    active={mood === option}
+                    onClick={() => setMood(option)}
+                  >
+                    {option.toLowerCase()}
+                  </DevButton>
+                )
+              )}
+            </DevGroup>
 
             <DevButton
               active={nativePixels}
@@ -338,6 +356,28 @@ export default function DeviceSimulator() {
         </aside>
       </div>
 
+      {/* State selector stays below activity and tuning controls on mobile. */}
+      <div className="flex w-full max-w-2xl flex-wrap justify-center gap-1.5">
+        {DEVICE_STATES.map((s) => {
+          const active = s.id === state;
+          return (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setState(s.id)}
+              aria-pressed={active}
+              className={`rounded-full border px-3.5 py-1.5 text-[11px] uppercase tracking-[0.14em] transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50 ${
+                active
+                  ? "border-white/20 bg-white/[0.07] text-white"
+                  : "border-white/[0.07] text-white/40 hover:border-white/15 hover:text-white/70"
+              }`}
+            >
+              {s.label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Dev readout — outside the device, never inside the panel */}
       <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 font-mono text-[10px] uppercase tracking-[0.18em] text-white/25">
         <span>240&times;240</span>
@@ -410,6 +450,127 @@ function DevGroup({
       <div className="flex items-center gap-1.5">{children}</div>
     </div>
   );
+}
+
+type BlobTool = "colour" | "face" | "pupils";
+
+function BlobToolOrbs({
+  open,
+  active,
+  screenSize,
+  blobColour,
+  showPupils,
+  onSelect,
+  onColourChange,
+}: {
+  open: boolean;
+  active: BlobTool | null;
+  screenSize: number;
+  blobColour: BlobColour;
+  showPupils: boolean;
+  onSelect: (tool: BlobTool) => void;
+  onColourChange: (colour: BlobColour) => void;
+}) {
+  if (!open) return null;
+  const orbSize = Math.max(34, Math.min(52, screenSize * 0.14));
+  const orbStyle = (left: string) => ({
+    left,
+    top: screenSize * 0.085,
+    width: orbSize,
+    height: orbSize,
+    transform: "translateX(-50%)",
+  });
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-30">
+      <div
+        className="pointer-events-auto absolute"
+        style={{ ...orbStyle("25%"), transform: "translateX(-50%) rotate(-12deg)" }}
+      >
+        <OrbButton active={active === "colour"} label="Blob colour" onClick={() => onSelect("colour")}>
+          <span className="h-4 w-4 rounded-full border border-white/70" style={{ background: blobColourSwatch(blobColour) }} />
+        </OrbButton>
+      </div>
+      <div className="pointer-events-auto absolute" style={orbStyle("50%")}>
+        <OrbButton active={active === "face"} label="Eyes and mouth settings" onClick={() => onSelect("face")}>
+          <span className="text-[17px] leading-none">☺</span>
+        </OrbButton>
+      </div>
+      <div
+        className="pointer-events-auto absolute"
+        style={{ ...orbStyle("75%"), transform: "translateX(-50%) rotate(12deg)" }}
+      >
+        <OrbButton active={active === "pupils"} label={showPupils ? "Hide pupils" : "Show pupils"} onClick={() => onSelect("pupils")}>
+          <span className="relative block h-4 w-4 rounded-full border border-white/75">
+            <span className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white" />
+          </span>
+        </OrbButton>
+      </div>
+
+      {active === "colour" && (
+        <div className="pointer-events-auto absolute left-1/2 top-[30%] flex -translate-x-1/2 gap-1.5 rounded-xl border border-white/15 bg-black/75 p-2 shadow-2xl backdrop-blur-sm">
+          {BLOB_COLOURS.map((colour) => (
+            <button
+              key={colour.id}
+              type="button"
+              aria-label={`Use ${colour.label} Blob`}
+              aria-pressed={blobColour === colour.id}
+              onClick={() => onColourChange(colour.id)}
+              className="h-6 w-6 rounded-full border border-white/30 transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+              style={{ background: blobColourSwatch(colour.id) }}
+            />
+          ))}
+        </div>
+      )}
+
+      {active === "face" && (
+        <div className="pointer-events-none absolute left-1/2 top-[30%] -translate-x-1/2 rounded-xl border border-white/15 bg-black/75 px-3 py-2 text-center shadow-2xl backdrop-blur-sm">
+          <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-white/70">Face library open</p>
+          <p className="mt-1 text-[10px] text-white/40">Use Expressions tab</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OrbButton({
+  active,
+  label,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={active}
+      onClick={onClick}
+      className={`flex h-full w-full items-center justify-center rounded-full border text-white shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition duration-200 hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
+        active
+          ? "border-white/60 bg-white/20"
+          : "border-white/25 bg-black/65 hover:border-white/50 hover:bg-white/15"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function blobColourSwatch(colour: BlobColour) {
+  const swatches: Record<BlobColour, string> = {
+    purple: "#9a63ed",
+    teal: "#28c9c4",
+    yellow: "#f3c431",
+    green: "#55d963",
+    blue: "#398cff",
+    red: "#ef4b59",
+  };
+  return swatches[colour];
 }
 
 function DevButton({

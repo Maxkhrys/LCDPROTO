@@ -532,6 +532,18 @@ export class BehaviourController {
     Object.assign(this.delta, NEUTRAL_DELTA);
   }
 
+  setMood(mood: HomeMood | null) {
+    if (!mood) {
+      this.nextMoodAt = this.clock + 7000;
+      return;
+    }
+    this.mood = mood;
+    this.lastMood = mood;
+    this.nextMoodAt = this.clock + 1000000000;
+    if (this.expressionReleaseAt === 0) this.applyMoodEyeTargets();
+    if (this.mouthReleaseAt === 0) this.applyMoodMouthTargets();
+  }
+
   /** Future device states can take over every channel from the current pose. */
   cancel() {
     this.clearBeatCues();

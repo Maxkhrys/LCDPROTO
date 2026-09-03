@@ -61,7 +61,9 @@ export default function HomeState({
   triggerRequest,
   onBehaviourStatus,
   screenColour,
-  onBlobColourCycle,
+  onOpenBlobTools,
+  mood,
+  showPupils,
   blobColour,
 }: StateViewProps) {
   const [rig, setRig] = useState<BlobRig>(() =>
@@ -98,6 +100,10 @@ export default function HomeState({
   useEffect(() => {
     reset();
   }, [runId, reset]);
+
+  useEffect(() => {
+    if (mood) controller.current.setMood(mood);
+  }, [mood]);
 
   // Dev trigger buttons: a new nonce means "run this behaviour now".
   const lastNonce = useRef(-1);
@@ -310,7 +316,8 @@ export default function HomeState({
         renderScale={renderScale}
         rig={rig}
         colour={blobColour}
-        onColourCycle={onBlobColourCycle}
+        onOpenTools={onOpenBlobTools}
+        showPupils={showPupils}
       />
     </div>
   );

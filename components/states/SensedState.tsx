@@ -93,7 +93,9 @@ export default function SensedState({
   triggerRequest,
   onBehaviourStatus,
   screenColour,
-  onBlobColourCycle,
+  onOpenBlobTools,
+  mood,
+  showPupils,
   blobColour,
 }: StateViewProps) {
   const [rig, setRig] = useState<BlobRig>(() =>
@@ -140,6 +142,10 @@ export default function SensedState({
   useEffect(() => {
     reset();
   }, [reset, runId]);
+
+  useEffect(() => {
+    if (mood) controller.current.setMood(mood);
+  }, [mood]);
 
   const lastNonce = useRef(-1);
   useEffect(() => {
@@ -344,7 +350,8 @@ export default function SensedState({
           renderScale={renderScale}
           rig={rig}
           colour={blobColour}
-          onColourCycle={onBlobColourCycle}
+          onOpenTools={onOpenBlobTools}
+          showPupils={showPupils}
         />
       </div>
     </div>

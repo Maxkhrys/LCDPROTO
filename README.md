@@ -181,7 +181,9 @@ The fixed **Expressions** tab exposes the authored catalogue without changing
 the animation architecture. HOME is grouped into Gaze, Lids & eyes, Jelly body,
 Mouth, Idle life, Angry, Sad, and Big beats. SENSED inherits that same global
 catalogue and adds its own variants. Search filters the library without hiding
-the currently selected state.
+the currently selected state. Double tapping Blob opens three test orbs for
+colour rigs, face expressions, and pupil visibility. The Mood control pins one
+of the shared emotional presets or returns to automatic mood changes.
 
 ## SENSED state
 

@@ -1,6 +1,7 @@
 import type { FaceCalibration } from "./blobCalibration";
 import type { IdleConfig } from "./blobIdle";
 import type { BehaviourId, HomeActivityStatus } from "./blobBehaviour";
+import type { HomeMood } from "./blobBehaviour";
 import type { BlobColour } from "./blobRig";
 
 export type DisplayMode = "dark" | "warm" | "brown";
@@ -82,8 +83,12 @@ export interface StateViewProps {
   displayMode: DisplayMode;
   /** Dev-only LCD background colour. Defaults to true black. */
   screenColour: string;
-  /** Optional dev interaction for cycling rig colours by tapping Blob. */
-  onBlobColourCycle?: () => void;
+  /** Opens floating Blob edit orbs after a double tap. */
+  onOpenBlobTools?: () => void;
+  /** Optional mood override; null keeps automatic mood changes. */
+  mood: HomeMood | null;
+  /** Shows a small light pupil inside each procedural eye. */
+  showPupils: boolean;
   /** Dev-only rig colour preview; every colour uses identical transforms. */
   blobColour: BlobColour;
 }

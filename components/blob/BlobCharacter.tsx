@@ -23,8 +23,10 @@ interface BlobCharacterProps {
   rig?: BlobRig;
   /** Dev-only colour testing; geometry and motion are shared. */
   colour?: BlobColour;
-  /** Dev-only tap target used to cycle colour rigs during animation testing. */
-  onColourCycle?: () => void;
+  /** Opens the floating Blob tool orbs after a deliberate double tap. */
+  onOpenTools?: () => void;
+  /** Dev-only pupil preview. */
+  showPupils?: boolean;
 }
 
 type LayerId = "body";
@@ -71,43 +73,8 @@ function eyeSocketPath(
   width: number,
   height: number
 ) {
-  // Slightly organic rather than perfectly geometric. This follows the old
-  // glossy eye silhouette while keeping the aperture deterministic.
   ctx.beginPath();
-  ctx.moveTo(x, y - height * 0.5);
-  ctx.bezierCurveTo(
-    x - width * 0.35,
-    y - height * 0.52,
-    x - width * 0.51,
-    y - height * 0.2,
-    x - width * 0.49,
-    y + height * 0.16
-  );
-  ctx.bezierCurveTo(
-    x - width * 0.47,
-    y + height * 0.42,
-    x - width * 0.22,
-    y + height * 0.52,
-    x,
-    y + height * 0.5
-  );
-  ctx.bezierCurveTo(
-    x + width * 0.28,
-    y + height * 0.48,
-    x + width * 0.5,
-    y + height * 0.25,
-    x + width * 0.47,
-    y - height * 0.02
-  );
-  ctx.bezierCurveTo(
-    x + width * 0.44,
-    y - height * 0.35,
-    x + width * 0.2,
-    y - height * 0.5,
-    x,
-    y - height * 0.5
-  );
-  ctx.closePath();
+  ctx.ellipse(x, y, width * 0.5, height * 0.5, 0, 0, Math.PI * 2);
 }
 
 function drawMouthShape(
@@ -215,7 +182,8 @@ function drawProceduralEye(
   width: number,
   height: number,
   gazeX: number,
-  gazeY: number
+  gazeY: number,
+  showPupil: boolean
 ) {
   // Keep the eye as one clean black mass. It is deliberately inset from the
   // socket so a full left/right glance never kisses the aperture edge and
@@ -228,6 +196,18 @@ function drawProceduralEye(
   eyeSocketPath(ctx, eyeX, eyeY, eyeWidth, eyeHeight);
   ctx.fillStyle = "#010204";
   ctx.fill();
+  if (showPupil) {
+    ctx.beginPath();
+    ctx.arc(
+      eyeX - eyeWidth * 0.18,
+      eyeY - eyeHeight * 0.22,
+      Math.max(0.75, Math.min(width, height) * 0.065),
+      0,
+      Math.PI * 2
+    );
+    ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
+    ctx.fill();
+  }
 }
 
 function drawEyebrow(
@@ -333,11 +313,11 @@ export default function BlobCharacter({
   renderScale,
   rig = NEUTRAL_RIG,
   colour = "purple",
-  onColourCycle,
+  onOpenTools,
+  showPupils = false,
 }: BlobCharacterProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [images, setImages] = useState<Images | null>(null);
-  const colourClickTimer = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -498,13 +478,7 @@ export default function BlobCharacter({
         ctx.clip();
 
         ctx.rotate((t.rotation * Math.PI) / 180);
-        drawProceduralEye(
-          ctx,
-          socketWidth,
-          socketHeight,
-          gazeX,
-          gazeY
-        );
+        drawProceduralEye(ctx, socketWidth, socketHeight, gazeX, gazeY, showPupils);
         ctx.restore();
       }
     };
@@ -545,7 +519,7 @@ export default function BlobCharacter({
     ctx.restore();
 
     ctx.restore();
-  }, [layers, size, renderScale, rig, colour]);
+  }, [layers, size, renderScale, rig, colour, showPupils]);
 
   const isBlobHit = (event: MouseEvent<HTMLCanvasElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -556,33 +530,15 @@ export default function BlobCharacter({
     return Math.hypot(px - blobX, py - blobY) <= size * BODY_FRACTION * 0.62;
   };
 
-  const handleColourClick = (event: MouseEvent<HTMLCanvasElement>) => {
-    if (!onColourCycle || !isBlobHit(event)) return;
-    if (colourClickTimer.current !== null) window.clearTimeout(colourClickTimer.current);
-    colourClickTimer.current = window.setTimeout(() => {
-      colourClickTimer.current = null;
-      onColourCycle();
-    }, 220);
-  };
-
-  const handleColourDoubleClick = (event: MouseEvent<HTMLCanvasElement>) => {
-    if (!onColourCycle || !isBlobHit(event)) return;
-    event.preventDefault();
-    if (colourClickTimer.current !== null) {
-      window.clearTimeout(colourClickTimer.current);
-      colourClickTimer.current = null;
-    }
-    onColourCycle();
-  };
-
   return (
     <canvas
       ref={canvasRef}
       width={size * renderScale}
       height={size * renderScale}
       className="block"
-      onClick={handleColourClick}
-      onDoubleClick={handleColourDoubleClick}
+      onDoubleClick={(event) => {
+        if (onOpenTools && isBlobHit(event)) onOpenTools();
+      }}
       style={{
         width: size,
         height: size,
