@@ -171,19 +171,6 @@ function drawMouthShape(
   ctx.fill();
 }
 
-function eyeIrisColour(colour: BlobColour) {
-  switch (colour) {
-    case "teal":
-      return "#54d9d4";
-    case "yellow":
-      return "#e4b94e";
-    case "green":
-      return "#79d96a";
-    default:
-      return "#8969e8";
-  }
-}
-
 function eyePalette(colour: BlobColour) {
   switch (colour) {
     case "teal":
@@ -223,86 +210,21 @@ function drawProceduralEye(
   height: number,
   gazeX: number,
   gazeY: number,
-  colour: BlobColour,
   eyeBias: number
 ) {
-  // The socket is the eye's stable dark mass. Everything else is drawn inside
-  // it, so gaze moves the iris rather than dragging a glossy eye sticker.
-  const palette = eyePalette(colour);
+  // Keep eye material deliberately simple at native size. The body already
+  // carries the rich lighting; the eye only needs one stable black mass and
+  // one readable white focal point.
   eyeSocketPath(ctx, 0, 0, width, height);
-  const surface = ctx.createLinearGradient(0, -height / 2, 0, height / 2);
-  surface.addColorStop(0, "#07080a");
-  surface.addColorStop(0.58, "#020304");
-  surface.addColorStop(0.86, palette.shade);
-  surface.addColorStop(1, palette.rim);
-  ctx.fillStyle = surface;
+  ctx.fillStyle = "#010204";
   ctx.fill();
 
-  const bottomWash = ctx.createRadialGradient(
-    -width * 0.12,
-    height * 0.32,
-    0,
-    -width * 0.02,
-    height * 0.25,
-    height * 0.75
-  );
-  bottomWash.addColorStop(0, palette.wash);
-  bottomWash.addColorStop(0.58, palette.washEdge);
-  eyeSocketPath(ctx, 0, 0, width, height);
-  ctx.fillStyle = bottomWash;
-  ctx.fill();
-
-  const irisX = gazeX * 0.72 + eyeBias;
-  const irisY = gazeY * 0.66;
-  const irisWidth = width * 0.17;
-  const irisHeight = height * 0.23;
-
-  ellipsePath(ctx, irisX, irisY, irisWidth, irisHeight);
-  const iris = ctx.createRadialGradient(
-    irisX - width * 0.06,
-    irisY - height * 0.1,
-    width * 0.03,
-    irisX,
-    irisY,
-    irisHeight * 1.2
-  );
-  iris.addColorStop(0, eyeIrisColour(colour));
-  iris.addColorStop(0.55, palette.shade);
-  iris.addColorStop(1, "#020304");
-  ctx.fillStyle = iris;
-  ctx.fill();
-
-  ellipsePath(ctx, irisX, irisY + height * 0.012, width * 0.065, height * 0.12);
-  ctx.fillStyle = "#010203";
-  ctx.fill();
-
-  // Solid highlights keep the eye alive at native size without filters.
-  ctx.save();
-  ctx.translate(irisX - width * 0.045, irisY - height * 0.115);
-  ctx.rotate(-0.28);
-  ellipsePath(
-    ctx,
-    0,
-    0,
-    width * 0.12,
-    height * 0.17
-  );
-  ctx.fillStyle = "#f3ffff";
-  ctx.fill();
-  ctx.restore();
-
-  ellipsePath(
-    ctx,
-    irisX + width * 0.08,
-    irisY + height * 0.11,
-    width * 0.04,
-    height * 0.052
-  );
-  ctx.fillStyle = "#9edbdc";
-  ctx.fill();
-
-  ellipsePath(ctx, -width * 0.16, -height * 0.28, width * 0.018, height * 0.018);
-  ctx.fillStyle = "#d8ffff";
+  // The dot is the gaze cue, not a second eye material. It travels inside the
+  // fixed black socket, while both lids are supplied by the body underneath.
+  const dotX = clamp(gazeX * 0.58 + eyeBias, -width * 0.23, width * 0.23);
+  const dotY = clamp(gazeY * 0.38, -height * 0.18, height * 0.18);
+  ellipsePath(ctx, dotX, dotY, width * 0.105, height * 0.12);
+  ctx.fillStyle = "#f5fbff";
   ctx.fill();
 }
 
@@ -478,10 +400,8 @@ export default function BlobCharacter({
       const open = clamp(t.eyeOpen, 0, 1);
       // Blink closes from both lids. Keep a tiny upper-lid lead so it still
       // reads as a blink, while never leaving the lower half exposed.
-      const visibleHeight = socketHeight * open;
-      const visibleTop =
-        -visibleHeight / 2 - socketHeight * 0.035 * (1 - open);
-      const visibleBottom = visibleTop + visibleHeight;
+      const openingHeight = socketHeight * open;
+      const openingY = socketHeight * 0.025 * (1 - open);
       const gazeX = clamp(t.x, -socketWidth * 0.2, socketWidth * 0.2);
       const gazeY = clamp(t.y, -socketHeight * 0.14, socketHeight * 0.14);
       const eyeBias = id === "leftEye" ? -socketWidth * 0.012 : socketWidth * 0.012;
@@ -492,12 +412,9 @@ export default function BlobCharacter({
         applyBodySurface(ctx, center, bw, bh, bt);
 
         // Clip is created before texture translation, so the socket does not
-        // travel with a glance. The aperture follows the eye's oval silhouette.
+        // travel with a glance. The aperture itself closes from both lids.
         ctx.translate(socketX, socketY);
-        eyeSocketPath(ctx, 0, 0, socketWidth, socketHeight);
-        ctx.clip();
-        ctx.beginPath();
-        ctx.rect(-socketWidth / 2, visibleTop, socketWidth, visibleBottom - visibleTop);
+        eyeSocketPath(ctx, 0, openingY, socketWidth, openingHeight);
         ctx.clip();
 
         ctx.rotate((t.rotation * Math.PI) / 180);
@@ -507,44 +424,8 @@ export default function BlobCharacter({
           socketHeight,
           gazeX,
           gazeY,
-          colour,
           eyeBias
         );
-        ctx.restore();
-      }
-
-      // Do not leave a transparent half-eye during a blink. Repaint the
-      // covered part with the exact body texture already underneath it. This
-      // creates a coloured, surface-matched lid without inventing new art.
-      const coverAmount = 1 - Math.min(1, open);
-      if (coverAmount > 0.001) {
-        ctx.save();
-        ctx.globalAlpha = t.opacity;
-        applyBodySurface(ctx, center, bw, bh, bt);
-        // Keep body image and socket in the same body-space coordinate system.
-        // Translating to socket before drawing made the lid sample pixels from
-        // the eye centre instead of repainting the body underneath the eye.
-        eyeSocketPath(ctx, socketX, socketY, socketWidth, socketHeight);
-        ctx.clip();
-        ctx.beginPath();
-        const coverTop = -socketHeight / 2;
-        const coverBottom = socketHeight / 2;
-        const topBoundary = Math.max(coverTop, visibleTop);
-        const bottomBoundary = Math.min(coverBottom, visibleBottom);
-        ctx.rect(
-          socketX - socketWidth / 2,
-          socketY + coverTop,
-          socketWidth,
-          topBoundary - coverTop
-        );
-        ctx.rect(
-          socketX - socketWidth / 2,
-          socketY + bottomBoundary,
-          socketWidth,
-          coverBottom - bottomBoundary
-        );
-        ctx.clip();
-        ctx.drawImage(layers.body, -bw / 2, -bh / 2, bw, bh);
         ctx.restore();
       }
     };
