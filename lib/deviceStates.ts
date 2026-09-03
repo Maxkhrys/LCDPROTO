@@ -1,3 +1,5 @@
+import type { BlobCalibration } from "./blobConfig";
+
 /**
  * The device's interaction states. Each one will eventually own a full
  * animation; for now they only carry an accent colour and a label.
@@ -18,11 +20,17 @@ export interface DeviceStateMeta {
   label: string;
   /** Temporary accent colour, replaced when each state gets designed. */
   accent: string;
+  /**
+   * States sharing a continuity key are rendered by one mounted component and
+   * animate between themselves, instead of being crossfaded by DeviceScreen.
+   * Used where a transition must not blink — currently HOME -> REACTION.
+   */
+  continuity?: string;
 }
 
 export const DEVICE_STATES: readonly DeviceStateMeta[] = [
-  { id: "HOME", label: "Home", accent: "#6D5BD0" },
-  { id: "SENSED", label: "Sensed", accent: "#5B6BD0" },
+  { id: "HOME", label: "Home", accent: "#6D5BD0", continuity: "blob" },
+  { id: "SENSED", label: "Sensed", accent: "#5B6BD0", continuity: "blob" },
   { id: "APPROACHING", label: "Approaching", accent: "#4F86C6" },
   { id: "VERY_CLOSE", label: "Very Close", accent: "#3FA9A0" },
   { id: "TOGETHER", label: "Together", accent: "#54A86B" },
@@ -49,4 +57,6 @@ export interface StateViewProps {
   runId: number;
   /** Frame rate the preview is throttled to (30 or 60). */
   fps: number;
+  /** Temporary reaction-frame calibration from the dev controls. */
+  calibration: BlobCalibration;
 }

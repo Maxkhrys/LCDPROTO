@@ -5,6 +5,10 @@ import DeviceBezel from "./DeviceBezel";
 import DeviceScreen from "./DeviceScreen";
 import { DEVICE_CONFIG, type Fps, type Speed } from "@/lib/deviceConfig";
 import {
+  DEFAULT_CALIBRATION,
+  type BlobCalibration,
+} from "@/lib/blobConfig";
+import {
   DEFAULT_STATE,
   DEVICE_STATES,
   getStateMeta,
@@ -26,6 +30,12 @@ export default function DeviceSimulator() {
   const [speed, setSpeed] = useState<Speed>(1);
   const [runId, setRunId] = useState(0);
 
+  // Temporary reaction.png alignment controls. The measured anchors in
+  // lib/blobConfig.ts already align the frames, so these start at 0/0/1x.
+  const [calibration, setCalibration] =
+    useState<BlobCalibration>(DEFAULT_CALIBRATION);
+  const [showCalibration, setShowCalibration] = useState(false);
+
   // The outer size is decided by CSS so there is no layout shift; JS only
   // measures it to work out the 240 -> CSS pixel scale factor.
   const frameRef = useRef<HTMLDivElement>(null);
@@ -46,6 +56,7 @@ export default function DeviceSimulator() {
     setState(DEFAULT_STATE);
     setSpeed(1);
     setPlaying(true);
+    setCalibration(DEFAULT_CALIBRATION);
     setRunId((n) => n + 1);
   }, []);
 
@@ -67,6 +78,7 @@ export default function DeviceSimulator() {
             speed={speed}
             runId={runId}
             fps={fps}
+            calibration={calibration}
           />
         </DeviceBezel>
       </div>
@@ -117,7 +129,22 @@ export default function DeviceSimulator() {
             </DevButton>
           ))}
         </DevGroup>
+
+        <DevButton
+          active={showCalibration}
+          onClick={() => setShowCalibration((v) => !v)}
+        >
+          Calibrate
+        </DevButton>
       </div>
+
+      {showCalibration && (
+        <CalibrationPanel
+          value={calibration}
+          onChange={setCalibration}
+          onReset={() => setCalibration(DEFAULT_CALIBRATION)}
+        />
+      )}
 
       {/* Dev readout — outside the device, never inside the panel */}
       <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 font-mono text-[10px] uppercase tracking-[0.18em] text-white/25">
@@ -178,5 +205,105 @@ function DevButton({
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * Temporary alignment controls for reaction.png.
+ *
+ * Offsets are in 240-space pixels, so 1 unit is one real pixel on the target
+ * panel. Once a good set of numbers is found, fold them into
+ * DEFAULT_CALIBRATION in lib/blobConfig.ts and this panel can be deleted.
+ */
+function CalibrationPanel({
+  value,
+  onChange,
+  onReset,
+}: {
+  value: BlobCalibration;
+  onChange: (v: BlobCalibration) => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="flex w-full max-w-md flex-col gap-3 rounded-lg border border-white/[0.06] bg-white/[0.015] p-4">
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/30">
+          reaction.png alignment
+        </span>
+        <button
+          type="button"
+          onClick={onReset}
+          className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/30 transition-colors hover:text-white/60"
+        >
+          Reset
+        </button>
+      </div>
+
+      <Slider
+        label="X"
+        min={-8}
+        max={8}
+        step={0.25}
+        value={value.offsetX}
+        format={(v) => `${v > 0 ? "+" : ""}${v.toFixed(2)} px`}
+        onChange={(offsetX) => onChange({ ...value, offsetX })}
+      />
+      <Slider
+        label="Y"
+        min={-8}
+        max={8}
+        step={0.25}
+        value={value.offsetY}
+        format={(v) => `${v > 0 ? "+" : ""}${v.toFixed(2)} px`}
+        onChange={(offsetY) => onChange({ ...value, offsetY })}
+      />
+      <Slider
+        label="Scale"
+        min={0.9}
+        max={1.1}
+        step={0.002}
+        value={value.scale}
+        format={(v) => `${v.toFixed(3)}x`}
+        onChange={(scale) => onChange({ ...value, scale })}
+      />
+    </div>
+  );
+}
+
+function Slider({
+  label,
+  min,
+  max,
+  step,
+  value,
+  format,
+  onChange,
+}: {
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  format: (v: number) => string;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <label className="flex items-center gap-3">
+      <span className="w-10 shrink-0 font-mono text-[10px] uppercase tracking-[0.14em] text-white/30">
+        {label}
+      </span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="h-1 flex-1 cursor-pointer appearance-none rounded-full bg-white/10 accent-[#8A60E8]"
+      />
+      <span className="w-16 shrink-0 text-right font-mono text-[10px] tabular-nums text-white/40">
+        {format(value)}
+      </span>
+    </label>
   );
 }
