@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  FACE_ORDER,
   NEUTRAL_RIG,
   RIG_ASSETS,
   bodyScale,
@@ -25,7 +24,7 @@ interface BlobCharacterProps {
   colour?: BlobColour;
 }
 
-type LayerId = "body" | FaceLayerId;
+type LayerId = "body";
 type Images = Record<LayerId, HTMLImageElement>;
 
 /**
@@ -90,29 +89,95 @@ function drawMouthShape(
   const topCenter = centerY - lineHalf - ovalHalf;
   const bottomCenter = centerY + lineHalf + ovalHalf;
   const halfWidth = mouthWidth / 2;
+  const corner = Math.min(halfWidth * 0.2, Math.max(0.8, height * 0.18));
 
   // One filled path morphs between a curved mouth and a rounded O. No asset
   // swap, opacity trick, or rotation is used at any point in the transition.
   ctx.beginPath();
-  ctx.moveTo(-halfWidth, topEnd);
+  ctx.moveTo(-halfWidth + corner, topEnd);
   ctx.bezierCurveTo(
     -halfWidth * 0.72,
     topCenter,
-    halfWidth * 0.72,
+    halfWidth * 0.7,
     topCenter,
-    halfWidth,
+    halfWidth - corner,
     topEnd
   );
+  ctx.quadraticCurveTo(halfWidth, topEnd, halfWidth, topEnd + corner);
   ctx.bezierCurveTo(
     halfWidth * 0.72,
     bottomCenter,
     -halfWidth * 0.72,
     bottomCenter,
-    -halfWidth,
+    -halfWidth + corner,
     bottomEnd
   );
+  ctx.quadraticCurveTo(-halfWidth, bottomEnd, -halfWidth, bottomEnd - corner);
   ctx.closePath();
   ctx.fillStyle = "#050506";
+  ctx.fill();
+}
+
+function eyeIrisColour(colour: BlobColour) {
+  switch (colour) {
+    case "teal":
+      return "#6ce9e4";
+    case "yellow":
+      return "#ffe08a";
+    case "green":
+      return "#a8f28f";
+    default:
+      return "#9b82ff";
+  }
+}
+
+function drawProceduralEye(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  gazeX: number,
+  gazeY: number,
+  colour: BlobColour,
+  eyeBias: number
+) {
+  // The socket is the eye's stable dark mass. Everything else is drawn inside
+  // it, so gaze moves the iris rather than dragging a glossy eye sticker.
+  ellipsePath(ctx, 0, 0, width / 2, height / 2);
+  ctx.fillStyle = "#030405";
+  ctx.fill();
+
+  const irisX = gazeX * 0.72 + eyeBias;
+  const irisY = gazeY * 0.66;
+  const irisWidth = width * 0.19;
+  const irisHeight = height * 0.27;
+
+  ellipsePath(ctx, irisX, irisY, irisWidth, irisHeight);
+  ctx.fillStyle = eyeIrisColour(colour);
+  ctx.fill();
+
+  ellipsePath(ctx, irisX, irisY + height * 0.012, width * 0.085, height * 0.16);
+  ctx.fillStyle = "#010203";
+  ctx.fill();
+
+  // Solid highlights keep the eye alive at native size without glow or blur.
+  ellipsePath(
+    ctx,
+    irisX - width * 0.065,
+    irisY - height * 0.105,
+    width * 0.052,
+    height * 0.075
+  );
+  ctx.fillStyle = "#f3ffff";
+  ctx.fill();
+
+  ellipsePath(
+    ctx,
+    irisX + width * 0.08,
+    irisY + height * 0.11,
+    width * 0.026,
+    height * 0.04
+  );
+  ctx.fillStyle = "#9edbdc";
   ctx.fill();
 }
 
@@ -148,9 +213,10 @@ function drawRippleBody(
 }
 
 /**
- * Renders the Blob as independent layers: the locked body, then each facial
- * element drawn separately so it can be moved, scaled, rotated and faded on
- * its own. The body is never touched by facial transforms.
+ * Renders the Blob as a locked body surface plus independent procedural facial
+ * features. Each feature can be moved and shaped on its own, while its socket
+ * remains attached to the body's surface. The body is never touched by facial
+ * transforms.
  *
  * Drawing order is body -> left eye -> right eye -> mouth.
  */
@@ -166,12 +232,7 @@ export default function BlobCharacter({
   useEffect(() => {
     let cancelled = false;
     const assets = RIG_ASSETS[colour];
-    const entries: [LayerId, string][] = [
-      ["body", assets.body.src],
-      ["leftEye", assets.face.leftEye.src],
-      ["rightEye", assets.face.rightEye.src],
-      ["mouth", assets.face.mouth.src],
-    ];
+    const entries: [LayerId, string][] = [["body", assets.body.src]];
     setImages(null);
     Promise.all(
       entries.map(
@@ -231,30 +292,9 @@ export default function BlobCharacter({
       );
     }
 
-    // Eye layers carry alpha and are baked at their neutral size. Mouth is
-    // procedural so its smile, frown and O can share one continuous shape.
-    const face = {} as Record<FaceLayerId, HTMLCanvasElement>;
-    for (const id of FACE_ORDER) {
-      const asset = assets.face[id];
-      const a = faceAnchor(id, size, colour);
-      const c = buffer(a.width * renderScale, a.height * renderScale);
-      const cctx = c.getContext("2d");
-      if (cctx) {
-        drawDownscaled(
-          cctx,
-          images[id],
-          asset.width,
-          asset.height,
-          0,
-          0,
-          c.width,
-          c.height
-        );
-      }
-      face[id] = c;
-    }
-
-    return { body: bodyCanvas, face };
+    // Eyes and mouth are procedural. Their metadata remains in blobRig so
+    // their sockets stay calibrated to each colour-specific body.
+    return { body: bodyCanvas };
   }, [images, size, renderScale, colour]);
 
   useEffect(() => {
@@ -306,8 +346,6 @@ export default function BlobCharacter({
       const a = faceAnchor(id, size, colour);
       const socketX = a.x - center + t.socketX;
       const socketY = a.y - center + t.socketY;
-      const textureX = a.x - center + t.x;
-      const textureY = a.y - center + t.y;
       const socketScaleX = clamp(t.eyeSocketScaleX, 0.72, 1.35);
       const socketScaleY = clamp(t.eyeSocketScaleY, 0.72, 1.35);
       const socketWidth = a.width * socketScaleX;
@@ -319,8 +357,9 @@ export default function BlobCharacter({
       const visibleTop =
         -visibleHeight / 2 - socketHeight * 0.035 * (1 - open);
       const visibleBottom = visibleTop + visibleHeight;
-      const textureScaleX = Math.max(0.1, faceCompensationX * t.scaleX);
-      const textureScaleY = Math.max(0.1, faceCompensationY * t.scaleY);
+      const gazeX = clamp(t.x, -socketWidth * 0.2, socketWidth * 0.2);
+      const gazeY = clamp(t.y, -socketHeight * 0.14, socketHeight * 0.14);
+      const eyeBias = id === "leftEye" ? -socketWidth * 0.012 : socketWidth * 0.012;
 
       if (open > 0.001) {
         ctx.save();
@@ -336,12 +375,15 @@ export default function BlobCharacter({
         ctx.rect(-socketWidth / 2, visibleTop, socketWidth, visibleBottom - visibleTop);
         ctx.clip();
 
-        ctx.translate(textureX - socketX, textureY - socketY);
-        ctx.rotate((t.rotation * Math.PI) / 180);
-        ctx.scale(textureScaleX, textureScaleY);
-        // Re-anchor texture bottom after an expressive vertical scale.
-        ctx.translate(0, socketHeight / (2 * textureScaleY) - a.height / 2);
-        ctx.drawImage(layers.face[id], -a.width / 2, -a.height / 2, a.width, a.height);
+        drawProceduralEye(
+          ctx,
+          socketWidth,
+          socketHeight,
+          gazeX,
+          gazeY,
+          colour,
+          eyeBias
+        );
         ctx.restore();
       }
 
@@ -391,8 +433,8 @@ export default function BlobCharacter({
       ctx.scale(faceCompensationX, faceCompensationY);
       drawMouthShape(
         ctx,
-        a.width * 0.66 * clamp(t.scaleX, 0.62, 1.18),
-        a.height * 0.78 * clamp(t.scaleY, 0.7, 1.24),
+        a.width * 0.78 * clamp(t.scaleX, 0.62, 1.18),
+        a.height * 0.9 * clamp(t.scaleY, 0.7, 1.24),
         clamp(t.mouthCurve, -1, 1),
         clamp(t.mouthO, 0, 1)
       );
