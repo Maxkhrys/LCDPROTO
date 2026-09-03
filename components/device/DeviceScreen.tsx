@@ -2,13 +2,10 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { DEVICE_CONFIG } from "@/lib/deviceConfig";
-import {
-  getStateMeta,
-  type DeviceState,
-  type StateViewProps,
-} from "@/lib/deviceStates";
+import { type DeviceState, type StateViewProps } from "@/lib/deviceStates";
 
-import BlobState from "@/components/states/BlobState";
+import HomeState from "@/components/states/HomeState";
+import SensedState from "@/components/states/SensedState";
 import ApproachingState from "@/components/states/ApproachingState";
 import VeryCloseState from "@/components/states/VeryCloseState";
 import TogetherState from "@/components/states/TogetherState";
@@ -16,13 +13,12 @@ import SyncState from "@/components/states/SyncState";
 import ConnectedState from "@/components/states/ConnectedState";
 import RecognizedState from "@/components/states/RecognizedState";
 
-type StateView = (p: StateViewProps & { state: DeviceState }) => React.ReactNode;
+type StateView = (p: StateViewProps) => React.ReactNode;
 
 /** One entry per state — add a state here and in lib/deviceStates.ts only. */
 const STATE_VIEWS: Record<DeviceState, StateView> = {
-  // HOME and SENSED share BlobState so the reaction transition stays continuous.
-  HOME: BlobState,
-  SENSED: BlobState,
+  HOME: HomeState,
+  SENSED: SensedState,
   APPROACHING: ApproachingState,
   VERY_CLOSE: VeryCloseState,
   TOGETHER: TogetherState,
@@ -51,11 +47,6 @@ export default function DeviceScreen({
   const scale = screenSize / native;
   const View = STATE_VIEWS[state];
 
-  // States in a continuity group keep one mounted component, so switching
-  // between them animates internally instead of crossfading the whole screen.
-  const group = getStateMeta(state).continuity;
-  const key = `${group ?? state}-${viewProps.runId}`;
-
   return (
     <div
       className="relative overflow-hidden rounded-full bg-black"
@@ -71,7 +62,7 @@ export default function DeviceScreen({
       >
         <AnimatePresence mode="sync" initial={false}>
           <motion.div
-            key={key}
+            key={`${state}-${viewProps.runId}`}
             className="absolute inset-0"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -79,7 +70,7 @@ export default function DeviceScreen({
             transition={{ duration: 0.45, ease: "easeInOut" }}
             style={{ width: native, height: native }}
           >
-            <View size={native} state={state} {...viewProps} />
+            <View size={native} {...viewProps} />
           </motion.div>
         </AnimatePresence>
       </div>

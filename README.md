@@ -24,9 +24,9 @@ Vercel-ready: no env vars, no backend, fully static.
 ```
 app/                     page shell + global styles
 components/device/       DeviceSimulator, DeviceScreen, DeviceBezel
-components/blob/         BlobStage (canvas renderer) + alignment maths
+components/blob/         BlobCharacter (layered rig renderer)
 components/states/       one file per device state
-public/blob/             home.png, reaction.png
+public/blob/             Blob-body.png + facial layers
 lib/deviceConfig.ts      resolution, bezel, fps/speed options
 lib/deviceStates.ts      DeviceState type, state table, StateViewProps
 ```
@@ -50,36 +50,49 @@ Large source art is downscaled by repeated halving (`components/blob/downscale.t
 rather than one big `drawImage`, which canvas does with cheap bilinear
 filtering.
 
-## Blob character (HOME -> REACTION)
+## Blob character rig
 
-`public/blob/home.png` and `public/blob/reaction.png` are the master character
-and the first reaction keyframe. They are rendered by `components/blob/`.
+The Blob is a **layered rig**, not a set of pre-rendered state images.
 
-The two frames were authored independently, so their canvases, body scale and
-**silhouettes** differ. Two things follow from that:
+```
+public/blob/Blob-body.png   permanent, locked body — never morphed or replaced
+public/blob/eye-left.png    tight crops lifted from the original master
+public/blob/eye-right.png
+public/blob/mouth-smile.png
+```
 
-1. **Alignment is measured, not eyeballed.** Both frames are anchored on the
-   midpoint between the eyes, scaled so their eye-to-eye distances match. The
-   landmark coordinates live in `lib/blobConfig.ts`. This lands the eyes within
-   a fraction of a pixel and matches body scale to ~0.2%.
-2. **Only the face crossfades.** A full-image crossfade double-edges the body
-   rim. Instead the HOME body is held at full opacity for the whole transition
-   and a feathered ellipse over the eyes and mouth is the only region that
-   blends — so the body is provably stationary.
+`components/blob/BlobCharacter.tsx` draws them in order — body, left eye, right
+eye, mouth — with every facial element independently transformable
+(x, y, scaleX, scaleY, rotation, opacity) and a whole-character transform
+(x, y, scale, rotation, opacity) on top. Facial transforms never touch the body.
 
-`HOME` and `SENSED` are rendered by one mounted component (`BlobState`) so the
-transition is continuous; see `continuity` in `lib/deviceStates.ts`.
+### Where the face sits
+
+The facial PNGs are tight crops with no positioning information, so their
+placement was **recovered, not guessed**. FFT template matching located each
+crop's exact original position inside the master (`home.png`); re-compositing
+them back at those positions reproduces the master with **zero differing
+pixels**. Those positions are stored in `lib/blobRig.ts` as fractions of the
+master body width, so the face lands correctly at any render size.
+
+Note the supplied body is *not* the master's body with the face erased — it is
+redrawn art, about 5% wider and 7% taller with a different silhouette. The
+reconstruction therefore matches the master's face placement exactly but not
+its outline.
+
+`Blob-body.png` is exported as RGB on black with no alpha channel, so its
+transparency is keyed from luminance at load time; otherwise it would paint an
+opaque black square over the screen.
 
 ### Calibration controls
 
-The **Calibrate** dev button exposes temporary X / Y / Scale sliders for
-`reaction.png`. Offsets are in 240-space pixels, i.e. real pixels on the target
-panel. They default to `0 / 0 / 1.000x` because the measured anchors already
-align the frames. If you find better numbers, fold them into
-`DEFAULT_CALIBRATION` in `lib/blobConfig.ts` and the panel can be removed.
+**Calibrate** exposes X / Y / Scale for each facial element. Offsets are in
+240-space pixels — 1 unit is one real pixel on the target panel. All default to
+0 / 0 / 1.000x because the measured anchors already reproduce the master.
+**Save calibration** prints the current numbers to copy back for hardcoding.
 
 ## Adding a state's animation
 
 Edit that state's file in `components/states/`. Each file is isolated — replace
 the `StatePlaceholder` body with the real animation and no other state changes.
-Only the HOME/SENSED blob pair is built so far.
+Only HOME is built so far; it renders the layered rig in its neutral pose.

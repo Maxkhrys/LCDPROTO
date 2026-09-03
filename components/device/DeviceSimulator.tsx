@@ -5,9 +5,12 @@ import DeviceBezel from "./DeviceBezel";
 import DeviceScreen from "./DeviceScreen";
 import { DEVICE_CONFIG, type Fps, type Speed } from "@/lib/deviceConfig";
 import {
-  DEFAULT_CALIBRATION,
-  type BlobCalibration,
-} from "@/lib/blobConfig";
+  DEFAULT_FACE_CALIBRATION,
+  formatCalibration,
+  type ElementCalibration,
+  type FaceCalibration,
+} from "@/lib/blobCalibration";
+import type { FaceLayerId } from "@/lib/blobRig";
 import {
   DEFAULT_STATE,
   DEVICE_STATES,
@@ -30,10 +33,12 @@ export default function DeviceSimulator() {
   const [speed, setSpeed] = useState<Speed>(1);
   const [runId, setRunId] = useState(0);
 
-  // Temporary reaction.png alignment controls. The measured anchors in
-  // lib/blobConfig.ts already align the frames, so these start at 0/0/1x.
-  const [calibration, setCalibration] =
-    useState<BlobCalibration>(DEFAULT_CALIBRATION);
+  // Temporary facial-layer alignment controls. The measured anchors in
+  // lib/blobRig.ts already reproduce the master, so these start at 0/0/1x.
+  const [calibration, setCalibration] = useState<FaceCalibration>(
+    DEFAULT_FACE_CALIBRATION
+  );
+  const [saved, setSaved] = useState<string | null>(null);
   const [showCalibration, setShowCalibration] = useState(false);
   /** When true the panel rasterises at exactly 240x240 — real hardware pixels. */
   const [nativePixels, setNativePixels] = useState(false);
@@ -67,7 +72,8 @@ export default function DeviceSimulator() {
     setSpeed(1);
     setPlaying(true);
     setNativePixels(false);
-    setCalibration(DEFAULT_CALIBRATION);
+    setCalibration(DEFAULT_FACE_CALIBRATION);
+    setSaved(null);
     setRunId((n) => n + 1);
   }, []);
 
@@ -170,7 +176,12 @@ export default function DeviceSimulator() {
         <CalibrationPanel
           value={calibration}
           onChange={setCalibration}
-          onReset={() => setCalibration(DEFAULT_CALIBRATION)}
+          onReset={() => {
+            setCalibration(DEFAULT_FACE_CALIBRATION);
+            setSaved(null);
+          }}
+          saved={saved}
+          onSave={() => setSaved(formatCalibration(calibration))}
         />
       )}
 
@@ -241,26 +252,40 @@ function DevButton({
 }
 
 /**
- * Temporary alignment controls for reaction.png.
+ * Temporary calibration for the layered face.
  *
  * Offsets are in 240-space pixels, so 1 unit is one real pixel on the target
- * panel. Once a good set of numbers is found, fold them into
- * DEFAULT_CALIBRATION in lib/blobConfig.ts and this panel can be deleted.
+ * panel. Everything starts at 0 / 0 / 1.000x because the measured anchors in
+ * lib/blobRig.ts already reproduce the master's face placement. Once these are
+ * dialled in, SAVE CALIBRATION prints the numbers to hardcode.
  */
 function CalibrationPanel({
   value,
   onChange,
   onReset,
+  onSave,
+  saved,
 }: {
-  value: BlobCalibration;
-  onChange: (v: BlobCalibration) => void;
+  value: FaceCalibration;
+  onChange: (v: FaceCalibration) => void;
   onReset: () => void;
+  onSave: () => void;
+  saved: string | null;
 }) {
+  const groups: { id: FaceLayerId; label: string }[] = [
+    { id: "leftEye", label: "Left eye" },
+    { id: "rightEye", label: "Right eye" },
+    { id: "mouth", label: "Mouth" },
+  ];
+
+  const set = (id: FaceLayerId, patch: Partial<ElementCalibration>) =>
+    onChange({ ...value, [id]: { ...value[id], ...patch } });
+
   return (
-    <div className="flex w-full max-w-md flex-col gap-3 rounded-lg border border-white/[0.06] bg-white/[0.015] p-4">
+    <div className="flex w-full max-w-md flex-col gap-4 rounded-lg border border-white/[0.06] bg-white/[0.015] p-4">
       <div className="flex items-center justify-between">
         <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/30">
-          reaction.png alignment
+          face calibration
         </span>
         <button
           type="button"
@@ -271,33 +296,85 @@ function CalibrationPanel({
         </button>
       </div>
 
-      <Slider
-        label="X"
-        min={-8}
-        max={8}
-        step={0.25}
-        value={value.offsetX}
-        format={(v) => `${v > 0 ? "+" : ""}${v.toFixed(2)} px`}
-        onChange={(offsetX) => onChange({ ...value, offsetX })}
-      />
-      <Slider
-        label="Y"
-        min={-8}
-        max={8}
-        step={0.25}
-        value={value.offsetY}
-        format={(v) => `${v > 0 ? "+" : ""}${v.toFixed(2)} px`}
-        onChange={(offsetY) => onChange({ ...value, offsetY })}
-      />
-      <Slider
-        label="Scale"
-        min={0.9}
-        max={1.1}
-        step={0.002}
-        value={value.scale}
-        format={(v) => `${v.toFixed(3)}x`}
-        onChange={(scale) => onChange({ ...value, scale })}
-      />
+      {groups.map(({ id, label }) => (
+        <div key={id} className="flex flex-col gap-2">
+          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/40">
+            {label}
+          </span>
+          <Slider
+            label="X"
+            min={-20}
+            max={20}
+            step={0.25}
+            value={value[id].x}
+            format={(v) => `${v > 0 ? "+" : ""}${v.toFixed(2)} px`}
+            onChange={(x) => set(id, { x })}
+          />
+          <Slider
+            label="Y"
+            min={-20}
+            max={20}
+            step={0.25}
+            value={value[id].y}
+            format={(v) => `${v > 0 ? "+" : ""}${v.toFixed(2)} px`}
+            onChange={(y) => set(id, { y })}
+          />
+          <Slider
+            label="Scale"
+            min={0.5}
+            max={1.5}
+            step={0.005}
+            value={value[id].scale}
+            format={(v) => `${v.toFixed(3)}x`}
+            onChange={(scale) => set(id, { scale })}
+          />
+        </div>
+      ))}
+
+      <button
+        type="button"
+        onClick={onSave}
+        className="rounded-md border border-white/15 bg-white/[0.06] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-white/70 transition-colors hover:border-white/25 hover:text-white"
+      >
+        Save calibration
+      </button>
+
+      {saved && <SavedValues text={saved} />}
+    </div>
+  );
+}
+
+/** Shows the saved numbers as selectable text, with a copy button. */
+function SavedValues({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      /* Clipboard blocked — the text is selectable below regardless. */
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-white/[0.08] bg-black/40 p-3">
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/30">
+          current values
+        </span>
+        <button
+          type="button"
+          onClick={copy}
+          className="font-mono text-[9px] uppercase tracking-[0.14em] text-white/40 transition-colors hover:text-white/80"
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <pre className="overflow-x-auto font-mono text-[10px] leading-relaxed text-white/60 select-all">
+        {text}
+      </pre>
     </div>
   );
 }
