@@ -189,8 +189,17 @@ the animation architecture. HOME is grouped into Gaze, Lids & eyes, Jelly body
 and Mouth. Future state catalogues are added in `lib/expressionCatalog.ts` and
 appear under their own state filter when authored.
 
+## SENSED state
+
+SENSED now uses the same layered Blob rig with a quiet proximity field behind
+it: five thin green orbital rings and 18 sparse signal points. Each point has
+its own deterministic phase and period, so only a few points twinkle at once;
+the field never becomes a dense radar or a full-screen effect. The field is
+drawn at native 240-space and pauses with the simulator.
+
 ## Adding a state's animation
 
 Edit that state's file in `components/states/`. Each file is isolated — replace
 the `StatePlaceholder` body with the real animation and no other state changes.
-Only HOME is built so far; it renders the layered rig with concurrent idle motion.
+HOME and SENSED are built; SENSED owns its field in `components/states/` and
+reuses the layered rig without changing HOME's physics.
