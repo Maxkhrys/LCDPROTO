@@ -81,10 +81,10 @@ function drawMouthShape(
   oAmount: number
 ) {
   const o = clamp(oAmount, 0, 1);
-  const lineHalf = Math.max(0.65, height * 0.18) * (1 - o);
-  const ovalHalf = Math.max(1.25, height * 0.46) * o;
+  const lineHalf = Math.max(0.85, height * 0.23) * (1 - o);
+  const ovalHalf = Math.max(1.7, height * 0.48) * o;
   const mouthWidth = width * (1 - o * 0.2);
-  const centerY = curve * height * 0.82 * (1 - o);
+  const centerY = curve * height * 1.05 * (1 - o);
   const topEnd = -lineHalf;
   const bottomEnd = lineHalf;
   const topCenter = centerY - lineHalf - ovalHalf;
@@ -316,8 +316,9 @@ export default function BlobCharacter({
       // Blink closes from both lids. Keep a tiny upper-lid lead so it still
       // reads as a blink, while never leaving the lower half exposed.
       const visibleHeight = socketHeight * open;
-      const visibleTop = -visibleHeight / 2 - socketHeight * 0.035;
-      const visibleBottom = visibleTop + visibleHeight + 1.5;
+      const visibleTop =
+        -visibleHeight / 2 - socketHeight * 0.035 * (1 - open);
+      const visibleBottom = visibleTop + visibleHeight;
       const textureScaleX = Math.max(0.1, faceCompensationX * t.scaleX);
       const textureScaleY = Math.max(0.1, faceCompensationY * t.scaleY);
 
@@ -360,18 +361,19 @@ export default function BlobCharacter({
         ctx.beginPath();
         const coverTop = -socketHeight / 2;
         const coverBottom = socketHeight / 2;
-        const lidBoundary = visibleHeight / 2 + socketHeight * 0.035;
+        const topBoundary = Math.max(coverTop, visibleTop);
+        const bottomBoundary = Math.min(coverBottom, visibleBottom);
         ctx.rect(
           socketX - socketWidth / 2,
           socketY + coverTop,
           socketWidth,
-          lidBoundary - coverTop
+          topBoundary - coverTop
         );
         ctx.rect(
           socketX - socketWidth / 2,
-          socketY + lidBoundary,
+          socketY + bottomBoundary,
           socketWidth,
-          coverBottom - lidBoundary
+          coverBottom - bottomBoundary
         );
         ctx.clip();
         ctx.drawImage(layers.body, -bw / 2, -bh / 2, bw, bh);
@@ -389,8 +391,8 @@ export default function BlobCharacter({
       ctx.scale(faceCompensationX, faceCompensationY);
       drawMouthShape(
         ctx,
-        a.width * 0.56 * clamp(t.scaleX, 0.62, 1.18),
-        a.height * 0.52 * clamp(t.scaleY, 0.7, 1.24),
+        a.width * 0.66 * clamp(t.scaleX, 0.62, 1.18),
+        a.height * 0.78 * clamp(t.scaleY, 0.7, 1.24),
         clamp(t.mouthCurve, -1, 1),
         clamp(t.mouthO, 0, 1)
       );
