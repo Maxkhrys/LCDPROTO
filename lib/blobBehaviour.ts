@@ -527,6 +527,10 @@ export class BehaviourController {
       this.cancel();
       return;
     }
+    // A click can arrive between React's Auto toggle render and the next
+    // animation tick. Keep this direct cue alive through that transition;
+    // Auto only controls the seeded playlist, never manual inspection.
+    this.manualBeat = true;
     if (id === "NORMAL_BLINK" || id === "DOUBLE_BLINK") {
       this.startBlink(id === "DOUBLE_BLINK", cfg);
       return;
