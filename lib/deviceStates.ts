@@ -3,6 +3,14 @@ import type { IdleConfig } from "./blobIdle";
 import type { BehaviourId, HomeActivityStatus } from "./blobBehaviour";
 import type { BlobColour } from "./blobRig";
 
+export type DisplayMode = "dark" | "warm" | "brown";
+
+export const DISPLAY_BACKGROUNDS: Record<DisplayMode, string> = {
+  dark: "#000",
+  warm: "#cfc3b4",
+  brown: "#a58d76",
+};
+
 /**
  * The device's interaction states. Each one will eventually own a full
  * animation; for now they only carry an accent colour and a label.
@@ -71,7 +79,7 @@ export interface StateViewProps {
    */
   renderScale: number;
   /** Dev-only panel contrast preview. Hardware/default remains dark. */
-  displayMode: "dark" | "warm";
+  displayMode: DisplayMode;
   /** Dev-only rig colour preview; every colour uses identical transforms. */
   blobColour: BlobColour;
 }

@@ -2,7 +2,11 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { DEVICE_CONFIG } from "@/lib/deviceConfig";
-import { type DeviceState, type StateViewProps } from "@/lib/deviceStates";
+import {
+  DISPLAY_BACKGROUNDS,
+  type DeviceState,
+  type StateViewProps,
+} from "@/lib/deviceStates";
 
 import HomeState from "@/components/states/HomeState";
 import SensedState from "@/components/states/SensedState";
@@ -54,7 +58,7 @@ export default function DeviceScreen({
       style={{
         width: screenSize,
         height: screenSize,
-        background: displayMode === "warm" ? "#cfc3b4" : "#000",
+        background: DISPLAY_BACKGROUNDS[displayMode],
       }}
     >
       <div

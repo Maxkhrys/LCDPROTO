@@ -27,6 +27,7 @@ import {
   DEFAULT_STATE,
   DEVICE_STATES,
   getStateMeta,
+  type DisplayMode,
   type DeviceState,
 } from "@/lib/deviceStates";
 
@@ -44,7 +45,7 @@ export default function DeviceSimulator() {
   const [fps, setFps] = useState<Fps>(60);
   const [speed, setSpeed] = useState<Speed>(1);
   const [runId, setRunId] = useState(0);
-  const [displayMode, setDisplayMode] = useState<"dark" | "warm">("dark");
+  const [displayMode, setDisplayMode] = useState<DisplayMode>("dark");
   const [blobColour, setBlobColour] = useState<BlobColour>("teal");
 
   // Temporary facial-layer alignment controls. The measured anchors in
@@ -67,6 +68,7 @@ export default function DeviceSimulator() {
   const [showExpressions, setShowExpressions] = useState(false);
   const [expressionFilter, setExpressionFilter] =
     useState<ExpressionFilter>("ALL");
+  const [expressionQuery, setExpressionQuery] = useState("");
   /** When true the panel rasterises at exactly 240x240 — real hardware pixels. */
   const [nativePixels, setNativePixels] = useState(false);
   const [dpr, setDpr] = useState(1);
@@ -77,6 +79,10 @@ export default function DeviceSimulator() {
       delete document.documentElement.dataset.simulatorTheme;
     };
   }, [displayMode]);
+
+  useEffect(() => {
+    setStatus(null);
+  }, [state]);
 
   useEffect(() => {
     const read = () => setDpr(window.devicePixelRatio || 1);
@@ -115,6 +121,7 @@ export default function DeviceSimulator() {
     setSaved(null);
     setShowExpressions(false);
     setExpressionFilter("ALL");
+    setExpressionQuery("");
     setRunId((n) => n + 1);
   }, []);
 
@@ -169,7 +176,7 @@ export default function DeviceSimulator() {
                   type="button"
                   onClick={() => setState(s.id)}
                   aria-pressed={active}
-                  className={`rounded-full border px-3.5 py-1.5 text-[11px] uppercase tracking-[0.14em] transition-colors duration-200 ${
+                  className={`rounded-full border px-3.5 py-1.5 text-[11px] uppercase tracking-[0.14em] transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50 ${
                     active
                       ? "border-white/20 bg-white/[0.07] text-white"
                       : "border-white/[0.07] text-white/40 hover:border-white/15 hover:text-white/70"
@@ -242,12 +249,17 @@ export default function DeviceSimulator() {
               1:1
             </DevButton>
 
-            <DevButton
-              active={displayMode === "warm"}
-              onClick={() => setDisplayMode((v) => (v === "dark" ? "warm" : "dark"))}
-            >
-              {displayMode === "dark" ? "Warm" : "Dark"}
-            </DevButton>
+            <DevGroup label="Screen">
+              {(["dark", "warm", "brown"] as const).map((mode) => (
+                <DevButton
+                  key={mode}
+                  active={displayMode === mode}
+                  onClick={() => setDisplayMode(mode)}
+                >
+                  {mode}
+                </DevButton>
+              ))}
+            </DevGroup>
 
             <DevButton
               active={showCalibration}
@@ -257,14 +269,12 @@ export default function DeviceSimulator() {
             </DevButton>
           </div>
 
-          {state === "HOME" && (
-            <ActivityReadout
-              status={status}
-              playing={playing}
-              autoEnabled={autoBehaviourEnabled}
-              idleEnabled={idle.enabled}
-            />
-          )}
+          <ActivityReadout
+            status={status}
+            playing={playing}
+            autoEnabled={autoBehaviourEnabled}
+            idleEnabled={idle.enabled}
+          />
 
           {showCalibration && (
             <BehaviourPanel
@@ -341,12 +351,14 @@ export default function DeviceSimulator() {
         open={showExpressions}
         state={state}
         filter={expressionFilter}
+        query={expressionQuery}
         onToggle={() => setShowExpressions((v) => !v)}
         onStateChange={(next) => {
           setState(next);
           setExpressionFilter("ALL");
         }}
         onFilterChange={setExpressionFilter}
+        onQueryChange={setExpressionQuery}
         onTrigger={fire}
       />
     </div>
@@ -384,7 +396,7 @@ function DevButton({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`min-w-11 rounded-md border px-2.5 py-1 text-[11px] tracking-wide transition-colors duration-200 ${
+      className={`min-w-11 rounded-md border px-2.5 py-1 text-[11px] tracking-wide transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50 ${
         active
           ? "border-white/15 bg-white/[0.06] text-white/80"
           : "border-white/[0.06] text-white/35 hover:border-white/12 hover:text-white/65"
@@ -759,7 +771,7 @@ function BehaviourPanel({
                   key={entry.id}
                   type="button"
                   onClick={() => onTrigger(entry.id)}
-                  className="rounded-md border border-white/[0.07] px-2.5 py-1 text-[10px] tracking-wide text-white/40 transition-colors hover:border-white/20 hover:text-white/80"
+                  className="rounded-md border border-white/[0.07] px-2.5 py-1 text-[10px] tracking-wide text-white/40 transition-colors hover:border-white/20 hover:text-white/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
                 >
                   {entry.label}
                 </button>
@@ -776,22 +788,39 @@ function ExpressionDrawer({
   open,
   state,
   filter,
+  query,
   onToggle,
   onStateChange,
   onFilterChange,
+  onQueryChange,
   onTrigger,
 }: {
   open: boolean;
   state: DeviceState;
   filter: ExpressionFilter;
+  query: string;
   onToggle: () => void;
   onStateChange: (state: DeviceState) => void;
   onFilterChange: (filter: ExpressionFilter) => void;
+  onQueryChange: (query: string) => void;
   onTrigger: (id: BehaviourId) => void;
 }) {
   const groups = EXPRESSION_GROUPS_BY_STATE[state] ?? [];
-  const visibleGroups =
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredGroups =
     filter === "ALL" ? groups : groups.filter((group) => group.id === filter);
+  const visibleGroups = normalizedQuery
+    ? filteredGroups
+        .map((group) => ({
+          ...group,
+          entries: group.entries.filter(
+            (entry) =>
+              entry.label.toLowerCase().includes(normalizedQuery) ||
+              entry.hint.toLowerCase().includes(normalizedQuery)
+          ),
+        }))
+        .filter((group) => group.entries.length > 0)
+    : filteredGroups;
   const meta = getStateMeta(state);
 
   return (
@@ -807,7 +836,7 @@ function ExpressionDrawer({
           onClick={onToggle}
           aria-expanded={open}
           aria-controls="expression-library"
-          className="flex h-36 w-10 shrink-0 items-center justify-center rounded-l-xl border border-r-0 border-white/[0.1] bg-black/40 text-white/55 shadow-xl transition-colors hover:text-white"
+          className="flex h-36 w-10 shrink-0 items-center justify-center rounded-l-xl border border-r-0 border-white/[0.1] bg-black/40 text-white/55 shadow-xl transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
         >
           <span
             className="font-mono text-[9px] uppercase tracking-[0.2em]"
@@ -839,7 +868,7 @@ function ExpressionDrawer({
               type="button"
               onClick={onToggle}
               aria-label="Close expression library"
-              className="rounded-md px-1.5 text-lg leading-none text-white/35 transition-colors hover:text-white/80"
+              className="rounded-md px-1.5 text-lg leading-none text-white/35 transition-colors hover:text-white/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
             >
               ×
             </button>
@@ -859,13 +888,26 @@ function ExpressionDrawer({
                   className={
                     item.id === state
                       ? "shrink-0 rounded-md border border-white/20 bg-white/[0.07] px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-white/80 transition-colors"
-                      : "shrink-0 rounded-md border border-white/[0.06] px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-white/30 transition-colors hover:border-white/15 hover:text-white/65"
+                      : "shrink-0 rounded-md border border-white/[0.06] px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-white/30 transition-colors hover:border-white/15 hover:text-white/65 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
                   }
                 >
                   {item.label}
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="border-b border-white/[0.07] px-3 py-3">
+            <label className="block">
+              <span className="sr-only">Search expressions</span>
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => onQueryChange(event.target.value)}
+                placeholder="Search cues"
+                className="w-full rounded-md border border-white/[0.08] bg-black/15 px-3 py-2 text-[11px] text-white/75 outline-none placeholder:text-white/25 focus:border-white/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
+              />
+            </label>
           </div>
 
           <div className="border-b border-white/[0.07] px-3 py-3">
@@ -882,7 +924,7 @@ function ExpressionDrawer({
                   className={
                     item === filter
                       ? "rounded-md border border-white/20 bg-white/[0.07] px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-white/80 transition-colors"
-                      : "rounded-md border border-white/[0.06] px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-white/30 transition-colors hover:border-white/15 hover:text-white/65"
+                      : "rounded-md border border-white/[0.06] px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-white/30 transition-colors hover:border-white/15 hover:text-white/65 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
                   }
                 >
                   {item === "ALL" ? "All" : item}
@@ -904,7 +946,7 @@ function ExpressionDrawer({
               </div>
             ) : visibleGroups.length === 0 ? (
               <p className="px-1 py-4 text-[11px] text-white/35">
-                No cues in this filter.
+                {normalizedQuery ? "No matching cues." : "No cues in this filter."}
               </p>
             ) : (
               <div className="flex flex-col gap-4">
@@ -917,7 +959,7 @@ function ExpressionDrawer({
                   <button
                     type="button"
                     onClick={() => onTrigger("REST")}
-                    className="group flex w-full items-center justify-between gap-3 rounded-lg border border-white/[0.06] px-3 py-2 text-left transition-colors hover:border-white/20 hover:bg-white/[0.05]"
+                    className="group flex w-full items-center justify-between gap-3 rounded-lg border border-white/[0.06] px-3 py-2 text-left transition-colors hover:border-white/20 hover:bg-white/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
                   >
                     <span className="text-[11px] text-white/65 group-hover:text-white/90">
                       Return to neutral
@@ -943,7 +985,7 @@ function ExpressionDrawer({
                           key={entry.id}
                           type="button"
                           onClick={() => onTrigger(entry.id)}
-                          className="group flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] px-3 py-2 text-left transition-colors hover:border-white/20 hover:bg-white/[0.05]"
+                          className="group flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] px-3 py-2 text-left transition-colors hover:border-white/20 hover:bg-white/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
                         >
                           <span className="min-w-0 text-[11px] text-white/65 group-hover:text-white/90">
                             {entry.label}

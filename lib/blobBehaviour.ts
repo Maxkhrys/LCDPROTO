@@ -37,7 +37,16 @@ export type BehaviourId =
   | "MOUTH_O"
   | "MOUTH_FLIP"
   | "SENSED_WORRIED"
-  | "SENSED_SURPRISED";
+  | "SENSED_SURPRISED"
+  | "ANGRY_STARE"
+  | "ANGRY_SQUINT"
+  | "ANGRY_TILT"
+  | "SAD_DOWNCAST"
+  | "SAD_WOBBLE"
+  | "SAD_SMALL"
+  | "IDLE_SOFT_BREATH"
+  | "IDLE_LOOK_AROUND"
+  | "IDLE_SETTLE";
 
 export type HomeMood =
   | "CONTENT"
@@ -555,6 +564,20 @@ export class BehaviourController {
       this.startSensedVariant(id, cfg);
       return;
     }
+    if (
+      id === "ANGRY_STARE" ||
+      id === "ANGRY_SQUINT" ||
+      id === "ANGRY_TILT" ||
+      id === "SAD_DOWNCAST" ||
+      id === "SAD_WOBBLE" ||
+      id === "SAD_SMALL" ||
+      id === "IDLE_SOFT_BREATH" ||
+      id === "IDLE_LOOK_AROUND" ||
+      id === "IDLE_SETTLE"
+    ) {
+      this.startLibraryBeat(id, cfg);
+      return;
+    }
     this.startBody(id, cfg);
   }
 
@@ -967,6 +990,101 @@ export class BehaviourController {
     // Let the authored beat land cleanly before an automatic blink competes
     // with it. Manual blink tests still work immediately.
     this.nextBlinkAt = Math.max(this.nextBlinkAt, this.beatUntil + 180);
+  }
+
+  /** Reusable emotion and idle beats for the expression library. */
+  private startLibraryBeat(
+    id:
+      | "ANGRY_STARE"
+      | "ANGRY_SQUINT"
+      | "ANGRY_TILT"
+      | "SAD_DOWNCAST"
+      | "SAD_WOBBLE"
+      | "SAD_SMALL"
+      | "IDLE_SOFT_BREATH"
+      | "IDLE_LOOK_AROUND"
+      | "IDLE_SETTLE",
+    cfg: BehaviourConfig
+  ) {
+    this.clearBeatCues();
+    let gaze: GazeBehaviour | null = null;
+    let expression: ExpressionBehaviour | null = null;
+    let mouth: MouthBehaviour | null = null;
+    let body: BodyBehaviour | null = null;
+    let duration = 1500;
+
+    switch (id) {
+      case "ANGRY_STARE":
+        expression = "SOFT_SQUINT";
+        mouth = "MOUTH_FLIP";
+        body = "JELLY_TWIST_RIGHT";
+        duration = 1650;
+        break;
+      case "ANGRY_SQUINT":
+        expression = "SOFT_SQUINT";
+        mouth = "MOUTH_FLIP";
+        body = "SIDE_SQUISH_RIGHT";
+        duration = 1450;
+        break;
+      case "ANGRY_TILT":
+        gaze = "CURIOUS_TILT_RIGHT";
+        expression = "ONE_EYE_SQUINT_RIGHT";
+        mouth = "MOUTH_FLIP";
+        body = "JELLY_TWIST_RIGHT";
+        duration = 1750;
+        break;
+      case "SAD_DOWNCAST":
+        gaze = "LOOK_DOWN";
+        expression = "SOFT_SQUINT";
+        mouth = "MOUTH_FLIP";
+        body = "BODY_SETTLE";
+        duration = 1900;
+        break;
+      case "SAD_WOBBLE":
+        gaze = "LOOK_DOWN";
+        expression = "ONE_EYE_SQUINT_LEFT";
+        mouth = "MOUTH_FLIP";
+        body = "SOFT_SWAY_LEFT";
+        duration = 1850;
+        break;
+      case "SAD_SMALL":
+        gaze = "LOOK_DOWN";
+        expression = "SOFT_SQUINT";
+        mouth = "MOUTH_RELAX";
+        body = "BREATH_STRETCH";
+        duration = 1700;
+        break;
+      case "IDLE_SOFT_BREATH":
+        expression = "SOFT_SQUINT";
+        mouth = "MOUTH_RELAX";
+        body = "BREATH_STRETCH";
+        duration = 1550;
+        break;
+      case "IDLE_LOOK_AROUND":
+        gaze = "GLANCE_LEFT";
+        duration = 1250;
+        break;
+      case "IDLE_SETTLE":
+        expression = "SOFT_SQUINT";
+        mouth = "MOUTH_RELAX";
+        body = "BODY_SETTLE";
+        duration = 1600;
+        break;
+    }
+
+    if (gaze) this.startGaze(gaze, cfg);
+    this.beatExpressionAt = expression ? this.clock + 56 : 0;
+    this.beatMouthAt = mouth ? this.clock + 92 : 0;
+    this.beatBodyAt = body ? this.clock + 118 : 0;
+    this.beatExpressionId = expression;
+    this.beatMouthId = mouth;
+    this.beatBodyId = body;
+    this.beatUntil = this.clock + duration;
+    this.manualBeat = true;
+    this.nextBeatAt = Math.max(this.nextBeatAt, this.beatUntil + 260);
+    this.activityId = id;
+    this.activityStartedAt = this.clock;
+    this.activityUntil = this.beatUntil;
   }
 
   private startBody(id: BehaviourId, cfg: BehaviourConfig) {

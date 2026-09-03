@@ -16,6 +16,14 @@ html[data-simulator-theme="warm"] {
   --dev-panel-border: rgba(62, 48, 34, 0.16);
 }
 
+html[data-simulator-theme="brown"] {
+  color-scheme: light;
+  --simulator-bg: #a58d76;
+  --simulator-ink: #2c2722;
+  --dev-panel-bg: #b9a38b;
+  --dev-panel-border: rgba(49, 36, 25, 0.22);
+}
+
 html,
 body {
   background: var(--simulator-bg);
@@ -99,6 +107,23 @@ html[data-simulator-theme="warm"] [class~="bg-black/10"] {
 }
 html[data-simulator-theme="warm"] [class~="text-[#b295ff]"] {
   color: #694895 !important;
+}
+
+/* Brown is a lower-luminance variant of the warm inspection theme. */
+html[data-simulator-theme="brown"] [class*="text-white"] {
+  color: #2c2722 !important;
+}
+html[data-simulator-theme="brown"] [class*="border-white"] {
+  border-color: rgb(49 36 25 / 0.18) !important;
+}
+html[data-simulator-theme="brown"] [class*="bg-white"] {
+  background-color: rgb(255 248 237 / 0.22) !important;
+}
+html[data-simulator-theme="brown"] [class*="bg-black"] {
+  background-color: rgb(255 248 237 / 0.24) !important;
+}
+html[data-simulator-theme="brown"] [class~="text-[#b295ff]"] {
+  color: #5d3e72 !important;
 }
 
 /* The panel is a fixed-resolution render surface: never let the browser

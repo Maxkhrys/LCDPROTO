@@ -1,7 +1,15 @@
 import type { BehaviourId } from "./blobBehaviour";
 import type { DeviceState } from "./deviceStates";
 
-export type ExpressionCategory = "Gaze" | "Lids" | "Body" | "Mouth" | "Variants";
+export type ExpressionCategory =
+  | "Gaze"
+  | "Lids"
+  | "Body"
+  | "Mouth"
+  | "Idle"
+  | "Angry"
+  | "Sad"
+  | "Variants";
 export type ExpressionFilter = "ALL" | ExpressionCategory;
 
 export interface ExpressionEntry {
@@ -71,6 +79,41 @@ export const HOME_EXPRESSION_GROUPS: readonly ExpressionGroup[] = [
       { id: "MOUTH_FLIP", label: "Frown", hint: "curve morph" },
     ],
   },
+  {
+    id: "Idle",
+    label: "Idle life",
+    entries: [
+      {
+        id: "IDLE_SOFT_BREATH",
+        label: "Soft breath",
+        hint: "quiet inhale",
+      },
+      {
+        id: "IDLE_LOOK_AROUND",
+        label: "Look around",
+        hint: "small glance",
+      },
+      { id: "IDLE_SETTLE", label: "Idle settle", hint: "weight drops" },
+    ],
+  },
+  {
+    id: "Angry",
+    label: "Angry",
+    entries: [
+      { id: "ANGRY_STARE", label: "Stare", hint: "tight + weighted" },
+      { id: "ANGRY_SQUINT", label: "Hard squint", hint: "side compression" },
+      { id: "ANGRY_TILT", label: "Angry tilt", hint: "one eye + twist" },
+    ],
+  },
+  {
+    id: "Sad",
+    label: "Sad",
+    entries: [
+      { id: "SAD_DOWNCAST", label: "Downcast", hint: "drop + frown" },
+      { id: "SAD_WOBBLE", label: "Small wobble", hint: "soft sway" },
+      { id: "SAD_SMALL", label: "Small sad", hint: "quiet retreat" },
+    ],
+  },
 ] as const satisfies readonly ExpressionGroup[];
 
 export const EXPRESSION_FILTERS: readonly ExpressionFilter[] = [
@@ -79,6 +122,9 @@ export const EXPRESSION_FILTERS: readonly ExpressionFilter[] = [
   "Lids",
   "Body",
   "Mouth",
+  "Idle",
+  "Angry",
+  "Sad",
   "Variants",
 ];
 

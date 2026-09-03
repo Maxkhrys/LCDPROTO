@@ -25,10 +25,7 @@ export type BlobColour =
   | "yellow"
   | "green"
   | "blue"
-  | "red"
-  | "pink"
-  | "orange"
-  | "galaxy";
+  | "red";
 
 export const BLOB_COLOURS: readonly { id: BlobColour; label: string }[] = [
   { id: "purple", label: "Purple" },
@@ -37,9 +34,6 @@ export const BLOB_COLOURS: readonly { id: BlobColour; label: string }[] = [
   { id: "green", label: "Green" },
   { id: "blue", label: "Blue" },
   { id: "red", label: "Red" },
-  { id: "pink", label: "Pink" },
-  { id: "orange", label: "Orange" },
-  { id: "galaxy", label: "Galaxy" },
 ] as const;
 
 /** The locked body. Carries real alpha; nothing is keyed at runtime. */
@@ -202,39 +196,6 @@ export const RIG_ASSETS = {
       centerX: 252.5,
       centerY: 251.5,
       solidWidth: 496,
-    },
-    face: FACE_LAYERS,
-  },
-  pink: {
-    body: {
-      src: "/blob/rig/pink/body.png",
-      width: 572,
-      height: 567,
-      centerX: 283.5,
-      centerY: 285,
-      solidWidth: 567,
-    },
-    face: FACE_LAYERS,
-  },
-  orange: {
-    body: {
-      src: "/blob/rig/orange/body.png",
-      width: 569,
-      height: 579,
-      centerX: 286,
-      centerY: 289,
-      solidWidth: 564,
-    },
-    face: FACE_LAYERS,
-  },
-  galaxy: {
-    body: {
-      src: "/blob/rig/galaxy/body.png",
-      width: 570,
-      height: 579,
-      centerX: 282.5,
-      centerY: 287.5,
-      solidWidth: 564,
     },
     face: FACE_LAYERS,
   },

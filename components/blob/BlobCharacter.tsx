@@ -197,27 +197,6 @@ function eyePalette(colour: BlobColour) {
         wash: "rgba(255, 80, 76, 0.38)",
         washEdge: "rgba(255, 80, 76, 0)",
       };
-    case "pink":
-      return {
-        shade: "#4a0a35",
-        rim: "#d72a83",
-        wash: "rgba(255, 83, 190, 0.4)",
-        washEdge: "rgba(255, 83, 190, 0)",
-      };
-    case "orange":
-      return {
-        shade: "#4b2105",
-        rim: "#d96d16",
-        wash: "rgba(255, 156, 45, 0.38)",
-        washEdge: "rgba(255, 156, 45, 0)",
-      };
-    case "galaxy":
-      return {
-        shade: "#20134f",
-        rim: "#5b55c8",
-        wash: "rgba(91, 136, 255, 0.38)",
-        washEdge: "rgba(91, 136, 255, 0)",
-      };
     default:
       return {
         shade: "#1b0c42",
@@ -235,12 +214,13 @@ function drawProceduralEye(
   gazeX: number,
   gazeY: number
 ) {
-  // Keep the eye as one clean black mass. It is slightly smaller than the
-  // socket so the gaze can travel inside the surrounding body without a white
-  // dot or a pasted-on iris giving away the trick.
-  const eyeWidth = width * 0.94;
+  // Keep the eye as one clean black mass. It is deliberately inset from the
+  // socket so a full left/right glance never kisses the aperture edge and
+  // reads as a clipped oval. The old asset's generous black silhouette stays,
+  // but the movement now has a safe internal margin.
+  const eyeWidth = width * 0.86;
   const eyeHeight = height * 0.96;
-  const eyeX = clamp(gazeX * 0.46, -width * 0.12, width * 0.12);
+  const eyeX = clamp(gazeX * 0.3, -width * 0.08, width * 0.08);
   const eyeY = clamp(gazeY * 0.28, -height * 0.08, height * 0.08);
   eyeSocketPath(ctx, eyeX, eyeY, eyeWidth, eyeHeight);
   ctx.fillStyle = "#010204";
@@ -475,13 +455,18 @@ export default function BlobCharacter({
       const socketScaleY = clamp(t.eyeSocketScaleY, 0.72, 1.35);
       const socketWidth = a.width * socketScaleX;
       const socketHeight = a.height * socketScaleY;
+      // The aperture is a skin socket, not the exact silhouette of the
+      // procedural eye. A small horizontal cushion prevents the left edge
+      // from being shaved during a glance, especially at 1:1 rasterisation.
+      const apertureWidth = socketWidth * 1.1;
+      const apertureHeight = socketHeight * 1.04;
       const open = clamp(t.eyeOpen, 0, 1);
-      // Blink closes from both lids. Keep a tiny upper-lid lead so it still
-      // reads as a blink, while never leaving the lower half exposed.
-      const openingHeight = socketHeight * open;
-      const openingY = socketHeight * 0.025 * (1 - open);
+      // Blink closes from the top while the lower lid stays planted. This
+      // keeps a half-blink from looking like the bottom half was erased.
+      const openingHeight = apertureHeight * open;
+      const openingY = apertureHeight * 0.5 * (1 - open);
       const gazeX = clamp(t.x, -socketWidth * 0.2, socketWidth * 0.2);
-      const gazeY = clamp(t.y, -socketHeight * 0.14, socketHeight * 0.14);
+      const gazeY = clamp(t.y, -socketHeight * 0.12, socketHeight * 0.12);
 
       // Brows are part of the facial surface, not a separate floating asset.
       // They rise with curiosity, lower with squinting, and inherit the same
@@ -502,7 +487,7 @@ export default function BlobCharacter({
         // Clip is created before texture translation, so the socket does not
         // travel with a glance. The aperture itself closes from both lids.
         ctx.translate(socketX, socketY);
-        eyeSocketPath(ctx, 0, openingY, socketWidth, openingHeight);
+        eyeSocketPath(ctx, 0, openingY, apertureWidth, openingHeight);
         ctx.clip();
 
         ctx.rotate((t.rotation * Math.PI) / 180);

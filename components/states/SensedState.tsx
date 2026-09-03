@@ -11,7 +11,10 @@ import {
 import { AmbientDrift, type IdleConfig } from "@/lib/blobIdle";
 import { BlobJellyPhysics, type JellyTarget } from "@/lib/blobPhysics";
 import { NEUTRAL_BLOB, NEUTRAL_ELEMENT, type BlobRig } from "@/lib/blobRig";
-import type { StateViewProps } from "@/lib/deviceStates";
+import {
+  DISPLAY_BACKGROUNDS,
+  type StateViewProps,
+} from "@/lib/deviceStates";
 import SensedField from "./SensedField";
 
 const MAX_DEFORM = 0.1;
@@ -327,7 +330,7 @@ export default function SensedState({
   return (
     <div
       className="relative h-full w-full"
-      style={{ background: displayMode === "warm" ? "#cfc3b4" : "#000" }}
+      style={{ background: DISPLAY_BACKGROUNDS[displayMode] }}
     >
       <SensedField
         size={size}

@@ -1,7 +1,10 @@
 "use client";
 
 import { motion } from "framer-motion";
-import type { StateViewProps } from "@/lib/deviceStates";
+import {
+  DISPLAY_BACKGROUNDS,
+  type StateViewProps,
+} from "@/lib/deviceStates";
 
 interface StatePlaceholderProps extends StateViewProps {
   label: string;
@@ -19,18 +22,20 @@ export default function StatePlaceholder({
   speed,
   label,
   accent,
+  displayMode,
 }: StatePlaceholderProps) {
   const duration = 6 / (speed || 1);
+  const background = DISPLAY_BACKGROUNDS[displayMode];
 
   return (
     <div
-      className="relative h-full w-full overflow-hidden rounded-full bg-black"
-      style={{ width: size, height: size }}
+      className="relative h-full w-full overflow-hidden rounded-full"
+      style={{ width: size, height: size, background }}
     >
       <motion.div
         className="absolute inset-0"
         style={{
-          background: `radial-gradient(circle at 50% 50%, ${accent}26 0%, ${accent}0d 45%, #000 72%)`,
+          background: `radial-gradient(circle at 50% 50%, ${accent}26 0%, ${accent}0d 45%, ${background} 72%)`,
         }}
         animate={playing ? { opacity: [0.65, 1, 0.65] } : { opacity: 0.8 }}
         transition={

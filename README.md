@@ -67,9 +67,6 @@ public/blob/rig/green/eye-right.png 279x421
 public/blob/rig/green/mouth-home.png 429x171
 public/blob/rig/blue/body.png    509x504
 public/blob/rig/red/body.png     506x504
-public/blob/rig/pink/body.png    572x567
-public/blob/rig/orange/body.png  569x579
-public/blob/rig/galaxy/body.png  570x579
 ```
 
 All rigs are produced from their matching parts sheet by
@@ -79,15 +76,9 @@ All rigs are produced from their matching parts sheet by
 node scripts/extractBlobParts.mjs [sheet]
 ```
 
-Body-only colour sheets use the companion extractor:
-
-```bash
-node scripts/extractBlobColourBodies.mjs [sheet] [output-directory]
-```
-
-Current colour selector: purple, teal, yellow, green, blue, red, pink,
-orange, and galaxy. New colour bodies reuse the same procedural eye, eyebrow,
-mouth, socket, and HOME physics rig.
+Current colour selector: purple, teal, yellow, green, blue, and red. All six
+colours reuse the same procedural eye, eyebrow, mouth, socket, and HOME physics
+rig.
 
 ### How transparency is recovered
 
@@ -181,13 +172,15 @@ remain available for manual testing when Auto is off. **Idle** toggles the
 ambient layer. With both Auto and Idle off, the calibrated pose is static until
 a cue is fired. The side tuning rail exposes Float, Drift, Breath, Squash,
 Jelly, Ripple, Blink, Gaze, Rotate, and Activity controls beside the device so
-changes can be judged live. **Warm** changes the complete simulator UI and LCD
-preview to a low-glare warm testing theme; hardware/default view remains dark.
+changes can be judged live. **Screen** switches between Dark, Warm, and Brown
+preview backgrounds. Brown is the lower-luminance beige-brown testing theme;
+hardware/default view remains dark.
 
 The fixed **Expressions** tab exposes the authored catalogue without changing
-the animation architecture. HOME is grouped into Gaze, Lids & eyes, Jelly body
-and Mouth. Future state catalogues are added in `lib/expressionCatalog.ts` and
-appear under their own state filter when authored.
+the animation architecture. HOME is grouped into Gaze, Lids & eyes, Jelly body,
+Mouth, Idle life, Angry, and Sad. SENSED inherits those groups and adds its own
+variants. Search filters the library without hiding the currently selected
+state.
 
 ## SENSED state
 
