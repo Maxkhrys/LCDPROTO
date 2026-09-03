@@ -1,6 +1,7 @@
 import type { FaceCalibration } from "./blobCalibration";
 import type { IdleConfig } from "./blobIdle";
 import type { BehaviourId, HomeActivityStatus } from "./blobBehaviour";
+import type { BlobColour } from "./blobRig";
 
 /**
  * The device's interaction states. Each one will eventually own a full
@@ -71,4 +72,6 @@ export interface StateViewProps {
   renderScale: number;
   /** Dev-only panel contrast preview. Hardware/default remains dark. */
   displayMode: "dark" | "light";
+  /** Dev-only rig colour preview; every colour uses identical transforms. */
+  blobColour: BlobColour;
 }

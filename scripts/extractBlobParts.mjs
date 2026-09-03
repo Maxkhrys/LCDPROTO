@@ -1,7 +1,7 @@
 /**
  * Extracts the four Blob rig layers from a parts sheet into production PNGs.
  *
- *   node scripts/extractBlobParts.mjs [sheet]
+ *   node scripts/extractBlobParts.mjs [sheet] [output-directory]
  *
  * Why this is not a luminance key
  * -------------------------------
@@ -24,7 +24,7 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { PNG } from "pngjs";
 
 const SHEET = process.argv[2] ?? "public/blob/Blob-parts2.png";
-const OUT_DIR = "public/blob/rig";
+const OUT_DIR = process.argv[3] ?? "public/blob/rig";
 
 /** Flat background colour of the sheet, sampled from an empty corner. */
 const BG = [247, 247, 247];

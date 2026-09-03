@@ -14,10 +14,10 @@ import { NEUTRAL_BLOB, NEUTRAL_ELEMENT, type BlobRig } from "@/lib/blobRig";
 import type { StateViewProps } from "@/lib/deviceStates";
 
 /** Safety cap on total body deformation, whatever the layers add up to. */
-const MAX_DEFORM = 0.07;
-const MAX_BODY_DEFORM = 0.045;
-const FACE_DEFORM_SHARE = 0.2;
-const BODY_DEFORM_SHARE = 0.8;
+const MAX_DEFORM = 0.1;
+const MAX_BODY_DEFORM = 0.04;
+const FACE_DEFORM_SHARE = 0.34;
+const BODY_DEFORM_SHARE = 0.66;
 const clampDeform = (v: number) =>
   v < -MAX_DEFORM ? -MAX_DEFORM : v > MAX_DEFORM ? MAX_DEFORM : v;
 const clampBodyDeform = (v: number) =>
@@ -46,10 +46,9 @@ const behaviourConfig = (idle: IdleConfig): BehaviourConfig => ({
 /**
  * HOME — the neutral Blob, driven by the micro-behaviour system.
  *
- * Two layers compose into one pose: continuous ambient drift and breathing,
- * and whatever single behaviour the scheduler is currently running. Both are
- * deltas on calibrated HOME. Ambient and actions stay independently switchable,
- * and a future device state can still take over from any frame.
+ * Ambient drift composes with concurrent mood, gaze, lids, mouth and body
+ * channels. Face springs lead, body springs follow, and the secondary mass is
+ * last to settle. A future state can still interrupt from any presented frame.
  */
 export default function HomeState({
   size,
@@ -64,6 +63,7 @@ export default function HomeState({
   triggerRequest,
   onBehaviourStatus,
   displayMode,
+  blobColour,
 }: StateViewProps) {
   const [rig, setRig] = useState<BlobRig>(() =>
     applyCalibration(
@@ -117,7 +117,7 @@ export default function HomeState({
     let latestIdleX = 0;
     let latestIdleY = 0;
     let latestRotation = 0;
-    let latestEyeLid = 1;
+    let latestBodySpeed = 0;
     const jellyTarget: JellyTarget = {
       x: 0,
       y: 0,
@@ -129,6 +129,10 @@ export default function HomeState({
       bodyRotation: 0,
       bodyScaleX: 0,
       bodyScaleY: 0,
+      bodySkewX: 0,
+      bodySkewY: 0,
+      bodyOriginX: 0,
+      bodyOriginY: 0.82,
     };
     const frameInterval = 1000 / fps;
 
@@ -137,7 +141,7 @@ export default function HomeState({
       const bc = behaviourConfig(cfgIdle);
 
       if (on) controller.current.update(dt, bc);
-      const d = controller.current.pose(bc);
+      const d = controller.current.pose();
 
       // Ambient sees the behaviour's vertical contribution too, so the soft-body
       // lag reacts to real movement rather than only to the drift.
@@ -158,12 +162,16 @@ export default function HomeState({
       jellyTarget.bodyRotation = active ? d.bodyRotation : 0;
       jellyTarget.bodyScaleX = active ? clampBodyDeform(d.bodyScaleX) : 0;
       jellyTarget.bodyScaleY = active ? clampBodyDeform(d.bodyScaleY) : 0;
+      jellyTarget.bodySkewX = active ? d.bodySkewX : 0;
+      jellyTarget.bodySkewY = active ? d.bodySkewY : 0;
+      jellyTarget.bodyOriginX = active ? d.bodyOriginX : 0;
+      jellyTarget.bodyOriginY = active ? d.bodyOriginY : 0.82;
       const physical = physics.current.update(dt, jellyTarget);
 
       latestIdleX = amb.x;
       latestIdleY = amb.y;
       latestRotation = physical.rotation;
-      latestEyeLid = active ? d.eyeLid : 1;
+      latestBodySpeed = physical.bodySpeed;
 
       const deformX = clampDeform(physical.scaleX);
       const deformY = clampDeform(physical.scaleY);
@@ -189,6 +197,10 @@ export default function HomeState({
             x: physical.bodyX,
             y: physical.bodyY,
             rotation: physical.bodyRotation,
+            skewX: physical.bodySkewX,
+            skewY: physical.bodySkewY,
+            originX: physical.bodyOriginX,
+            originY: physical.bodyOriginY,
             scaleX:
               1 + deformX * BODY_DEFORM_SHARE + clampBodyDeform(physical.bodyScaleX),
             scaleY:
@@ -228,12 +240,13 @@ export default function HomeState({
     };
 
     const report = (now: number) => {
-      const base = controller.current.status(latestEyeLid);
+      const base = controller.current.status();
       const s: HomeActivityStatus = {
         ...base,
         idleX: latestIdleX,
         idleY: latestIdleY,
         bodyRotation: latestRotation,
+        bodySpeed: latestBodySpeed,
       };
       if (
         now - statusAt < 100 &&
@@ -272,7 +285,12 @@ export default function HomeState({
       className="relative h-full w-full"
       style={{ background: displayMode === "light" ? "#eeeaf4" : "#000" }}
     >
-      <BlobCharacter size={size} renderScale={renderScale} rig={rig} />
+      <BlobCharacter
+        size={size}
+        renderScale={renderScale}
+        rig={rig}
+        colour={blobColour}
+      />
     </div>
   );
 }

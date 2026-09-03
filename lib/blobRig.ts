@@ -19,6 +19,14 @@ export interface BlobLayerAsset {
   centerY: number;
 }
 
+export type BlobColour = "purple" | "teal" | "yellow";
+
+export const BLOB_COLOURS: readonly { id: BlobColour; label: string }[] = [
+  { id: "purple", label: "Purple" },
+  { id: "teal", label: "Teal" },
+  { id: "yellow", label: "Yellow" },
+] as const;
+
 /** The locked body. Carries real alpha; nothing is keyed at runtime. */
 export const BODY_LAYER = {
   src: "/blob/rig/body.png",
@@ -55,6 +63,80 @@ export const FACE_LAYERS = {
   },
 } as const satisfies Record<string, BlobLayerAsset>;
 
+/** Same authored rig, extracted from colour-specific parts sheets. */
+export const RIG_ASSETS = {
+  purple: {
+    body: BODY_LAYER,
+    face: FACE_LAYERS,
+  },
+  teal: {
+    body: {
+      src: "/blob/rig/teal/body.png",
+      width: 607,
+      height: 586,
+      centerX: 303,
+      centerY: 292.5,
+      solidWidth: 599,
+    },
+    face: {
+      leftEye: {
+        src: "/blob/rig/teal/eye-left.png",
+        width: 278,
+        height: 408,
+        centerX: 138.5,
+        centerY: 203.5,
+      },
+      rightEye: {
+        src: "/blob/rig/teal/eye-right.png",
+        width: 283,
+        height: 424,
+        centerX: 141,
+        centerY: 211.5,
+      },
+      mouth: {
+        src: "/blob/rig/teal/mouth-home.png",
+        width: 438,
+        height: 173,
+        centerX: 218.5,
+        centerY: 86,
+      },
+    },
+  },
+  yellow: {
+    body: {
+      src: "/blob/rig/yellow/body.png",
+      width: 582,
+      height: 595,
+      centerX: 290.5,
+      centerY: 297,
+      solidWidth: 574,
+    },
+    face: {
+      leftEye: {
+        src: "/blob/rig/yellow/eye-left.png",
+        width: 276,
+        height: 406,
+        centerX: 137.5,
+        centerY: 202.5,
+      },
+      rightEye: {
+        src: "/blob/rig/yellow/eye-right.png",
+        width: 279,
+        height: 424,
+        centerX: 139,
+        centerY: 211.5,
+      },
+      mouth: {
+        src: "/blob/rig/yellow/mouth-home.png",
+        width: 426,
+        height: 172,
+        centerX: 212.5,
+        centerY: 85.5,
+      },
+    },
+  },
+} as const;
+
 export type FaceLayerId = keyof typeof FACE_LAYERS;
 
 export const FACE_ORDER: readonly FaceLayerId[] = ["leftEye", "rightEye", "mouth"];
@@ -87,16 +169,20 @@ export const FACE_PLACEMENT: Record<
 };
 
 /** Scale applied to the body image so its solid core spans BODY_FRACTION. */
-export function bodyScale(screen: number): number {
-  return (screen * BODY_FRACTION) / BODY_LAYER.solidWidth;
+export function bodyScale(screen: number, colour: BlobColour = "purple"): number {
+  return (screen * BODY_FRACTION) / RIG_ASSETS[colour].body.solidWidth;
 }
 
 /** Neutral geometry of a facial layer in 240-space pixels. */
-export function faceAnchor(id: FaceLayerId, screen: number) {
-  const layer = FACE_LAYERS[id];
+export function faceAnchor(
+  id: FaceLayerId,
+  screen: number,
+  colour: BlobColour = "purple"
+) {
+  const layer = RIG_ASSETS[colour].face[id];
   const p = FACE_PLACEMENT[id];
   const bodyW = screen * BODY_FRACTION;
-  const s = bodyScale(screen) * p.scale;
+  const s = bodyScale(screen, colour) * p.scale;
   return {
     x: screen / 2 + p.dx * bodyW,
     y: screen / 2 + p.dy * bodyW,
@@ -116,6 +202,12 @@ export interface ElementTransform {
   scaleY: number;
   /** Degrees, clockwise, about the element's own centre. */
   rotation: number;
+  /** Degrees of affine shear. Used by the body; neutral for face layers. */
+  skewX: number;
+  skewY: number;
+  /** Transform pivot in local space: -1 left/top, +1 right/bottom. */
+  originX: number;
+  originY: number;
   opacity: number;
 }
 
@@ -145,6 +237,10 @@ export const NEUTRAL_ELEMENT: ElementTransform = {
   scaleX: 1,
   scaleY: 1,
   rotation: 0,
+  skewX: 0,
+  skewY: 0,
+  originX: 0,
+  originY: 0,
   opacity: 1,
 };
 

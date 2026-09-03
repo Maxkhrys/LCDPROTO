@@ -1,18 +1,11 @@
 /**
- * HOME micro-behaviour system.
+ * Concurrent HOME animation director.
  *
- * HOME is not a loop. Blob rests most of the time and occasionally performs
- * one small spontaneous behaviour, then goes quiet again. These are internal
- * behaviours — the device state is still HOME.
- *
- * Scheduling is deterministic: a seeded PRNG picks what happens next and how
- * long the quiet gaps are, so a run is reproducible, resettable, and does
- * nothing during render (no hydration risk). Timing advances only from the
- * clock the caller supplies, so pausing genuinely freezes the character.
- *
- * Everything a behaviour produces is a small *delta* on top of the neutral
- * pose. Nothing here reads or writes the rig directly, so a future device
- * state can take the rig over at any moment — see `cancel()`.
+ * HOME is composed from independent mood, gaze, lids, mouth and body channels.
+ * Every channel retargets its current spring state, preserving velocity, so an
+ * incoming device state can interrupt from the exact presented pose. The
+ * deterministic scheduler never calls Math.random() and allocates nothing in
+ * the frame loop. All values are simple affine transforms suitable for ESP32.
  */
 
 export type BehaviourId =
@@ -44,19 +37,38 @@ export type BehaviourId =
   | "MOUTH_O"
   | "MOUTH_FLIP";
 
-/** Additive deltas on the neutral pose. Scales are deviations from 1. */
+export type HomeMood =
+  | "CONTENT"
+  | "CURIOUS"
+  | "SLEEPY"
+  | "AMUSED"
+  | "DISTRACTED"
+  | "THOUGHTFUL";
+
+export interface BehaviourConfig {
+  gazePx: number;
+  squash: number;
+  paceScale: number;
+  blinkIntervalMs: number;
+}
+
+/** Additive deltas on the calibrated neutral pose. */
 export interface PoseDelta {
   blobX: number;
   blobY: number;
   blobRotation: number;
   blobScaleX: number;
   blobScaleY: number;
-  /** Secondary silhouette mass; face does not inherit these values. */
   bodyX: number;
   bodyY: number;
   bodyRotation: number;
   bodyScaleX: number;
   bodyScaleY: number;
+  bodySkewX: number;
+  bodySkewY: number;
+  /** Pivot in local body space: -1 left/top, +1 right/bottom. */
+  bodyOriginX: number;
+  bodyOriginY: number;
   eyeX: number;
   eyeY: number;
   leftEyeX: number;
@@ -69,9 +81,7 @@ export interface PoseDelta {
   rightEyeScaleX: number;
   rightEyeScaleY: number;
   rightEyeRotation: number;
-  /** Multiplier on eye scaleY, for lid closure. */
   eyeLid: number;
-  /** Independent resting lid tension; multiplied by eyeLid. */
   leftEyeTension: number;
   rightEyeTension: number;
   mouthX: number;
@@ -92,6 +102,10 @@ export const NEUTRAL_DELTA: PoseDelta = {
   bodyRotation: 0,
   bodyScaleX: 0,
   bodyScaleY: 0,
+  bodySkewX: 0,
+  bodySkewY: 0,
+  bodyOriginX: 0,
+  bodyOriginY: 0.82,
   eyeX: 0,
   eyeY: 0,
   leftEyeX: 0,
@@ -114,462 +128,15 @@ export const NEUTRAL_DELTA: PoseDelta = {
   mouthRotation: 0,
 };
 
-/** Amplitudes the dev sliders scale. */
-export interface BehaviourConfig {
-  /** Peak eye travel for a glance, in 240-space pixels. */
-  gazePx: number;
-  /** Reference squash magnitude; body deformations scale against it. */
-  squash: number;
-  /** Scales every quiet gap. 1 = the tuned default. */
-  paceScale: number;
-  /** Mean time between blinks, before deterministic jitter. */
-  blinkIntervalMs: number;
-}
-
-const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
-const smoothstep = (t: number) => {
-  const c = clamp01(t);
-  return c * c * (3 - 2 * c);
+const clamp = (v: number, min: number, max: number) =>
+  v < min ? min : v > max ? max : v;
+const clamp01 = (v: number) => clamp(v, 0, 1);
+const smoothstep = (v: number) => {
+  const t = clamp01(v);
+  return t * t * (3 - 2 * t);
 };
+const preserveAreaX = (scaleYDelta: number) => 1 / (1 + scaleYDelta) - 1;
 
-/**
- * Attack / hold / release envelope over a normalised phase. `lag` shifts the
- * whole envelope later, which is how the body trails the eyes.
- */
-function envelope(p: number, attack: number, release: number, lag = 0): number {
-  const t = (p - lag) / (1 - lag);
-  if (t <= 0 || t >= 1) return 0;
-  if (t < attack) return smoothstep(t / attack);
-  if (t > 1 - release) return smoothstep((1 - t) / release);
-  return 1;
-}
-
-/** Lid closure over a blink: quick to shut, a little softer opening. */
-function lidCurve(p: number): number {
-  if (p <= 0 || p >= 1) return 0;
-  const CLOSE = 0.38;
-  return p < CLOSE
-    ? smoothstep(p / CLOSE)
-    : 1 - smoothstep((p - CLOSE) / (1 - CLOSE));
-}
-
-const LID_MIN = 0.07;
-
-interface BehaviourDef {
-  duration: number;
-  /** Relative frequency when choosing what to do next. */
-  weight: number;
-  evaluate: (p: number, cfg: BehaviourConfig, out: PoseDelta) => void;
-}
-
-/** Body trails the face by this fraction of a behaviour. Roughly 90-115ms. */
-const BODY_LAG = 0.07;
-
-function glance(dir: 1 | -1): BehaviourDef["evaluate"] {
-  return (p, cfg, out) => {
-    const eye = envelope(p, 0.12, 0.4);
-    // The body starts after the eyes and settles after them too, which is what
-    // stops the face and body reading as separate layers.
-    const body = envelope(p, 0.2, 0.27, BODY_LAG);
-    out.eyeX = dir * cfg.gazePx * eye;
-    out.eyeY = -0.18 * eye;
-    out.blobRotation = dir * 1.2 * body;
-    out.blobX = dir * 1.45 * body;
-    out.blobScaleX = cfg.squash * 0.48 * body;
-    out.blobScaleY = -cfg.squash * 0.4 * body;
-    out.mouthX = dir * 0.32 * eye;
-    out.mouthRotation = dir * 0.55 * eye;
-  };
-}
-
-function softSway(dir: 1 | -1): BehaviourDef["evaluate"] {
-  return (p, cfg, out) => {
-    const face = envelope(p, 0.18, 0.42);
-    const body = envelope(p, 0.24, 0.28, BODY_LAG);
-    // Face shifts first, then mass follows and is last to settle.
-    out.eyeX = dir * 0.8 * face;
-    out.blobX = dir * 2.15 * body;
-    out.blobRotation = dir * 1.0 * body;
-    out.blobScaleX = cfg.squash * 0.72 * body;
-    out.blobScaleY = -cfg.squash * 0.55 * body;
-    out.bodyX = dir * 1.1 * body;
-    out.bodyRotation = dir * 0.75 * body;
-    out.bodyScaleX = cfg.squash * 0.32 * body;
-    out.bodyScaleY = -cfg.squash * 0.24 * body;
-    out.mouthX = dir * 0.42 * face;
-    out.mouthRotation = dir * 0.8 * face;
-  };
-}
-
-function curiousTilt(dir: 1 | -1): BehaviourDef["evaluate"] {
-  return (p, cfg, out) => {
-    const face = envelope(p, 0.16, 0.38);
-    const body = envelope(p, 0.25, 0.27, BODY_LAG);
-    out.eyeX = dir * cfg.gazePx * 0.72 * face;
-    out.eyeY = -cfg.gazePx * 0.28 * face;
-    out.leftEyeScaleY = (dir < 0 ? 0.07 : 0.02) * face;
-    out.rightEyeScaleY = (dir > 0 ? 0.07 : 0.02) * face;
-    out.leftEyeRotation = dir * 1.4 * face;
-    out.rightEyeRotation = dir * 1.1 * face;
-    out.mouthX = dir * 0.55 * face;
-    out.mouthY = -0.18 * face;
-    out.mouthRotation = dir * 6 * face;
-    out.blobX = dir * 1.2 * body;
-    out.blobRotation = dir * 1.25 * body;
-    out.bodyX = dir * 1.1 * body;
-    out.bodyY = 0.35 * body;
-    out.bodyRotation = dir * 1.1 * body;
-    out.bodyScaleX = cfg.squash * 0.55 * body;
-    out.bodyScaleY = -cfg.squash * 0.4 * body;
-  };
-}
-
-function sideSquish(dir: 1 | -1): BehaviourDef["evaluate"] {
-  return (p, cfg, out) => {
-    const face = envelope(p, 0.13, 0.45);
-    const body = envelope(p, 0.2, 0.24, BODY_LAG);
-    out.eyeX = dir * 1.25 * face;
-    out.leftEyeTension = 1 - 0.045 * face;
-    out.rightEyeTension = 1 - 0.035 * face;
-    out.mouthX = dir * 0.6 * face;
-    out.mouthRotation = dir * 3.5 * face;
-    out.blobX = dir * 1.8 * body;
-    out.blobRotation = dir * 0.8 * body;
-    out.blobScaleX = cfg.squash * 1.05 * body;
-    out.blobScaleY = -cfg.squash * 0.7 * body;
-    out.bodyX = dir * 2.2 * body;
-    out.bodyRotation = dir * 1.6 * body;
-    out.bodyScaleX = cfg.squash * 0.82 * body;
-    out.bodyScaleY = -cfg.squash * 0.58 * body;
-  };
-}
-
-function jellyTwist(dir: 1 | -1): BehaviourDef["evaluate"] {
-  return (p, cfg, out) => {
-    const face = envelope(p, 0.15, 0.4);
-    const body = envelope(p, 0.24, 0.22, BODY_LAG);
-    out.eyeX = dir * 1.0 * face;
-    out.leftEyeY = -dir * 0.25 * face;
-    out.rightEyeY = dir * 0.25 * face;
-    out.mouthRotation = dir * 5 * face;
-    out.blobRotation = dir * 1.15 * body;
-    out.bodyX = dir * 1.45 * body;
-    out.bodyY = 0.45 * body;
-    out.bodyRotation = dir * 2.6 * body;
-    out.bodyScaleX = cfg.squash * 0.52 * body;
-    out.bodyScaleY = -cfg.squash * 0.34 * body;
-  };
-}
-
-export const BEHAVIOURS: Record<BehaviourId, BehaviourDef> = {
-  REST: { duration: 2000, weight: 0, evaluate: () => {} },
-
-  NORMAL_BLINK: {
-    duration: 180,
-    weight: 0,
-    evaluate: (p, _cfg, out) => {
-      out.eyeLid = 1 - lidCurve(p) * (1 - LID_MIN);
-    },
-  },
-
-  DOUBLE_BLINK: {
-    duration: 510,
-    weight: 0,
-    evaluate: (p, _cfg, out) => {
-      // Two closures with a short beat between them.
-      const first = lidCurve(p / 0.3);
-      const second = lidCurve((p - 0.48) / 0.34);
-      out.eyeLid = 1 - Math.max(first, second) * (1 - LID_MIN);
-    },
-  },
-
-  GLANCE_LEFT: { duration: 1450, weight: 14, evaluate: glance(-1) },
-  GLANCE_RIGHT: { duration: 1450, weight: 14, evaluate: glance(1) },
-
-  LOOK_UP: {
-    duration: 1550,
-    weight: 10,
-    evaluate: (p, cfg, out) => {
-      const eye = envelope(p, 0.14, 0.4);
-      const body = envelope(p, 0.22, 0.28, BODY_LAG);
-      out.eyeY = -cfg.gazePx * 0.76 * eye;
-      // Reaching up reads as a slight vertical stretch.
-      out.blobScaleY = cfg.squash * 0.76 * body;
-      out.blobScaleX = -cfg.squash * 0.5 * body;
-      out.blobY = -1.0 * body;
-      out.mouthScaleY = 0.045 * eye;
-      out.mouthY = -0.25 * eye;
-    },
-  },
-
-  LOOK_DOWN: {
-    duration: 1450,
-    weight: 9,
-    evaluate: (p, cfg, out) => {
-      const face = envelope(p, 0.15, 0.38);
-      const body = envelope(p, 0.24, 0.27, BODY_LAG);
-      out.eyeY = cfg.gazePx * 0.62 * face;
-      out.leftEyeTension = 1 - 0.075 * face;
-      out.rightEyeTension = 1 - 0.06 * face;
-      out.mouthY = 0.42 * face;
-      out.mouthScaleX = 0.035 * face;
-      out.blobY = 0.85 * body;
-      out.blobScaleX = cfg.squash * 0.55 * body;
-      out.blobScaleY = -cfg.squash * 0.48 * body;
-      out.bodyY = 0.85 * body;
-      out.bodyScaleX = cfg.squash * 0.4 * body;
-      out.bodyScaleY = -cfg.squash * 0.32 * body;
-    },
-  },
-
-  CURIOUS_TILT_LEFT: { duration: 1850, weight: 10, evaluate: curiousTilt(-1) },
-  CURIOUS_TILT_RIGHT: { duration: 1850, weight: 10, evaluate: curiousTilt(1) },
-
-  BODY_SETTLE: {
-    duration: 1080,
-    weight: 16,
-    evaluate: (p, cfg, out) => {
-      // One weighted drop and soft recovery. No repeated bounce.
-      const drop = Math.sin(Math.PI * p) + 0.1 * Math.sin(2 * Math.PI * p);
-      out.blobY = 2.25 * drop;
-      out.blobScaleY = -cfg.squash * 1.05 * drop;
-      out.blobScaleX = cfg.squash * 0.92 * drop;
-      out.leftEyeTension = 1 - 0.06 * drop;
-      out.rightEyeTension = 1 - 0.045 * drop;
-      out.mouthScaleX = 0.035 * drop;
-      out.mouthScaleY = -0.05 * drop;
-      out.bodyY = 1.2 * drop;
-      out.bodyScaleX = cfg.squash * 0.5 * drop;
-      out.bodyScaleY = -cfg.squash * 0.44 * drop;
-    },
-  },
-
-  TINY_SQUISH: {
-    duration: 820,
-    weight: 14,
-    evaluate: (p, cfg, out) => {
-      const s =
-        p < 0.72
-          ? Math.sin(Math.PI * (p / 0.72))
-          : -0.13 * Math.sin(Math.PI * ((p - 0.72) / 0.28));
-      out.blobScaleX = cfg.squash * 1.32 * s;
-      out.blobScaleY = -cfg.squash * 1.18 * s;
-      out.blobY = 0.85 * Math.max(0, s);
-      out.leftEyeTension = 1 - 0.055 * Math.max(0, s);
-      out.rightEyeTension = 1 - 0.045 * Math.max(0, s);
-      out.mouthScaleX = 0.045 * s;
-      out.mouthScaleY = -0.06 * s;
-      out.bodyY = 0.65 * Math.max(0, s);
-      out.bodyScaleX = cfg.squash * 0.58 * s;
-      out.bodyScaleY = -cfg.squash * 0.52 * s;
-    },
-  },
-
-  SOFT_SWAY_LEFT: { duration: 1600, weight: 8, evaluate: softSway(-1) },
-  SOFT_SWAY_RIGHT: { duration: 1600, weight: 8, evaluate: softSway(1) },
-  SIDE_SQUISH_LEFT: { duration: 1350, weight: 11, evaluate: sideSquish(-1) },
-  SIDE_SQUISH_RIGHT: { duration: 1350, weight: 11, evaluate: sideSquish(1) },
-
-  TALL_STRETCH: {
-    duration: 1350,
-    weight: 11,
-    evaluate: (p, cfg, out) => {
-      const face = envelope(p, 0.14, 0.44);
-      const body = envelope(p, 0.2, 0.23, BODY_LAG);
-      out.eyeY = -1.15 * face;
-      out.leftEyeScaleY = 0.055 * face;
-      out.rightEyeScaleY = 0.045 * face;
-      out.mouthY = -0.55 * face;
-      out.mouthScaleX = -0.1 * face;
-      out.mouthScaleY = 0.12 * face;
-      out.blobY = -1.45 * body;
-      out.blobScaleX = -cfg.squash * 1.2 * body;
-      out.blobScaleY = cfg.squash * 1.55 * body;
-      out.bodyY = -1.2 * body;
-      out.bodyScaleX = -cfg.squash * 0.65 * body;
-      out.bodyScaleY = cfg.squash * 0.88 * body;
-    },
-  },
-
-  JELLY_TWIST_LEFT: { duration: 1500, weight: 9, evaluate: jellyTwist(-1) },
-  JELLY_TWIST_RIGHT: { duration: 1500, weight: 9, evaluate: jellyTwist(1) },
-
-  SOFT_SQUINT: {
-    duration: 1750,
-    weight: 12,
-    evaluate: (p, cfg, out) => {
-      const face = envelope(p, 0.24, 0.38);
-      const body = envelope(p, 0.29, 0.25, BODY_LAG);
-      out.leftEyeTension = 1 - 0.17 * face;
-      out.rightEyeTension = 1 - 0.13 * face;
-      out.mouthY = 0.38 * face;
-      out.mouthScaleX = 0.04 * face;
-      out.mouthScaleY = -0.035 * face;
-      out.blobY = 0.75 * body;
-      out.blobScaleX = cfg.squash * 0.48 * body;
-      out.blobScaleY = -cfg.squash * 0.42 * body;
-    },
-  },
-
-  ONE_EYE_SQUINT_LEFT: {
-    duration: 1350,
-    weight: 7,
-    evaluate: (p, _cfg, out) => {
-      const face = envelope(p, 0.2, 0.38);
-      out.leftEyeTension = 1 - 0.35 * face;
-      out.rightEyeTension = 1 - 0.04 * face;
-      out.leftEyeRotation = -1.8 * face;
-      out.mouthX = -0.35 * face;
-      out.mouthRotation = -4.5 * face;
-    },
-  },
-
-  ONE_EYE_SQUINT_RIGHT: {
-    duration: 1350,
-    weight: 7,
-    evaluate: (p, _cfg, out) => {
-      const face = envelope(p, 0.2, 0.38);
-      out.rightEyeTension = 1 - 0.35 * face;
-      out.leftEyeTension = 1 - 0.04 * face;
-      out.rightEyeRotation = 1.8 * face;
-      out.mouthX = 0.35 * face;
-      out.mouthRotation = 4.5 * face;
-    },
-  },
-
-  CURIOUS_WIDE: {
-    duration: 1550,
-    weight: 10,
-    evaluate: (p, cfg, out) => {
-      const face = envelope(p, 0.13, 0.43);
-      const body = envelope(p, 0.24, 0.25, BODY_LAG);
-      out.leftEyeScaleX = 0.045 * face;
-      out.leftEyeScaleY = 0.12 * face;
-      out.rightEyeScaleX = 0.045 * face;
-      out.rightEyeScaleY = 0.12 * face;
-      out.eyeY = -0.45 * face;
-      out.mouthScaleX = -0.22 * face;
-      out.mouthScaleY = 0.16 * face;
-      out.mouthY = -0.25 * face;
-      out.blobY = -0.55 * body;
-      out.blobScaleX = -cfg.squash * 0.35 * body;
-      out.blobScaleY = cfg.squash * 0.48 * body;
-      out.bodyY = -0.4 * body;
-      out.bodyScaleY = cfg.squash * 0.28 * body;
-    },
-  },
-
-  BREATH_STRETCH: {
-    duration: 1900,
-    weight: 11,
-    evaluate: (p, cfg, out) => {
-      const face = envelope(p, 0.3, 0.42);
-      const body = envelope(p, 0.32, 0.3, BODY_LAG);
-      out.eyeY = -0.45 * face;
-      out.leftEyeTension = 1 - 0.045 * face;
-      out.rightEyeTension = 1 - 0.035 * face;
-      out.mouthScaleX = -0.035 * face;
-      out.mouthScaleY = 0.06 * face;
-      out.blobY = -0.8 * body;
-      out.blobScaleX = -cfg.squash * 0.92 * body;
-      out.blobScaleY = cfg.squash * 1.18 * body;
-      out.bodyY = -0.65 * body;
-      out.bodyScaleX = -cfg.squash * 0.35 * body;
-      out.bodyScaleY = cfg.squash * 0.5 * body;
-    },
-  },
-
-  MOUTH_RELAX: {
-    duration: 1550,
-    weight: 9,
-    evaluate: (p, _cfg, out) => {
-      const e = envelope(p, 0.22, 0.38);
-      out.mouthScaleX = 0.05 * e;
-      out.mouthScaleY = -0.04 * e;
-      out.mouthY = 0.55 * e;
-    },
-  },
-
-  MOUTH_TWITCH: {
-    duration: 620,
-    weight: 7,
-    evaluate: (p, _cfg, out) => {
-      const s = Math.sin(Math.PI * p);
-      out.mouthX = 0.7 * s;
-      out.mouthRotation = 2 * s;
-      out.mouthScaleX = 0.025 * s;
-    },
-  },
-
-  MOUTH_O: {
-    duration: 1500,
-    weight: 9,
-    evaluate: (p, cfg, out) => {
-      const face = envelope(p, 0.16, 0.42);
-      const body = envelope(p, 0.27, 0.25, BODY_LAG);
-      // Existing mouth artwork becomes a tiny rounded "o" through transform
-      // only; no replacement art or crossfade.
-      out.mouthScaleX = -0.62 * face;
-      out.mouthScaleY = -0.04 * face;
-      out.mouthY = -0.15 * face;
-      out.leftEyeScaleY = 0.065 * face;
-      out.rightEyeScaleY = 0.065 * face;
-      out.blobScaleX = -cfg.squash * 0.3 * body;
-      out.blobScaleY = cfg.squash * 0.42 * body;
-      out.bodyY = -0.35 * body;
-      out.bodyScaleY = cfg.squash * 0.28 * body;
-    },
-  },
-
-  MOUTH_FLIP: {
-    duration: 2100,
-    weight: 6,
-    evaluate: (p, cfg, out) => {
-      const face = envelope(p, 0.2, 0.4);
-      const body = envelope(p, 0.29, 0.25, BODY_LAG);
-      out.mouthRotation = 180 * face;
-      out.mouthY = 0.25 * face;
-      out.mouthScaleX = -0.08 * face;
-      out.leftEyeTension = 1 - 0.12 * face;
-      out.rightEyeTension = 1 - 0.1 * face;
-      out.eyeY = 0.45 * face;
-      out.blobY = 0.45 * body;
-      out.bodyY = 0.4 * body;
-      out.bodyScaleX = cfg.squash * 0.22 * body;
-      out.bodyScaleY = -cfg.squash * 0.18 * body;
-    },
-  },
-};
-
-/** Stable authored order keeps the seeded schedule varied from its first run. */
-const PICKABLE: readonly BehaviourId[] = [
-  "BODY_SETTLE",
-  "GLANCE_LEFT",
-  "CURIOUS_TILT_RIGHT",
-  "MOUTH_O",
-  "SIDE_SQUISH_LEFT",
-  "MOUTH_RELAX",
-  "SOFT_SWAY_RIGHT",
-  "ONE_EYE_SQUINT_LEFT",
-  "TINY_SQUISH",
-  "GLANCE_RIGHT",
-  "LOOK_UP",
-  "JELLY_TWIST_RIGHT",
-  "SOFT_SQUINT",
-  "CURIOUS_WIDE",
-  "SIDE_SQUISH_RIGHT",
-  "MOUTH_TWITCH",
-  "LOOK_DOWN",
-  "SOFT_SWAY_LEFT",
-  "BREATH_STRETCH",
-  "CURIOUS_TILT_LEFT",
-  "TALL_STRETCH",
-  "ONE_EYE_SQUINT_RIGHT",
-  "JELLY_TWIST_LEFT",
-  "MOUTH_FLIP",
-];
-
-/** Small, fast, deterministic PRNG. */
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -581,191 +148,909 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-const SEED = 0x5eed1e;
+class SpringAxis {
+  value: number;
+  velocity = 0;
+  target: number;
+
+  constructor(initial = 0) {
+    this.value = initial;
+    this.target = initial;
+  }
+
+  reset(initial = 0) {
+    this.value = initial;
+    this.target = initial;
+    this.velocity = 0;
+  }
+
+  step(dt: number, frequency: number, damping: number) {
+    const omega = Math.PI * 2 * frequency;
+    const acceleration =
+      (this.target - this.value) * omega * omega -
+      this.velocity * (2 * damping * omega);
+    this.velocity += acceleration * dt;
+    this.value += this.velocity * dt;
+  }
+}
+
+interface MoodPose {
+  leftTension: number;
+  rightTension: number;
+  eyeScaleX: number;
+  eyeScaleY: number;
+  mouthX: number;
+  mouthY: number;
+  mouthScaleX: number;
+  mouthScaleY: number;
+  mouthRotation: number;
+}
+
+const MOODS: Record<HomeMood, MoodPose> = {
+  CONTENT: {
+    leftTension: 0.97,
+    rightTension: 0.985,
+    eyeScaleX: 0,
+    eyeScaleY: 0,
+    mouthX: 0,
+    mouthY: 0,
+    mouthScaleX: 0,
+    mouthScaleY: 0,
+    mouthRotation: 0,
+  },
+  CURIOUS: {
+    leftTension: 1.06,
+    rightTension: 1.08,
+    eyeScaleX: 0.025,
+    eyeScaleY: 0.06,
+    mouthX: 0.25,
+    mouthY: -0.18,
+    mouthScaleX: -0.12,
+    mouthScaleY: 0.09,
+    mouthRotation: 2,
+  },
+  SLEEPY: {
+    leftTension: 0.84,
+    rightTension: 0.87,
+    eyeScaleX: 0.035,
+    eyeScaleY: -0.02,
+    mouthX: -0.12,
+    mouthY: 0.42,
+    mouthScaleX: 0.05,
+    mouthScaleY: -0.05,
+    mouthRotation: -1.5,
+  },
+  AMUSED: {
+    leftTension: 0.9,
+    rightTension: 0.93,
+    eyeScaleX: 0.02,
+    eyeScaleY: -0.015,
+    mouthX: 0.15,
+    mouthY: -0.18,
+    mouthScaleX: 0.075,
+    mouthScaleY: 0.025,
+    mouthRotation: 1.5,
+  },
+  DISTRACTED: {
+    leftTension: 0.97,
+    rightTension: 1.02,
+    eyeScaleX: 0,
+    eyeScaleY: 0.025,
+    mouthX: 0.35,
+    mouthY: 0.12,
+    mouthScaleX: -0.06,
+    mouthScaleY: 0.02,
+    mouthRotation: 3,
+  },
+  THOUGHTFUL: {
+    leftTension: 0.9,
+    rightTension: 0.97,
+    eyeScaleX: 0.025,
+    eyeScaleY: -0.01,
+    mouthX: -0.35,
+    mouthY: 0.24,
+    mouthScaleX: -0.08,
+    mouthScaleY: 0.015,
+    mouthRotation: -4,
+  },
+};
+
+const MOOD_ORDER: readonly HomeMood[] = [
+  "CONTENT",
+  "CURIOUS",
+  "SLEEPY",
+  "AMUSED",
+  "DISTRACTED",
+  "THOUGHTFUL",
+];
 
 export interface BehaviourStatus {
   id: BehaviourId;
-  /** 0..1 through the current behaviour. */
   phase: number;
   remainingMs: number;
-  /** Time until the next scheduled action starts, including current settle. */
   nextBehaviourMs: number;
   blinkState: "open" | "closing" | "closed" | "opening";
 }
 
 export interface HomeActivityStatus extends BehaviourStatus {
+  mood: HomeMood;
+  gaze: string;
+  lids: string;
+  mouth: string;
+  body: string;
+  nextGazeMs: number;
+  nextBlinkMs: number;
+  nextMouthMs: number;
+  nextBodyMs: number;
   idleX: number;
   idleY: number;
   bodyRotation: number;
+  bodySpeed: number;
 }
 
-/**
- * Drives the behaviour schedule. Stateful on purpose: a pure function of time
- * could not be interrupted mid-behaviour, which SENSED will need to do.
- */
+/** Independent-channel director with current-presentation retargeting. */
 export class BehaviourController {
   private clock = 0;
-  private startedAt = 0;
-  private duration = 0;
-  private current: BehaviourId = "REST";
-  private rand = mulberry32(SEED);
-  private lastPerformed: BehaviourId | null = null;
   private initialized = false;
-  private nextBehaviourAt = 0;
+  private rand = mulberry32(0x1a11ee);
+  private mood: HomeMood = "CONTENT";
+  private lastMood: HomeMood = "CONTENT";
+  private nextMoodAt = 0;
+  private nextMicroAt = 0;
+  private nextGazeAt = 0;
   private nextBlinkAt = 0;
+  private nextExpressionAt = 0;
+  private nextMouthAt = 0;
+  private nextBodyAt = 0;
+
+  private gazeAction = "RESTING";
+  private lidAction = "OPEN";
+  private mouthAction = "SMILE";
+  private bodyAction = "SUSPENDED";
+  private gazeReleaseAt = 0;
+  private expressionReleaseAt = 0;
+  private mouthReleaseAt = 0;
+  private bodyReleaseAt = 0;
+  private followAt = 0;
+  private followReleaseAt = 0;
+  private followXTarget = 0;
+  private followRotationTarget = 0;
+  private followScaleYTarget = 0;
+
+  private activityId: BehaviourId = "REST";
+  private activityStartedAt = 0;
+  private activityUntil = 0;
+
+  private blinkStartedAt = -1;
+  private blinkDouble = false;
+  private blinkLid = 1;
+  private blinkState: BehaviourStatus["blinkState"] = "open";
+
+  private baseGazeX = 0;
+  private baseGazeY = 0;
+  private microX = 0;
+  private microY = 0;
+
+  private readonly leftX = new SpringAxis();
+  private readonly leftY = new SpringAxis();
+  private readonly rightX = new SpringAxis();
+  private readonly rightY = new SpringAxis();
+  private readonly leftScaleX = new SpringAxis();
+  private readonly leftScaleY = new SpringAxis();
+  private readonly rightScaleX = new SpringAxis();
+  private readonly rightScaleY = new SpringAxis();
+  private readonly leftRotation = new SpringAxis();
+  private readonly rightRotation = new SpringAxis();
+  private readonly leftTension = new SpringAxis(1);
+  private readonly rightTension = new SpringAxis(1);
+  private readonly mouthX = new SpringAxis();
+  private readonly mouthY = new SpringAxis();
+  private readonly mouthScaleX = new SpringAxis();
+  private readonly mouthScaleY = new SpringAxis();
+  private readonly mouthRotation = new SpringAxis();
+
+  private bodyXTarget = 0;
+  private bodyYTarget = 0;
+  private bodyRotationTarget = 0;
+  private bodyScaleYTarget = 0;
+  private massXTarget = 0;
+  private massYTarget = 0;
+  private massRotationTarget = 0;
+  private massScaleYTarget = 0;
+  private massSkewXTarget = 0;
+  private massSkewYTarget = 0;
+  private massOriginXTarget = 0;
+  private massOriginYTarget = 0.82;
+
   private readonly delta: PoseDelta = { ...NEUTRAL_DELTA };
 
-  /** Returns to the neutral pose and restarts the schedule from the top. */
   reset() {
     this.clock = 0;
-    this.startedAt = 0;
-    this.duration = 0;
-    this.current = "REST";
-    this.rand = mulberry32(SEED);
-    this.lastPerformed = null;
     this.initialized = false;
-    this.nextBehaviourAt = 0;
+    this.rand = mulberry32(0x1a11ee);
+    this.mood = "CONTENT";
+    this.lastMood = "CONTENT";
+    this.nextMoodAt = 0;
+    this.nextMicroAt = 0;
+    this.nextGazeAt = 0;
     this.nextBlinkAt = 0;
+    this.nextExpressionAt = 0;
+    this.nextMouthAt = 0;
+    this.nextBodyAt = 0;
+    this.gazeAction = "RESTING";
+    this.lidAction = "OPEN";
+    this.mouthAction = "SMILE";
+    this.bodyAction = "SUSPENDED";
+    this.gazeReleaseAt = 0;
+    this.expressionReleaseAt = 0;
+    this.mouthReleaseAt = 0;
+    this.bodyReleaseAt = 0;
+    this.followAt = 0;
+    this.followReleaseAt = 0;
+    this.followXTarget = 0;
+    this.followRotationTarget = 0;
+    this.followScaleYTarget = 0;
+    this.activityId = "REST";
+    this.activityStartedAt = 0;
+    this.activityUntil = 0;
+    this.blinkStartedAt = -1;
+    this.blinkDouble = false;
+    this.blinkLid = 1;
+    this.blinkState = "open";
+    this.baseGazeX = 0;
+    this.baseGazeY = 0;
+    this.microX = 0;
+    this.microY = 0;
+    this.leftX.reset();
+    this.leftY.reset();
+    this.rightX.reset();
+    this.rightY.reset();
+    this.leftScaleX.reset();
+    this.leftScaleY.reset();
+    this.rightScaleX.reset();
+    this.rightScaleY.reset();
+    this.leftRotation.reset();
+    this.rightRotation.reset();
+    this.leftTension.reset(1);
+    this.rightTension.reset(1);
+    this.mouthX.reset();
+    this.mouthY.reset();
+    this.mouthScaleX.reset();
+    this.mouthScaleY.reset();
+    this.mouthRotation.reset();
+    this.clearBodyTargets();
+    this.applyMoodTargets();
+    Object.assign(this.delta, NEUTRAL_DELTA);
   }
 
-  /**
-   * Abandons whatever is running and returns to REST immediately. The pose
-   * snaps to neutral rather than being left half-way through a glance, which
-   * is what lets a device state take the rig over cleanly.
-   */
+  /** Future device states can take over every channel from the current pose. */
   cancel() {
-    this.current = "REST";
-    this.startedAt = this.clock;
-    this.duration = 0;
-    this.nextBehaviourAt = this.clock + 1800;
+    this.gazeReleaseAt = this.expressionReleaseAt = this.mouthReleaseAt = 0;
+    this.bodyReleaseAt = this.followAt = this.followReleaseAt = 0;
+    this.baseGazeX = this.baseGazeY = this.microX = this.microY = 0;
+    this.retargetEyes();
+    this.clearBodyTargets();
+    this.mood = "CONTENT";
+    this.applyMoodTargets();
+    this.activityId = "REST";
+    this.activityUntil = this.clock;
   }
 
-  /** Runs a behaviour now, cutting short anything in progress. */
   trigger(id: BehaviourId, cfg: BehaviourConfig) {
     this.ensureSchedule(cfg);
     if (id === "REST") {
       this.cancel();
       return;
     }
-    this.start(id, cfg, this.clock);
-  }
-
-  private start(id: BehaviourId, cfg: BehaviourConfig, at: number) {
-    this.current = id;
-    this.startedAt = at;
-    this.duration = BEHAVIOURS[id].duration;
-    if (BEHAVIOURS[id].weight > 0) this.lastPerformed = id;
-
     if (id === "NORMAL_BLINK" || id === "DOUBLE_BLINK") {
-      this.nextBlinkAt = at + this.blinkDuration(cfg);
+      this.startBlink(id === "DOUBLE_BLINK", cfg);
+      return;
     }
-
-    const end = at + this.duration;
-    const normalNext = end + this.restDuration(cfg.paceScale);
-    // Never stack a blink directly on an expressive pose. Let body finish,
-    // then leave a tiny physical beat before closing the eyes.
-    const blinkNext = Math.max(this.nextBlinkAt, end + 220);
-    this.nextBehaviourAt = Math.max(at + 1800, Math.min(normalNext, blinkNext));
+    if (
+      id === "GLANCE_LEFT" ||
+      id === "GLANCE_RIGHT" ||
+      id === "LOOK_UP" ||
+      id === "LOOK_DOWN" ||
+      id === "CURIOUS_TILT_LEFT" ||
+      id === "CURIOUS_TILT_RIGHT"
+    ) {
+      this.startGaze(id, cfg);
+      return;
+    }
+    if (
+      id === "SOFT_SQUINT" ||
+      id === "ONE_EYE_SQUINT_LEFT" ||
+      id === "ONE_EYE_SQUINT_RIGHT" ||
+      id === "CURIOUS_WIDE"
+    ) {
+      this.startExpression(id);
+      return;
+    }
+    if (
+      id === "MOUTH_RELAX" ||
+      id === "MOUTH_TWITCH" ||
+      id === "MOUTH_O" ||
+      id === "MOUTH_FLIP"
+    ) {
+      this.startMouth(id);
+      return;
+    }
+    this.startBody(id, cfg);
   }
 
-  update(dt: number, cfg: BehaviourConfig) {
+  update(dtMs: number, cfg: BehaviourConfig) {
     this.ensureSchedule(cfg);
-    this.clock += dt;
+    this.clock += Math.max(0, dtMs);
 
-    // A while-loop keeps deterministic timing intact after a long frame.
-    let guard = 0;
-    while (guard++ < 8) {
-      if (this.current !== "REST") {
-        const end = this.startedAt + this.duration;
-        if (this.clock < end) break;
-        this.current = "REST";
-        this.startedAt = end;
-        this.duration = 0;
-        continue;
-      }
-
-      if (this.clock < this.nextBehaviourAt) break;
-      const at = this.nextBehaviourAt;
-      const blinkDue = this.nextBlinkAt <= at + 1;
-      this.start(blinkDue ? this.pickBlink() : this.pick(), cfg, at);
+    if (this.gazeReleaseAt > 0 && this.clock >= this.gazeReleaseAt) {
+      this.gazeReleaseAt = 0;
+      this.baseGazeX = 0;
+      this.baseGazeY = 0;
+      this.gazeAction = "RESTING";
+      this.retargetEyes();
     }
+    if (this.expressionReleaseAt > 0 && this.clock >= this.expressionReleaseAt) {
+      this.expressionReleaseAt = 0;
+      this.lidAction = "MOOD";
+      this.applyMoodEyeTargets();
+    }
+    if (this.mouthReleaseAt > 0 && this.clock >= this.mouthReleaseAt) {
+      this.mouthReleaseAt = 0;
+      this.mouthAction = "MOOD";
+      this.applyMoodMouthTargets();
+    }
+    if (this.bodyReleaseAt > 0 && this.clock >= this.bodyReleaseAt) {
+      this.bodyReleaseAt = 0;
+      this.bodyAction = "SETTLING";
+      this.clearBodyTargets();
+    }
+    if (this.followAt > 0 && this.clock >= this.followAt) {
+      this.followAt = 0;
+      this.followReleaseAt = this.clock + 520;
+    }
+    if (this.followReleaseAt > 0 && this.clock >= this.followReleaseAt) {
+      this.followReleaseAt = 0;
+      this.followXTarget = 0;
+      this.followRotationTarget = 0;
+      this.followScaleYTarget = 0;
+    }
+
+    if (this.clock >= this.nextMoodAt) this.pickMood(cfg);
+    if (this.clock >= this.nextMicroAt) this.pickMicro(cfg);
+    if (this.clock >= this.nextGazeAt && this.gazeReleaseAt === 0)
+      this.pickGaze(cfg);
+    if (this.clock >= this.nextExpressionAt && this.expressionReleaseAt === 0)
+      this.pickExpression(cfg);
+    if (this.clock >= this.nextMouthAt && this.mouthReleaseAt === 0)
+      this.pickMouth(cfg);
+    if (this.clock >= this.nextBodyAt && this.bodyReleaseAt === 0)
+      this.pickBody(cfg);
+    if (this.clock >= this.nextBlinkAt && this.blinkStartedAt < 0)
+      this.startBlink(this.rand() < 0.14, cfg);
+
+    this.updateBlink();
+    this.stepFaceSprings(dtMs);
   }
 
   private ensureSchedule(cfg: BehaviourConfig) {
     if (this.initialized) return;
     this.initialized = true;
-    this.nextBlinkAt = this.clock + this.blinkDuration(cfg);
-    this.nextBehaviourAt = this.clock + 750 + this.rand() * 650;
+    this.nextMoodAt = 5600 + this.rand() * 2200;
+    this.nextMicroAt = 260 + this.rand() * 280;
+    this.nextGazeAt = 850 + this.rand() * 650;
+    this.nextExpressionAt = 1500 + this.rand() * 1100;
+    this.nextMouthAt = 1100 + this.rand() * 900;
+    this.nextBodyAt = 650 + this.rand() * 800;
+    this.nextBlinkAt = this.clock + this.blinkGap(cfg);
+    this.applyMoodTargets();
   }
 
-  private blinkDuration(cfg: BehaviourConfig): number {
-    return cfg.blinkIntervalMs * (0.85 + this.rand() * 0.3);
+  private interval(min: number, max: number, cfg: BehaviourConfig) {
+    return (min + this.rand() * (max - min)) * cfg.paceScale;
   }
 
-  private pickBlink(): BehaviourId {
-    return this.rand() < 0.14 ? "DOUBLE_BLINK" : "NORMAL_BLINK";
+  private blinkGap(cfg: BehaviourConfig) {
+    return cfg.blinkIntervalMs * (0.82 + this.rand() * 0.36);
   }
 
-  private restDuration(paceScale: number): number {
-    let d = 850 + this.rand() * 1250;
-    // Rare longer breath. Most action starts remain roughly 2-5s apart.
-    if (this.rand() < 0.1) d += 1100 + this.rand() * 850;
-    return d * paceScale;
+  private mark(id: BehaviourId, duration: number) {
+    this.activityId = id;
+    this.activityStartedAt = this.clock;
+    this.activityUntil = this.clock + duration;
   }
 
-  private pick(): BehaviourId {
-    // Never repeat the previous non-blink action, so no short cycle is learned.
-    let total = 0;
-    for (const id of PICKABLE) {
-      if (id !== this.lastPerformed) total += BEHAVIOURS[id].weight;
+  private pickMood(cfg: BehaviourConfig) {
+    let next = this.lastMood;
+    while (next === this.lastMood) {
+      next = MOOD_ORDER[Math.floor(this.rand() * MOOD_ORDER.length)];
     }
-    let r = this.rand() * total;
-    for (const id of PICKABLE) {
-      if (id === this.lastPerformed) continue;
-      r -= BEHAVIOURS[id].weight;
-      if (r <= 0) return id;
-    }
-    return PICKABLE[PICKABLE.length - 1];
+    this.mood = next;
+    this.lastMood = next;
+    this.nextMoodAt = this.clock + this.interval(6000, 11000, cfg);
+    if (this.expressionReleaseAt === 0) this.applyMoodEyeTargets();
+    if (this.mouthReleaseAt === 0) this.applyMoodMouthTargets();
   }
 
-  /** Current pose delta. The returned object is reused between frames. */
-  pose(cfg: BehaviourConfig): PoseDelta {
-    Object.assign(this.delta, NEUTRAL_DELTA);
-    const p =
-      this.current === "REST" || this.duration === 0
-        ? 0
-        : clamp01((this.clock - this.startedAt) / this.duration);
-    BEHAVIOURS[this.current].evaluate(p, cfg, this.delta);
+  private pickMicro(cfg: BehaviourConfig) {
+    const amplitude = 0.32 + this.rand() * 0.48;
+    const angle = this.rand() * Math.PI * 2;
+    this.microX = Math.cos(angle) * amplitude;
+    this.microY = Math.sin(angle) * amplitude * 0.62;
+    this.retargetEyes();
+    this.nextMicroAt = this.clock + this.interval(350, 900, cfg);
+  }
+
+  private pickGaze(cfg: BehaviourConfig) {
+    const r = this.rand();
+    const id: BehaviourId =
+      r < 0.25
+        ? "GLANCE_LEFT"
+        : r < 0.5
+          ? "GLANCE_RIGHT"
+          : r < 0.67
+            ? "LOOK_UP"
+            : r < 0.79
+              ? "LOOK_DOWN"
+              : r < 0.895
+                ? "CURIOUS_TILT_LEFT"
+                : "CURIOUS_TILT_RIGHT";
+    this.startGaze(id, cfg);
+    this.nextGazeAt = this.clock + this.interval(1800, 3800, cfg);
+  }
+
+  private startGaze(id: BehaviourId, cfg: BehaviourConfig) {
+    const amount = clamp(cfg.gazePx, 0, 4.5);
+    let x = 0;
+    let y = 0;
+    let bodyDir = 0;
+    let duration = 900;
+    if (id === "GLANCE_LEFT" || id === "GLANCE_RIGHT") {
+      bodyDir = id === "GLANCE_LEFT" ? -1 : 1;
+      x = bodyDir * amount * (0.92 + this.rand() * 0.22);
+      y = -0.2 + this.rand() * 0.38;
+      duration = 820 + this.rand() * 520;
+    } else if (id === "LOOK_UP") {
+      y = -amount * 0.78;
+      x = (this.rand() * 2 - 1) * 0.35;
+      duration = 900 + this.rand() * 500;
+    } else if (id === "LOOK_DOWN") {
+      y = amount * 0.64;
+      x = (this.rand() * 2 - 1) * 0.45;
+      duration = 780 + this.rand() * 430;
+    } else {
+      bodyDir = id === "CURIOUS_TILT_LEFT" ? -1 : 1;
+      x = bodyDir * amount * 0.72;
+      y = -amount * 0.28;
+      duration = 1050 + this.rand() * 520;
+      this.leftRotation.target = bodyDir * 1.6;
+      this.rightRotation.target = bodyDir * 1.15;
+    }
+    this.baseGazeX = x;
+    this.baseGazeY = y;
+    this.microX = 0;
+    this.microY = 0;
+    this.gazeAction = id;
+    this.gazeReleaseAt = this.clock + duration;
+    this.retargetEyes();
+    this.followAt = this.clock + 85 + this.rand() * 35;
+    this.followXTarget = bodyDir * 1.5;
+    this.followRotationTarget = bodyDir * 1.25;
+    this.followScaleYTarget = y < -1 ? 0.025 : y > 1 ? -0.022 : -0.012;
+    this.mark(id, duration + 650);
+  }
+
+  private retargetEyes() {
+    const x = this.baseGazeX + this.microX;
+    const y = this.baseGazeY + this.microY;
+    this.leftX.target = x;
+    this.leftY.target = y;
+    this.rightX.target = x * 0.965;
+    this.rightY.target = y * 0.98;
+  }
+
+  private pickExpression(cfg: BehaviourConfig) {
+    const r = this.rand();
+    const id: BehaviourId =
+      r < 0.38
+        ? "SOFT_SQUINT"
+        : r < 0.58
+          ? "ONE_EYE_SQUINT_LEFT"
+          : r < 0.78
+            ? "ONE_EYE_SQUINT_RIGHT"
+            : "CURIOUS_WIDE";
+    this.startExpression(id);
+    this.nextExpressionAt = this.clock + this.interval(2400, 4800, cfg);
+  }
+
+  private startExpression(id: BehaviourId) {
+    const mood = MOODS[this.mood];
+    let duration = 850;
+    if (id === "SOFT_SQUINT") {
+      this.leftTension.target = 0.7;
+      this.rightTension.target = 0.76;
+      this.leftScaleX.target = mood.eyeScaleX + 0.055;
+      this.rightScaleX.target = mood.eyeScaleX + 0.045;
+      duration = 850 + this.rand() * 650;
+    } else if (id === "ONE_EYE_SQUINT_LEFT") {
+      this.leftTension.target = 0.58;
+      this.rightTension.target = mood.rightTension * 0.98;
+      this.leftRotation.target = -2.2;
+      duration = 680 + this.rand() * 500;
+    } else if (id === "ONE_EYE_SQUINT_RIGHT") {
+      this.rightTension.target = 0.58;
+      this.leftTension.target = mood.leftTension * 0.98;
+      this.rightRotation.target = 2.2;
+      duration = 680 + this.rand() * 500;
+    } else {
+      this.leftTension.target = 1.1;
+      this.rightTension.target = 1.12;
+      this.leftScaleX.target = mood.eyeScaleX + 0.045;
+      this.rightScaleX.target = mood.eyeScaleX + 0.045;
+      this.leftScaleY.target = mood.eyeScaleY + 0.12;
+      this.rightScaleY.target = mood.eyeScaleY + 0.12;
+      duration = 760 + this.rand() * 520;
+    }
+    this.lidAction = id;
+    this.expressionReleaseAt = this.clock + duration;
+    this.mark(id, duration + 300);
+  }
+
+  private pickMouth(cfg: BehaviourConfig) {
+    const r = this.rand();
+    const id: BehaviourId =
+      r < 0.34
+        ? "MOUTH_RELAX"
+        : r < 0.62
+          ? "MOUTH_TWITCH"
+          : r < 0.86
+            ? "MOUTH_O"
+            : "MOUTH_FLIP";
+    this.startMouth(id);
+    this.nextMouthAt = this.clock + this.interval(1900, 4400, cfg);
+  }
+
+  private startMouth(id: BehaviourId) {
+    let duration = 720;
+    if (id === "MOUTH_RELAX") {
+      this.mouthX.target = 0;
+      this.mouthY.target = 0.7;
+      this.mouthScaleX.target = 0.09;
+      this.mouthScaleY.target = -0.1;
+      this.mouthRotation.target = 0;
+      duration = 900 + this.rand() * 500;
+    } else if (id === "MOUTH_TWITCH") {
+      const dir = this.rand() < 0.5 ? -1 : 1;
+      this.mouthX.target = dir * 0.9;
+      this.mouthY.target = -0.08;
+      this.mouthScaleX.target = 0.04;
+      this.mouthScaleY.target = -0.02;
+      this.mouthRotation.target = dir * 4.5;
+      duration = 380 + this.rand() * 260;
+    } else if (id === "MOUTH_O") {
+      this.mouthX.target = 0;
+      this.mouthY.target = -0.28;
+      this.mouthScaleX.target = -0.62;
+      this.mouthScaleY.target = -0.04;
+      this.mouthRotation.target = 0;
+      duration = 820 + this.rand() * 520;
+    } else {
+      this.mouthX.target = 0;
+      this.mouthY.target = 0.3;
+      this.mouthScaleX.target = -0.12;
+      this.mouthScaleY.target = -0.02;
+      this.mouthRotation.target = this.mouthRotation.value >= 90 ? 0 : 180;
+      duration = 1100 + this.rand() * 650;
+    }
+    this.mouthAction = id;
+    this.mouthReleaseAt = this.clock + duration;
+    this.mark(id, duration + 300);
+  }
+
+  private pickBody(cfg: BehaviourConfig) {
+    const r = this.rand();
+    const id: BehaviourId =
+      r < 0.18
+        ? "BODY_SETTLE"
+        : r < 0.34
+          ? "TINY_SQUISH"
+          : r < 0.46
+            ? "SOFT_SWAY_LEFT"
+            : r < 0.58
+              ? "SOFT_SWAY_RIGHT"
+              : r < 0.68
+                ? "SIDE_SQUISH_LEFT"
+                : r < 0.78
+                  ? "SIDE_SQUISH_RIGHT"
+                  : r < 0.86
+                    ? "TALL_STRETCH"
+                    : r < 0.92
+                      ? "BREATH_STRETCH"
+                      : r < 0.96
+                        ? "JELLY_TWIST_LEFT"
+                        : "JELLY_TWIST_RIGHT";
+    this.startBody(id, cfg);
+    this.nextBodyAt = this.clock + this.interval(1700, 3500, cfg);
+  }
+
+  private startBody(id: BehaviourId, cfg: BehaviourConfig) {
+    const strength = clamp(cfg.squash / 0.032, 0.55, 1.35);
+    let sy = 0;
+    let duration = 620;
+    let dir = 0;
+    this.clearBodyTargets();
+    if (id === "BODY_SETTLE") {
+      sy = -0.064 * strength;
+      this.bodyYTarget = 3.2;
+      this.massYTarget = 1.6;
+      this.massScaleYTarget = -0.025 * strength;
+      this.massOriginYTarget = 0.96;
+      duration = 520;
+    } else if (id === "TINY_SQUISH") {
+      sy = -0.052 * strength;
+      this.bodyYTarget = 1.8;
+      this.massYTarget = 0.8;
+      this.massScaleYTarget = -0.02 * strength;
+      this.massOriginYTarget = 0.94;
+      duration = 420;
+    } else if (id === "SOFT_SWAY_LEFT" || id === "SOFT_SWAY_RIGHT") {
+      dir = id === "SOFT_SWAY_LEFT" ? -1 : 1;
+      sy = -0.025 * strength;
+      this.bodyXTarget = dir * 3;
+      this.bodyRotationTarget = dir * 1.75;
+      this.massXTarget = dir * 2;
+      this.massRotationTarget = dir * 1.45;
+      this.massSkewYTarget = dir * 1.8;
+      this.massOriginXTarget = -dir * 0.9;
+      duration = 760;
+    } else if (id === "SIDE_SQUISH_LEFT" || id === "SIDE_SQUISH_RIGHT") {
+      dir = id === "SIDE_SQUISH_LEFT" ? -1 : 1;
+      const sx = -0.066 * strength;
+      sy = 1 / (1 + sx) - 1;
+      this.bodyXTarget = dir * 3.4;
+      this.bodyRotationTarget = dir * 1.05;
+      this.massXTarget = dir * 2.5;
+      this.massRotationTarget = dir * 1.7;
+      this.massSkewYTarget = dir * 2.6;
+      this.massOriginXTarget = -dir;
+      this.bodyScaleYTarget = sy;
+      this.massScaleYTarget = sy * 0.34;
+      duration = 570;
+    } else if (id === "TALL_STRETCH" || id === "BREATH_STRETCH") {
+      sy = (id === "TALL_STRETCH" ? 0.082 : 0.058) * strength;
+      this.bodyYTarget = id === "TALL_STRETCH" ? -2.6 : -1.5;
+      this.massYTarget = -1.1;
+      this.massScaleYTarget = sy * 0.38;
+      this.massOriginYTarget = 0.98;
+      duration = id === "TALL_STRETCH" ? 690 : 920;
+    } else {
+      dir = id === "JELLY_TWIST_LEFT" ? -1 : 1;
+      sy = 0.034 * strength;
+      this.bodyXTarget = dir * 2.4;
+      this.bodyRotationTarget = dir * 1.55;
+      this.massXTarget = dir * 1.8;
+      this.massRotationTarget = dir * 3.2;
+      this.massSkewXTarget = -dir * 1.8;
+      this.massSkewYTarget = dir * 2.8;
+      this.massOriginXTarget = -dir * 0.95;
+      duration = 670;
+    }
+    if (id !== "SIDE_SQUISH_LEFT" && id !== "SIDE_SQUISH_RIGHT") {
+      this.bodyScaleYTarget = sy;
+    }
+    this.bodyAction = id;
+    this.bodyReleaseAt = this.clock + duration;
+    this.mark(id, duration + 750);
+  }
+
+  private clearBodyTargets() {
+    this.bodyXTarget = 0;
+    this.bodyYTarget = 0;
+    this.bodyRotationTarget = 0;
+    this.bodyScaleYTarget = 0;
+    this.massXTarget = 0;
+    this.massYTarget = 0;
+    this.massRotationTarget = 0;
+    this.massScaleYTarget = 0;
+    this.massSkewXTarget = 0;
+    this.massSkewYTarget = 0;
+    this.massOriginXTarget = 0;
+    this.massOriginYTarget = 0.82;
+  }
+
+  private startBlink(double: boolean, cfg?: BehaviourConfig) {
+    this.blinkStartedAt = this.clock;
+    this.blinkDouble = double;
+    this.lidAction = double ? "DOUBLE_BLINK" : "NORMAL_BLINK";
+    this.mark(double ? "DOUBLE_BLINK" : "NORMAL_BLINK", double ? 515 : 205);
+    if (cfg) this.nextBlinkAt = this.clock + this.blinkGap(cfg);
+  }
+
+  private updateBlink() {
+    if (this.blinkStartedAt < 0) {
+      this.blinkLid = 1;
+      this.blinkState = "open";
+      return;
+    }
+    const elapsed = this.clock - this.blinkStartedAt;
+    const cycle = 205;
+    const gap = 105;
+    const local =
+      this.blinkDouble && elapsed >= cycle + gap ? elapsed - cycle - gap : elapsed;
+    const inGap = this.blinkDouble && elapsed >= cycle && elapsed < cycle + gap;
+    const done = this.blinkDouble ? elapsed >= cycle * 2 + gap : elapsed >= cycle;
+    if (done) {
+      this.blinkStartedAt = -1;
+      this.blinkLid = 1;
+      this.blinkState = "open";
+      this.lidAction = this.expressionReleaseAt > 0 ? this.lidAction : "MOOD";
+      return;
+    }
+    if (inGap) {
+      this.blinkLid = 1;
+      this.blinkState = "open";
+      return;
+    }
+    const closeMs = 65;
+    const min = 0.055;
+    if (local < closeMs) {
+      const t = smoothstep(local / closeMs);
+      this.blinkLid = 1 - t * (1 - min);
+      this.blinkState = t > 0.9 ? "closed" : "closing";
+    } else {
+      const t = smoothstep((local - closeMs) / (cycle - closeMs));
+      this.blinkLid = min + t * (1 - min);
+      this.blinkState = t < 0.08 ? "closed" : "opening";
+    }
+  }
+
+  private applyMoodTargets() {
+    this.applyMoodEyeTargets();
+    this.applyMoodMouthTargets();
+  }
+
+  private applyMoodEyeTargets() {
+    const mood = MOODS[this.mood];
+    this.leftTension.target = mood.leftTension;
+    this.rightTension.target = mood.rightTension;
+    this.leftScaleX.target = mood.eyeScaleX;
+    this.rightScaleX.target = mood.eyeScaleX;
+    this.leftScaleY.target = mood.eyeScaleY;
+    this.rightScaleY.target = mood.eyeScaleY;
+    this.leftRotation.target = 0;
+    this.rightRotation.target = 0;
+  }
+
+  private applyMoodMouthTargets() {
+    const mood = MOODS[this.mood];
+    this.mouthX.target = mood.mouthX;
+    this.mouthY.target = mood.mouthY;
+    this.mouthScaleX.target = mood.mouthScaleX;
+    this.mouthScaleY.target = mood.mouthScaleY;
+    this.mouthRotation.target = mood.mouthRotation;
+  }
+
+  private stepFaceSprings(dtMs: number) {
+    const seconds = Math.min(Math.max(dtMs, 0), 100) / 1000;
+    if (seconds <= 0) return;
+    const steps = Math.max(1, Math.ceil(seconds * 120));
+    const dt = seconds / steps;
+    for (let i = 0; i < steps; i += 1) {
+      this.leftX.step(dt, 9.4, 0.72);
+      this.leftY.step(dt, 9.2, 0.72);
+      this.rightX.step(dt, 7.9, 0.74);
+      this.rightY.step(dt, 7.8, 0.74);
+      this.leftScaleX.step(dt, 7, 0.72);
+      this.leftScaleY.step(dt, 7.2, 0.72);
+      this.rightScaleX.step(dt, 6.5, 0.74);
+      this.rightScaleY.step(dt, 6.7, 0.74);
+      this.leftRotation.step(dt, 6.4, 0.72);
+      this.rightRotation.step(dt, 6.1, 0.74);
+      this.leftTension.step(dt, 7.8, 0.76);
+      this.rightTension.step(dt, 7.2, 0.77);
+      this.mouthX.step(dt, 6.4, 0.7);
+      this.mouthY.step(dt, 6.2, 0.7);
+      this.mouthScaleX.step(dt, 6.8, 0.69);
+      this.mouthScaleY.step(dt, 6.6, 0.7);
+      this.mouthRotation.step(dt, 5.5, 0.72);
+    }
+  }
+
+  /** Reused every frame. */
+  pose(): PoseDelta {
+    const followActive = this.followReleaseAt > 0;
+    const scaleY =
+      this.bodyScaleYTarget + (followActive ? this.followScaleYTarget : 0);
+    const horizontalSpeed = Math.max(
+      Math.abs(this.leftX.velocity),
+      Math.abs(this.rightX.velocity)
+    );
+    const verticalUpSpeed = Math.max(
+      0,
+      -Math.min(this.leftY.velocity, this.rightY.velocity)
+    );
+    const velocityNarrow = Math.min(0.065, horizontalSpeed * 0.00165);
+    const velocityStretch = Math.min(0.075, verticalUpSpeed * 0.0021);
+
+    this.delta.blobX =
+      this.bodyXTarget + (followActive ? this.followXTarget : 0);
+    this.delta.blobY = this.bodyYTarget;
+    this.delta.blobRotation =
+      this.bodyRotationTarget +
+      (followActive ? this.followRotationTarget : 0);
+    this.delta.blobScaleY = scaleY;
+    this.delta.blobScaleX = preserveAreaX(scaleY);
+    this.delta.bodyX = this.massXTarget;
+    this.delta.bodyY = this.massYTarget;
+    this.delta.bodyRotation = this.massRotationTarget;
+    this.delta.bodyScaleY = this.massScaleYTarget;
+    this.delta.bodyScaleX = preserveAreaX(this.massScaleYTarget);
+    this.delta.bodySkewX = this.massSkewXTarget;
+    this.delta.bodySkewY = this.massSkewYTarget;
+    this.delta.bodyOriginX = this.massOriginXTarget;
+    this.delta.bodyOriginY = this.massOriginYTarget;
+    this.delta.eyeX = 0;
+    this.delta.eyeY = 0;
+    this.delta.leftEyeX = this.leftX.value;
+    this.delta.leftEyeY = this.leftY.value;
+    this.delta.leftEyeScaleX = this.leftScaleX.value - velocityNarrow;
+    this.delta.leftEyeScaleY = this.leftScaleY.value + velocityStretch;
+    this.delta.leftEyeRotation = this.leftRotation.value;
+    this.delta.rightEyeX = this.rightX.value;
+    this.delta.rightEyeY = this.rightY.value;
+    this.delta.rightEyeScaleX = this.rightScaleX.value - velocityNarrow * 0.9;
+    this.delta.rightEyeScaleY = this.rightScaleY.value + velocityStretch * 0.92;
+    this.delta.rightEyeRotation = this.rightRotation.value;
+    this.delta.eyeLid = this.blinkLid;
+    this.delta.leftEyeTension = this.leftTension.value;
+    this.delta.rightEyeTension = this.rightTension.value;
+    this.delta.mouthX = this.mouthX.value;
+    this.delta.mouthY = this.mouthY.value;
+    this.delta.mouthScaleX = this.mouthScaleX.value;
+    this.delta.mouthScaleY = this.mouthScaleY.value;
+    this.delta.mouthRotation = this.mouthRotation.value;
     return this.delta;
   }
 
-  status(eyeLid = 1): BehaviourStatus {
-    const elapsed = this.clock - this.startedAt;
-    const phase =
-      this.current === "REST" || this.duration === 0
-        ? 0
-        : clamp01(elapsed / this.duration);
-    const blinking =
-      this.current === "NORMAL_BLINK" || this.current === "DOUBLE_BLINK";
-    let blinkState: BehaviourStatus["blinkState"] = "open";
-    if (blinking) {
-      if (eyeLid <= 0.13) {
-        blinkState = "closed";
-      } else if (this.current === "NORMAL_BLINK") {
-        blinkState = phase < 0.38 ? "closing" : "opening";
-      } else if (phase < 0.3) {
-        blinkState = phase / 0.3 < 0.38 ? "closing" : "opening";
-      } else if (phase >= 0.48 && phase < 0.82) {
-        blinkState = (phase - 0.48) / 0.34 < 0.38 ? "closing" : "opening";
-      }
-    }
+  status(): BehaviourStatus &
+    Pick<
+      HomeActivityStatus,
+      | "mood"
+      | "gaze"
+      | "lids"
+      | "mouth"
+      | "body"
+      | "nextGazeMs"
+      | "nextBlinkMs"
+      | "nextMouthMs"
+      | "nextBodyMs"
+    > {
+    const active = this.clock < this.activityUntil;
+    const duration = Math.max(1, this.activityUntil - this.activityStartedAt);
+    const next = Math.min(
+      this.nextGazeAt,
+      this.nextBlinkAt,
+      this.nextExpressionAt,
+      this.nextMouthAt,
+      this.nextBodyAt,
+      this.nextMicroAt
+    );
     return {
-      id: this.current,
-      phase,
-      remainingMs:
-        this.current === "REST" ? 0 : Math.max(0, this.duration - elapsed),
-      nextBehaviourMs: Math.max(0, this.nextBehaviourAt - this.clock),
-      blinkState,
+      id: active ? this.activityId : "REST",
+      phase: active
+        ? clamp01((this.clock - this.activityStartedAt) / duration)
+        : 0,
+      remainingMs: active ? Math.max(0, this.activityUntil - this.clock) : 0,
+      nextBehaviourMs: Math.max(0, next - this.clock),
+      blinkState: this.blinkState,
+      mood: this.mood,
+      gaze: this.gazeAction,
+      lids: this.lidAction,
+      mouth: this.mouthAction,
+      body: this.bodyAction,
+      nextGazeMs: Math.max(0, this.nextGazeAt - this.clock),
+      nextBlinkMs: Math.max(0, this.nextBlinkAt - this.clock),
+      nextMouthMs: Math.max(0, this.nextMouthAt - this.clock),
+      nextBodyMs: Math.max(0, this.nextBodyAt - this.clock),
     };
   }
 }

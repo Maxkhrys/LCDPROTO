@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  BODY_LAYER,
-  FACE_LAYERS,
   FACE_ORDER,
   NEUTRAL_RIG,
+  RIG_ASSETS,
   bodyScale,
   faceAnchor,
   type BlobRig,
+  type BlobColour,
   type ElementTransform,
   type FaceLayerId,
 } from "@/lib/blobRig";
@@ -21,17 +21,12 @@ interface BlobCharacterProps {
   renderScale: number;
   /** Per-element transforms. Defaults to the neutral HOME pose. */
   rig?: BlobRig;
+  /** Dev-only colour testing; geometry and motion are shared. */
+  colour?: BlobColour;
 }
 
 type LayerId = "body" | FaceLayerId;
 type Images = Record<LayerId, HTMLImageElement>;
-
-const SOURCES: Record<LayerId, string> = {
-  body: BODY_LAYER.src,
-  leftEye: FACE_LAYERS.leftEye.src,
-  rightEye: FACE_LAYERS.rightEye.src,
-  mouth: FACE_LAYERS.mouth.src,
-};
 
 /**
  * Renders the Blob as independent layers: the locked body, then each facial
@@ -44,13 +39,21 @@ export default function BlobCharacter({
   size,
   renderScale,
   rig = NEUTRAL_RIG,
+  colour = "purple",
 }: BlobCharacterProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [images, setImages] = useState<Images | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    const entries = Object.entries(SOURCES) as [LayerId, string][];
+    const assets = RIG_ASSETS[colour];
+    const entries: [LayerId, string][] = [
+      ["body", assets.body.src],
+      ["leftEye", assets.face.leftEye.src],
+      ["rightEye", assets.face.rightEye.src],
+      ["mouth", assets.face.mouth.src],
+    ];
+    setImages(null);
     Promise.all(
       entries.map(
         ([id, src]) =>
@@ -71,7 +74,7 @@ export default function BlobCharacter({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [colour]);
 
   /**
    * Bake each layer once at render resolution. Per-frame transforms then work
@@ -92,15 +95,16 @@ export default function BlobCharacter({
     // letting its glow fall off into the background.
     // The body PNG carries real alpha from the extraction, so nothing is keyed
     // here — it is simply resampled once to its on-screen size.
-    const bs = bodyScale(size) * renderScale;
-    const bodyCanvas = buffer(BODY_LAYER.width * bs, BODY_LAYER.height * bs);
+    const assets = RIG_ASSETS[colour];
+    const bs = bodyScale(size, colour) * renderScale;
+    const bodyCanvas = buffer(assets.body.width * bs, assets.body.height * bs);
     const bctx = bodyCanvas.getContext("2d");
     if (bctx) {
       drawDownscaled(
         bctx,
         images.body,
-        BODY_LAYER.width,
-        BODY_LAYER.height,
+        assets.body.width,
+        assets.body.height,
         0,
         0,
         bodyCanvas.width,
@@ -111,8 +115,8 @@ export default function BlobCharacter({
     // Facial layers already carry alpha; bake them at their neutral size.
     const face = {} as Record<FaceLayerId, HTMLCanvasElement>;
     for (const id of FACE_ORDER) {
-      const asset = FACE_LAYERS[id];
-      const a = faceAnchor(id, size);
+      const asset = assets.face[id];
+      const a = faceAnchor(id, size, colour);
       const c = buffer(a.width * renderScale, a.height * renderScale);
       const cctx = c.getContext("2d");
       if (cctx) {
@@ -131,7 +135,7 @@ export default function BlobCharacter({
     }
 
     return { body: bodyCanvas, face };
-  }, [images, size, renderScale]);
+  }, [images, size, renderScale, colour]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -153,21 +157,33 @@ export default function BlobCharacter({
     ctx.translate(-center, -center);
 
     // 1. Body — has its own transform, but is never touched by facial controls.
-    const bs = bodyScale(size);
-    const bw = BODY_LAYER.width * bs;
-    const bh = BODY_LAYER.height * bs;
+    const bodyAsset = RIG_ASSETS[colour].body;
+    const bs = bodyScale(size, colour);
+    const bw = bodyAsset.width * bs;
+    const bh = bodyAsset.height * bs;
     const bt = rig.body;
+    const pivotX = bt.originX * (bw / 2);
+    const pivotY = bt.originY * (bh / 2);
     ctx.save();
     ctx.globalAlpha = blob.opacity * bt.opacity;
-    ctx.translate(center + bt.x, center + bt.y);
+    ctx.translate(center + bt.x + pivotX, center + bt.y + pivotY);
     ctx.rotate((bt.rotation * Math.PI) / 180);
+    ctx.transform(
+      1,
+      Math.tan((bt.skewY * Math.PI) / 180),
+      Math.tan((bt.skewX * Math.PI) / 180),
+      1,
+      0,
+      0
+    );
     ctx.scale(bt.scaleX, bt.scaleY);
+    ctx.translate(-pivotX, -pivotY);
     ctx.drawImage(layers.body, -bw / 2, -bh / 2, bw, bh);
     ctx.restore();
 
     // 2-4. Facial layers, each independently transformable about its own centre.
     const drawFace = (id: FaceLayerId, t: ElementTransform) => {
-      const a = faceAnchor(id, size);
+      const a = faceAnchor(id, size, colour);
       ctx.save();
       ctx.globalAlpha = blob.opacity * t.opacity;
       ctx.translate(a.x + t.x, a.y + t.y);
@@ -180,7 +196,7 @@ export default function BlobCharacter({
     for (const id of FACE_ORDER) drawFace(id, rig[id]);
 
     ctx.restore();
-  }, [layers, size, renderScale, rig]);
+  }, [layers, size, renderScale, rig, colour]);
 
   return (
     <canvas

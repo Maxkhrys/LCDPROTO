@@ -10,7 +10,11 @@ import {
   type ElementCalibration,
   type FaceCalibration,
 } from "@/lib/blobCalibration";
-import type { FaceLayerId } from "@/lib/blobRig";
+import {
+  BLOB_COLOURS,
+  type BlobColour,
+  type FaceLayerId,
+} from "@/lib/blobRig";
 import { DEFAULT_IDLE, IDLE_LIMITS, type IdleConfig } from "@/lib/blobIdle";
 import type { BehaviourId, HomeActivityStatus } from "@/lib/blobBehaviour";
 import {
@@ -35,6 +39,7 @@ export default function DeviceSimulator() {
   const [speed, setSpeed] = useState<Speed>(1);
   const [runId, setRunId] = useState(0);
   const [displayMode, setDisplayMode] = useState<"dark" | "light">("dark");
+  const [blobColour, setBlobColour] = useState<BlobColour>("teal");
 
   // Temporary facial-layer alignment controls. The measured anchors in
   // lib/blobRig.ts already reproduce the master, so these start at 0/0/1x.
@@ -93,6 +98,7 @@ export default function DeviceSimulator() {
     setPlaying(true);
     setNativePixels(false);
     setDisplayMode("dark");
+    setBlobColour("teal");
     setCalibration(DEFAULT_FACE_CALIBRATION);
     setIdle(DEFAULT_IDLE);
     setBehaviourEnabled(true);
@@ -135,6 +141,7 @@ export default function DeviceSimulator() {
             triggerRequest={trigger}
             onBehaviourStatus={setStatus}
             displayMode={displayMode}
+            blobColour={blobColour}
           />
         </DeviceBezel>
       </div>
@@ -182,6 +189,18 @@ export default function DeviceSimulator() {
           {DEVICE_CONFIG.speedOptions.map((s) => (
             <DevButton key={s} active={s === speed} onClick={() => setSpeed(s)}>
               {s}x
+            </DevButton>
+          ))}
+        </DevGroup>
+
+        <DevGroup label="Blob">
+          {BLOB_COLOURS.map((colour) => (
+            <DevButton
+              key={colour.id}
+              active={blobColour === colour.id}
+              onClick={() => setBlobColour(colour.id)}
+            >
+              {colour.label}
             </DevButton>
           ))}
         </DevGroup>
@@ -272,6 +291,10 @@ export default function DeviceSimulator() {
           /
         </span>
         <span>{nativePixels ? "1:1 pixels" : `${renderScale}x sampled`}</span>
+        <span aria-hidden className="text-white/10">
+          /
+        </span>
+        <span>{blobColour}</span>
         <span aria-hidden className="text-white/10">
           /
         </span>
@@ -706,12 +729,20 @@ function ActivityReadout({
   const blink = behaviourEnabled ? (status?.blinkState ?? "open") : "open";
 
   return (
-    <div className="grid w-full max-w-2xl grid-cols-2 gap-x-5 gap-y-2 rounded-lg border border-white/[0.06] bg-white/[0.015] px-4 py-3 font-mono text-[10px] sm:grid-cols-5">
+    <div className="grid w-full max-w-2xl grid-cols-2 gap-x-5 gap-y-3 rounded-lg border border-white/[0.06] bg-white/[0.015] px-4 py-3 font-mono text-[10px] sm:grid-cols-5">
       <ActivityValue label="Activity" value={behaviour} accent />
       <ActivityValue label="Next" value={next} />
+      <ActivityValue label="Mood" value={status?.mood ?? "CONTENT"} />
+      <ActivityValue label="Gaze" value={status?.gaze ?? "RESTING"} />
+      <ActivityValue label="Lids" value={status?.lids ?? "OPEN"} />
+      <ActivityValue label="Mouth" value={status?.mouth ?? "SMILE"} />
+      <ActivityValue label="Body" value={status?.body ?? "SUSPENDED"} />
       <ActivityValue label="Idle offset" value={`${x.toFixed(2)}, ${y.toFixed(2)} px`} />
       <ActivityValue label="Body rotation" value={`${rotation.toFixed(2)} deg`} />
-      <ActivityValue label="Blink" value={blink} />
+      <ActivityValue
+        label="Blink / speed"
+        value={`${blink} / ${(status?.bodySpeed ?? 0).toFixed(1)} px/s`}
+      />
     </div>
   );
 }
