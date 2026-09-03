@@ -1,4 +1,5 @@
 import type { FaceCalibration } from "./blobCalibration";
+import type { IdleConfig } from "./blobIdle";
 
 /**
  * The device's interaction states. Each one will eventually own a full
@@ -53,6 +54,8 @@ export interface StateViewProps {
   fps: number;
   /** Temporary facial-layer calibration from the dev controls. */
   calibration: FaceCalibration;
+  /** Procedural idle motion settings from the dev controls. */
+  idle: IdleConfig;
   /**
    * Pixels rasterised per 240-space pixel. Layout and animation always work in
    * 240-space; this only controls sampling fidelity so artwork stays sharp when

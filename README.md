@@ -55,7 +55,7 @@ filtering.
 The Blob is a **layered rig**, not a set of pre-rendered state images.
 
 ```
-public/blob/Blob-body.png   permanent, locked body — never morphed or replaced
+public/blob/Blob-Body.png   permanent, locked body — never morphed or replaced
 public/blob/eye-left.png    tight crops lifted from the original master
 public/blob/eye-right.png
 public/blob/mouth-smile.png
@@ -80,9 +80,36 @@ redrawn art, about 5% wider and 7% taller with a different silhouette. The
 reconstruction therefore matches the master's face placement exactly but not
 its outline.
 
-`Blob-body.png` is exported as RGB on black with no alpha channel, so its
+`Blob-Body.png` is exported as RGB on black with no alpha channel, so its
 transparency is keyed from luminance at load time; otherwise it would paint an
-opaque black square over the screen.
+opaque black square over the screen. Its filename is case-sensitive in
+production — note the capital B.
+
+If the body art is replaced, re-measure its solid bounding box (luminance > 100)
+and update `BODY_LAYER` in `lib/blobRig.ts`; the face anchors are defined
+against the master and do not change.
+
+## Idle motion
+
+`lib/blobIdle.ts` builds the idle pose as a **pure function of elapsed time** —
+no accumulated state and no random draws at runtime, so the same moment always
+produces the same pose and pausing freezes cleanly. It generates no artwork:
+everything is transforms on the existing layers.
+
+| motion | default | effect |
+| --- | --- | --- |
+| Float | 1.4 px | whole character rises and falls |
+| Breath | 0.7% | slow uniform scale |
+| Squash | 0.6% | scaleX up while scaleY goes down, and back |
+| Blink | 5.5 s | 130 ms lid close, jittered so it is not metronomic |
+
+Eyes also drift together by up to 1.3px on a gated envelope, so they sit still
+most of the time and occasionally wander. The mouth rides the whole-character
+transform and nothing else.
+
+Float and breath are stated as **total travel**, squash as **maximum deviation**
+from 1 — the sliders read as the distance actually covered, not amplitude.
+**Idle** toggles the whole system off.
 
 ### Calibration controls
 

@@ -40,13 +40,14 @@ export interface BlobLayerAsset {
  * screen centre.
  */
 export const BODY_LAYER = {
-  src: "/blob/Blob-body.png",
-  width: 1300,
-  height: 1210,
-  centerX: 661.5,
-  centerY: 603.0,
-  /** Solid bbox width, used to size the body against the screen. */
-  solidWidth: 1074,
+  // Note the capital B — the filename is case-sensitive in production.
+  src: "/blob/Blob-Body.png",
+  width: 1254,
+  height: 1254,
+  centerX: 609.0,
+  centerY: 612.0,
+  /** Solid bbox width (luminance > 100), used to size it against the screen. */
+  solidWidth: 1089,
 } as const;
 
 /** Facial layers, in paint order after the body. */
@@ -126,7 +127,15 @@ export interface ElementTransform {
 export interface BlobTransform {
   x: number;
   y: number;
+  /** Uniform scale. */
   scale: number;
+  /**
+   * Non-uniform scale on top of `scale`, used for jelly squash and stretch.
+   * Driving these inversely (one up while the other goes down) keeps the
+   * character's apparent volume roughly constant.
+   */
+  scaleX: number;
+  scaleY: number;
   rotation: number;
   opacity: number;
 }
@@ -151,6 +160,8 @@ export const NEUTRAL_BLOB: BlobTransform = {
   x: 0,
   y: 0,
   scale: 1,
+  scaleX: 1,
+  scaleY: 1,
   rotation: 0,
   opacity: 1,
 };

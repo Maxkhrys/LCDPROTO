@@ -155,7 +155,7 @@ export default function BlobCharacter({
     // Whole-character transform: the body and every facial layer move together.
     ctx.translate(center + blob.x, center + blob.y);
     ctx.rotate((blob.rotation * Math.PI) / 180);
-    ctx.scale(blob.scale, blob.scale);
+    ctx.scale(blob.scale * blob.scaleX, blob.scale * blob.scaleY);
     ctx.translate(-center, -center);
 
     // 1. Body — never transformed by facial controls.

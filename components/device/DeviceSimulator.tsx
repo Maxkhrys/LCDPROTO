@@ -11,6 +11,7 @@ import {
   type FaceCalibration,
 } from "@/lib/blobCalibration";
 import type { FaceLayerId } from "@/lib/blobRig";
+import { DEFAULT_IDLE, IDLE_LIMITS, type IdleConfig } from "@/lib/blobIdle";
 import {
   DEFAULT_STATE,
   DEVICE_STATES,
@@ -39,6 +40,7 @@ export default function DeviceSimulator() {
     DEFAULT_FACE_CALIBRATION
   );
   const [saved, setSaved] = useState<string | null>(null);
+  const [idle, setIdle] = useState<IdleConfig>(DEFAULT_IDLE);
   const [showCalibration, setShowCalibration] = useState(false);
   /** When true the panel rasterises at exactly 240x240 — real hardware pixels. */
   const [nativePixels, setNativePixels] = useState(false);
@@ -73,6 +75,7 @@ export default function DeviceSimulator() {
     setPlaying(true);
     setNativePixels(false);
     setCalibration(DEFAULT_FACE_CALIBRATION);
+    setIdle(DEFAULT_IDLE);
     setSaved(null);
     setRunId((n) => n + 1);
   }, []);
@@ -106,6 +109,7 @@ export default function DeviceSimulator() {
             fps={fps}
             calibration={calibration}
             renderScale={renderScale}
+            idle={idle}
           />
         </DeviceBezel>
       </div>
@@ -158,6 +162,13 @@ export default function DeviceSimulator() {
         </DevGroup>
 
         <DevButton
+          active={idle.enabled}
+          onClick={() => setIdle((v) => ({ ...v, enabled: !v.enabled }))}
+        >
+          Idle
+        </DevButton>
+
+        <DevButton
           active={nativePixels}
           onClick={() => setNativePixels((v) => !v)}
         >
@@ -171,6 +182,10 @@ export default function DeviceSimulator() {
           Calibrate
         </DevButton>
       </div>
+
+      {showCalibration && (
+        <IdlePanel value={idle} onChange={setIdle} onReset={() => setIdle(DEFAULT_IDLE)} />
+      )}
 
       {showCalibration && (
         <CalibrationPanel
@@ -200,6 +215,10 @@ export default function DeviceSimulator() {
           /
         </span>
         <span>{nativePixels ? "1:1 pixels" : `${renderScale}x sampled`}</span>
+        <span aria-hidden className="text-white/10">
+          /
+        </span>
+        <span>{idle.enabled ? "idle on" : "idle off"}</span>
         <span aria-hidden className="text-white/10">
           /
         </span>
@@ -248,6 +267,77 @@ function DevButton({
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * Temporary idle-motion controls.
+ *
+ * Defaults sit at the quiet end of the brief's ranges — the goal is "alive",
+ * which reads as almost subconscious rather than as animation.
+ */
+function IdlePanel({
+  value,
+  onChange,
+  onReset,
+}: {
+  value: IdleConfig;
+  onChange: (v: IdleConfig) => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="flex w-full max-w-md flex-col gap-3 rounded-lg border border-white/[0.06] bg-white/[0.015] p-4">
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/30">
+          idle motion
+        </span>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => onChange({ ...value, enabled: !value.enabled })}
+            className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/40 transition-colors hover:text-white/80"
+          >
+            {value.enabled ? "On" : "Off"}
+          </button>
+          <button
+            type="button"
+            onClick={onReset}
+            className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/30 transition-colors hover:text-white/60"
+          >
+            Reset
+          </button>
+        </div>
+      </div>
+
+      <Slider
+        label="Float"
+        {...IDLE_LIMITS.floatPx}
+        value={value.floatPx}
+        format={(v) => `${v.toFixed(1)} px`}
+        onChange={(floatPx) => onChange({ ...value, floatPx })}
+      />
+      <Slider
+        label="Breath"
+        {...IDLE_LIMITS.breathAmount}
+        value={value.breathAmount}
+        format={(v) => `${(v * 100).toFixed(2)}%`}
+        onChange={(breathAmount) => onChange({ ...value, breathAmount })}
+      />
+      <Slider
+        label="Squash"
+        {...IDLE_LIMITS.squashAmount}
+        value={value.squashAmount}
+        format={(v) => `${(v * 100).toFixed(2)}%`}
+        onChange={(squashAmount) => onChange({ ...value, squashAmount })}
+      />
+      <Slider
+        label="Blink"
+        {...IDLE_LIMITS.blinkInterval}
+        value={value.blinkInterval}
+        format={(v) => `${v.toFixed(1)} s`}
+        onChange={(blinkInterval) => onChange({ ...value, blinkInterval })}
+      />
+    </div>
   );
 }
 

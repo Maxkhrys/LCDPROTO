@@ -30,24 +30,42 @@ export const DEFAULT_FACE_CALIBRATION: FaceCalibration = {
   mouth: { ...DEFAULT_ELEMENT_CALIBRATION },
 };
 
-/** Builds a full rig from a whole-blob transform plus the face calibration. */
+/**
+ * Layers the calibration onto a pose: offsets add to whatever the animation is
+ * doing, scale multiplies it. Calibration is a static correction, so it must
+ * not overwrite the idle motion — a blink still closes an eye that has been
+ * nudged 2px left.
+ */
+export function applyCalibration(rig: BlobRig, cal: FaceCalibration): BlobRig {
+  const merge = (t: BlobRig["leftEye"], c: ElementCalibration) => ({
+    ...t,
+    x: t.x + c.x,
+    y: t.y + c.y,
+    scaleX: t.scaleX * c.scale,
+    scaleY: t.scaleY * c.scale,
+  });
+  return {
+    blob: rig.blob,
+    leftEye: merge(rig.leftEye, cal.leftEye),
+    rightEye: merge(rig.rightEye, cal.rightEye),
+    mouth: merge(rig.mouth, cal.mouth),
+  };
+}
+
+/** Neutral pose with only the calibration applied. */
 export function rigFromCalibration(
   cal: FaceCalibration,
   blob: BlobRig["blob"] = NEUTRAL_BLOB
 ): BlobRig {
-  const element = (c: ElementCalibration) => ({
-    ...NEUTRAL_ELEMENT,
-    x: c.x,
-    y: c.y,
-    scaleX: c.scale,
-    scaleY: c.scale,
-  });
-  return {
-    blob,
-    leftEye: element(cal.leftEye),
-    rightEye: element(cal.rightEye),
-    mouth: element(cal.mouth),
-  };
+  return applyCalibration(
+    {
+      blob,
+      leftEye: { ...NEUTRAL_ELEMENT },
+      rightEye: { ...NEUTRAL_ELEMENT },
+      mouth: { ...NEUTRAL_ELEMENT },
+    },
+    cal
+  );
 }
 
 /** Human-readable dump for SAVE CALIBRATION. */

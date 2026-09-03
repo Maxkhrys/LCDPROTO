@@ -2,24 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import BlobCharacter from "@/components/blob/BlobCharacter";
-import { rigFromCalibration } from "@/lib/blobCalibration";
-import { NEUTRAL_BLOB, type BlobRig } from "@/lib/blobRig";
+import { applyCalibration, rigFromCalibration } from "@/lib/blobCalibration";
+import { idleRig } from "@/lib/blobIdle";
+import type { BlobRig } from "@/lib/blobRig";
 import type { StateViewProps } from "@/lib/deviceStates";
 
-/** Idle "alive but almost still" motion, applied to the whole character. */
-const IDLE = {
-  floatPx: 1.5,
-  floatPeriod: 5200,
-  breathAmount: 0.006,
-  breathPeriod: 6800,
-} as const;
-
 /**
- * HOME — the neutral Blob, reconstructed from the layered rig.
+ * HOME — the neutral Blob with procedural idle motion.
  *
- * Nothing here transforms the face: every facial element sits at its measured
- * neutral position, so this is the reference pose. The only motion is the
- * whole-character float and breathe, which moves body and face as one.
+ * The pose is derived entirely from elapsed time (see lib/blobIdle.ts), so the
+ * animation is reproducible and freezes cleanly on pause. No expression
+ * animation lives here yet; the face only breathes, drifts and blinks.
  */
 export default function HomeState({
   size,
@@ -29,9 +22,12 @@ export default function HomeState({
   fps,
   renderScale,
   calibration,
+  idle,
 }: StateViewProps) {
-  const [blob, setBlob] = useState<BlobRig["blob"]>(NEUTRAL_BLOB);
   const timeRef = useRef(0);
+  const [rig, setRig] = useState<BlobRig>(() =>
+    rigFromCalibration(calibration)
+  );
 
   useEffect(() => {
     timeRef.current = 0;
@@ -43,15 +39,8 @@ export default function HomeState({
     let frameId = 0;
     const frameInterval = 1000 / fps;
 
-    const apply = () => {
-      const t = timeRef.current;
-      setBlob({
-        ...NEUTRAL_BLOB,
-        y: Math.sin((t / IDLE.floatPeriod) * Math.PI * 2) * IDLE.floatPx,
-        scale:
-          1 + Math.sin((t / IDLE.breathPeriod) * Math.PI * 2) * IDLE.breathAmount,
-      });
-    };
+    const apply = () =>
+      setRig(applyCalibration(idleRig(timeRef.current, idle), calibration));
 
     const loop = (now: number) => {
       frameId = requestAnimationFrame(loop);
@@ -64,18 +53,16 @@ export default function HomeState({
       apply();
     };
 
+    // Always paint the current pose, so a paused screen is never blank and
+    // slider changes take effect immediately.
     apply();
-    if (playing) frameId = requestAnimationFrame(loop);
+    if (playing && idle.enabled) frameId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(frameId);
-  }, [playing, speed, fps, runId]);
+  }, [playing, speed, fps, runId, idle, calibration]);
 
   return (
     <div className="relative h-full w-full bg-black">
-      <BlobCharacter
-        size={size}
-        renderScale={renderScale}
-        rig={rigFromCalibration(calibration, blob)}
-      />
+      <BlobCharacter size={size} renderScale={renderScale} rig={rig} />
     </div>
   );
 }
