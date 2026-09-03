@@ -337,6 +337,7 @@ export default function BlobCharacter({
 }: BlobCharacterProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [images, setImages] = useState<Images | null>(null);
+  const colourClickTimer = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -555,20 +556,33 @@ export default function BlobCharacter({
     return Math.hypot(px - blobX, py - blobY) <= size * BODY_FRACTION * 0.62;
   };
 
+  const handleColourClick = (event: MouseEvent<HTMLCanvasElement>) => {
+    if (!onColourCycle || !isBlobHit(event)) return;
+    if (colourClickTimer.current !== null) window.clearTimeout(colourClickTimer.current);
+    colourClickTimer.current = window.setTimeout(() => {
+      colourClickTimer.current = null;
+      onColourCycle();
+    }, 220);
+  };
+
+  const handleColourDoubleClick = (event: MouseEvent<HTMLCanvasElement>) => {
+    if (!onColourCycle || !isBlobHit(event)) return;
+    event.preventDefault();
+    if (colourClickTimer.current !== null) {
+      window.clearTimeout(colourClickTimer.current);
+      colourClickTimer.current = null;
+    }
+    onColourCycle();
+  };
+
   return (
     <canvas
       ref={canvasRef}
       width={size * renderScale}
       height={size * renderScale}
       className="block"
-      onClick={(event) => {
-        if (onColourCycle && isBlobHit(event)) onColourCycle();
-      }}
-      onDoubleClick={(event) => {
-        if (!onColourCycle || !isBlobHit(event)) return;
-        event.preventDefault();
-        onColourCycle();
-      }}
+      onClick={handleColourClick}
+      onDoubleClick={handleColourDoubleClick}
       style={{
         width: size,
         height: size,
