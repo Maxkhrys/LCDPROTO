@@ -173,8 +173,9 @@ ambient layer. With both Auto and Idle off, the calibrated pose is static until
 a cue is fired. The side tuning rail exposes Float, Drift, Breath, Squash,
 Jelly, Ripple, Blink, Gaze, Rotate, and Activity controls beside the device so
 changes can be judged live. **Screen** switches between Dark, Warm, and Brown
-preview backgrounds. Brown is the lower-luminance beige-brown testing theme;
-hardware/default view remains dark.
+preview backgrounds, and **LCD colour** provides a custom screen colour picker.
+Brown is the lower-luminance beige-brown testing theme; hardware/default view
+remains true black.
 
 The fixed **Expressions** tab exposes the authored catalogue without changing
 the animation architecture. HOME is grouped into Gaze, Lids & eyes, Jelly body,

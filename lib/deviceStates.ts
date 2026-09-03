@@ -80,6 +80,8 @@ export interface StateViewProps {
   renderScale: number;
   /** Dev-only panel contrast preview. Hardware/default remains dark. */
   displayMode: DisplayMode;
+  /** Dev-only LCD background colour. Defaults to true black. */
+  screenColour: string;
   /** Dev-only rig colour preview; every colour uses identical transforms. */
   blobColour: BlobColour;
 }

@@ -26,6 +26,7 @@ import {
 import {
   DEFAULT_STATE,
   DEVICE_STATES,
+  DISPLAY_BACKGROUNDS,
   getStateMeta,
   type DisplayMode,
   type DeviceState,
@@ -46,6 +47,7 @@ export default function DeviceSimulator() {
   const [speed, setSpeed] = useState<Speed>(1);
   const [runId, setRunId] = useState(0);
   const [displayMode, setDisplayMode] = useState<DisplayMode>("dark");
+  const [screenColour, setScreenColour] = useState(DISPLAY_BACKGROUNDS.dark);
   const [blobColour, setBlobColour] = useState<BlobColour>("teal");
 
   // Temporary facial-layer alignment controls. The measured anchors in
@@ -113,6 +115,7 @@ export default function DeviceSimulator() {
     setPlaying(true);
     setNativePixels(false);
     setDisplayMode("dark");
+    setScreenColour(DISPLAY_BACKGROUNDS.dark);
     setBlobColour("teal");
     setCalibration(DEFAULT_FACE_CALIBRATION);
     setIdle(DEFAULT_IDLE);
@@ -161,6 +164,7 @@ export default function DeviceSimulator() {
                 triggerRequest={trigger}
                 onBehaviourStatus={setStatus}
                 displayMode={displayMode}
+                screenColour={screenColour}
                 blobColour={blobColour}
               />
             </DeviceBezel>
@@ -254,12 +258,31 @@ export default function DeviceSimulator() {
                 <DevButton
                   key={mode}
                   active={displayMode === mode}
-                  onClick={() => setDisplayMode(mode)}
+                  onClick={() => {
+                    setDisplayMode(mode);
+                    setScreenColour(DISPLAY_BACKGROUNDS[mode]);
+                  }}
                 >
                   {mode}
                 </DevButton>
               ))}
             </DevGroup>
+
+            <label className="flex items-center gap-2">
+              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/25">
+                LCD colour
+              </span>
+              <input
+                aria-label="LCD screen background colour"
+                type="color"
+                value={screenColour}
+                onChange={(event) => setScreenColour(event.currentTarget.value)}
+                className="h-7 w-9 cursor-pointer rounded border border-white/[0.1] bg-transparent p-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
+              />
+              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-white/35">
+                {screenColour}
+              </span>
+            </label>
 
             <DevButton
               active={showCalibration}

@@ -2,11 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { DEVICE_CONFIG } from "@/lib/deviceConfig";
-import {
-  DISPLAY_BACKGROUNDS,
-  type DeviceState,
-  type StateViewProps,
-} from "@/lib/deviceStates";
+import type { DeviceState, StateViewProps } from "@/lib/deviceStates";
 
 import HomeState from "@/components/states/HomeState";
 import SensedState from "@/components/states/SensedState";
@@ -46,6 +42,7 @@ export default function DeviceScreen({
   state,
   screenSize,
   displayMode,
+  screenColour,
   ...viewProps
 }: DeviceScreenProps) {
   const native = DEVICE_CONFIG.resolution;
@@ -58,7 +55,7 @@ export default function DeviceScreen({
       style={{
         width: screenSize,
         height: screenSize,
-        background: DISPLAY_BACKGROUNDS[displayMode],
+        background: screenColour,
       }}
     >
       <div
@@ -79,7 +76,12 @@ export default function DeviceScreen({
             transition={{ duration: 0.45, ease: "easeInOut" }}
             style={{ width: native, height: native }}
           >
-            <View size={native} displayMode={displayMode} {...viewProps} />
+            <View
+              size={native}
+              displayMode={displayMode}
+              screenColour={screenColour}
+              {...viewProps}
+            />
           </motion.div>
         </AnimatePresence>
       </div>

@@ -150,7 +150,7 @@ export default function SensedField({
       width={size * renderScale}
       height={size * renderScale}
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 block"
+      className="pointer-events-none absolute inset-0 z-0 block"
       style={{
         width: size,
         height: size,

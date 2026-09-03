@@ -1,10 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import {
-  DISPLAY_BACKGROUNDS,
-  type StateViewProps,
-} from "@/lib/deviceStates";
+import type { StateViewProps } from "@/lib/deviceStates";
 
 interface StatePlaceholderProps extends StateViewProps {
   label: string;
@@ -22,10 +19,10 @@ export default function StatePlaceholder({
   speed,
   label,
   accent,
-  displayMode,
+  screenColour,
 }: StatePlaceholderProps) {
   const duration = 6 / (speed || 1);
-  const background = DISPLAY_BACKGROUNDS[displayMode];
+  const background = screenColour;
 
   return (
     <div

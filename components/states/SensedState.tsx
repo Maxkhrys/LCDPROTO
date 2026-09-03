@@ -11,10 +11,7 @@ import {
 import { AmbientDrift, type IdleConfig } from "@/lib/blobIdle";
 import { BlobJellyPhysics, type JellyTarget } from "@/lib/blobPhysics";
 import { NEUTRAL_BLOB, NEUTRAL_ELEMENT, type BlobRig } from "@/lib/blobRig";
-import {
-  DISPLAY_BACKGROUNDS,
-  type StateViewProps,
-} from "@/lib/deviceStates";
+import type { StateViewProps } from "@/lib/deviceStates";
 import SensedField from "./SensedField";
 
 const MAX_DEFORM = 0.1;
@@ -95,7 +92,7 @@ export default function SensedState({
   autoBehaviourEnabled,
   triggerRequest,
   onBehaviourStatus,
-  displayMode,
+  screenColour,
   blobColour,
 }: StateViewProps) {
   const [rig, setRig] = useState<BlobRig>(() =>
@@ -329,8 +326,8 @@ export default function SensedState({
 
   return (
     <div
-      className="relative h-full w-full"
-      style={{ background: DISPLAY_BACKGROUNDS[displayMode] }}
+      className="relative isolate h-full w-full"
+      style={{ background: screenColour }}
     >
       <SensedField
         size={size}
@@ -338,12 +335,14 @@ export default function SensedState({
         playing={playing}
         speed={speed}
       />
-      <BlobCharacter
-        size={size}
-        renderScale={renderScale}
-        rig={rig}
-        colour={blobColour}
-      />
+      <div className="relative z-10 h-full w-full">
+        <BlobCharacter
+          size={size}
+          renderScale={renderScale}
+          rig={rig}
+          colour={blobColour}
+        />
+      </div>
     </div>
   );
 }
