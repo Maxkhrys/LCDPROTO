@@ -93,6 +93,7 @@ export default function SensedState({
   triggerRequest,
   onBehaviourStatus,
   screenColour,
+  onBlobColourCycle,
   blobColour,
 }: StateViewProps) {
   const [rig, setRig] = useState<BlobRig>(() =>
@@ -253,6 +254,7 @@ export default function SensedState({
             eyeSocketScaleX: SENSED_FACE.eyeSocketScaleX + d.leftEyeScaleX,
             eyeSocketScaleY: SENSED_FACE.eyeSocketScaleY + d.leftEyeScaleY,
             browLift: SENSED_FACE.leftBrow + d.leftEyeTension - 1,
+            browRotation: d.leftBrowRotation,
             scaleX: SENSED_FACE.eyeScaleX + d.leftEyeScaleX,
             scaleY: SENSED_FACE.eyeScaleY + d.leftEyeScaleY,
             rotation: d.leftEyeRotation,
@@ -265,6 +267,7 @@ export default function SensedState({
             eyeSocketScaleX: SENSED_FACE.eyeSocketScaleX + d.rightEyeScaleX,
             eyeSocketScaleY: SENSED_FACE.eyeSocketScaleY + d.rightEyeScaleY,
             browLift: SENSED_FACE.rightBrow + d.rightEyeTension - 1,
+            browRotation: d.rightBrowRotation,
             scaleX: SENSED_FACE.eyeScaleX + d.rightEyeScaleX,
             scaleY: SENSED_FACE.eyeScaleY + d.rightEyeScaleY,
             rotation: d.rightEyeRotation,
@@ -341,6 +344,7 @@ export default function SensedState({
           renderScale={renderScale}
           rig={rig}
           colour={blobColour}
+          onColourCycle={onBlobColourCycle}
         />
       </div>
     </div>

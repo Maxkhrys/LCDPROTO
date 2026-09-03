@@ -61,6 +61,7 @@ export default function HomeState({
   triggerRequest,
   onBehaviourStatus,
   screenColour,
+  onBlobColourCycle,
   blobColour,
 }: StateViewProps) {
   const [rig, setRig] = useState<BlobRig>(() =>
@@ -224,6 +225,7 @@ export default function HomeState({
             eyeSocketScaleX: 1 + d.leftEyeScaleX,
             eyeSocketScaleY: 1 + d.leftEyeScaleY,
             browLift: d.leftEyeTension - 1,
+            browRotation: d.leftBrowRotation,
             scaleX: 1 + d.leftEyeScaleX,
             scaleY: 1 + d.leftEyeScaleY,
             rotation: d.leftEyeRotation,
@@ -236,6 +238,7 @@ export default function HomeState({
             eyeSocketScaleX: 1 + d.rightEyeScaleX,
             eyeSocketScaleY: 1 + d.rightEyeScaleY,
             browLift: d.rightEyeTension - 1,
+            browRotation: d.rightBrowRotation,
             scaleX: 1 + d.rightEyeScaleX,
             scaleY: 1 + d.rightEyeScaleY,
             rotation: d.rightEyeRotation,
@@ -307,6 +310,7 @@ export default function HomeState({
         renderScale={renderScale}
         rig={rig}
         colour={blobColour}
+        onColourCycle={onBlobColourCycle}
       />
     </div>
   );

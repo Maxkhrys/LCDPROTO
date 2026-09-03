@@ -82,6 +82,8 @@ export interface StateViewProps {
   displayMode: DisplayMode;
   /** Dev-only LCD background colour. Defaults to true black. */
   screenColour: string;
+  /** Optional dev interaction for cycling rig colours by tapping Blob. */
+  onBlobColourCycle?: () => void;
   /** Dev-only rig colour preview; every colour uses identical transforms. */
   blobColour: BlobColour;
 }

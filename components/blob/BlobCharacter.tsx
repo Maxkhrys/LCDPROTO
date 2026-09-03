@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import {
   NEUTRAL_RIG,
   RIG_ASSETS,
+  BODY_FRACTION,
   bodyScale,
   faceAnchor,
   type BlobRig,
@@ -22,6 +23,8 @@ interface BlobCharacterProps {
   rig?: BlobRig;
   /** Dev-only colour testing; geometry and motion are shared. */
   colour?: BlobColour;
+  /** Dev-only tap target used to cycle colour rigs during animation testing. */
+  onColourCycle?: () => void;
 }
 
 type LayerId = "body";
@@ -330,6 +333,7 @@ export default function BlobCharacter({
   renderScale,
   rig = NEUTRAL_RIG,
   colour = "purple",
+  onColourCycle,
 }: BlobCharacterProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [images, setImages] = useState<Images | null>(null);
@@ -477,7 +481,7 @@ export default function BlobCharacter({
       ctx.globalAlpha = t.opacity * 0.88;
       applyBodySurface(ctx, center, bw, bh, bt);
       ctx.translate(socketX, socketY);
-      ctx.rotate((t.rotation * Math.PI) / 180);
+      ctx.rotate((t.browRotation * Math.PI) / 180);
       drawEyebrow(ctx, socketWidth, socketHeight, t.browLift, gazeY);
       ctx.restore();
 
@@ -542,12 +546,29 @@ export default function BlobCharacter({
     ctx.restore();
   }, [layers, size, renderScale, rig, colour]);
 
+  const isBlobHit = (event: MouseEvent<HTMLCanvasElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const px = ((event.clientX - rect.left) / rect.width) * size;
+    const py = ((event.clientY - rect.top) / rect.height) * size;
+    const blobX = size / 2 + rig.blob.x;
+    const blobY = size / 2 + rig.blob.y;
+    return Math.hypot(px - blobX, py - blobY) <= size * BODY_FRACTION * 0.62;
+  };
+
   return (
     <canvas
       ref={canvasRef}
       width={size * renderScale}
       height={size * renderScale}
       className="block"
+      onClick={(event) => {
+        if (onColourCycle && isBlobHit(event)) onColourCycle();
+      }}
+      onDoubleClick={(event) => {
+        if (!onColourCycle || !isBlobHit(event)) return;
+        event.preventDefault();
+        onColourCycle();
+      }}
       style={{
         width: size,
         height: size,

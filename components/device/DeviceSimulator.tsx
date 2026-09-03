@@ -49,6 +49,12 @@ export default function DeviceSimulator() {
   const [displayMode, setDisplayMode] = useState<DisplayMode>("dark");
   const [screenColour, setScreenColour] = useState(DISPLAY_BACKGROUNDS.dark);
   const [blobColour, setBlobColour] = useState<BlobColour>("teal");
+  const cycleBlobColour = useCallback(() => {
+    setBlobColour((current) => {
+      const index = BLOB_COLOURS.findIndex((colour) => colour.id === current);
+      return BLOB_COLOURS[(index + 1) % BLOB_COLOURS.length].id;
+    });
+  }, []);
 
   // Temporary facial-layer alignment controls. The measured anchors in
   // lib/blobRig.ts already reproduce the master, so these start at 0/0/1x.
@@ -165,6 +171,7 @@ export default function DeviceSimulator() {
                 onBehaviourStatus={setStatus}
                 displayMode={displayMode}
                 screenColour={screenColour}
+                onBlobColourCycle={cycleBlobColour}
                 blobColour={blobColour}
               />
             </DeviceBezel>

@@ -208,10 +208,10 @@ export const FACE_ORDER: readonly FaceLayerId[] = ["leftEye", "rightEye", "mouth
 /**
  * Share of the 240px screen diameter the body's solid core spans.
  *
- * V2 reduced this from 0.68 so Blob floats inside the display rather than
+ * V3 reduced this from 0.68 so Blob floats inside the display rather than
  * filling it, leaving room for leaning, squash and future state transitions.
  */
-export const BODY_FRACTION = 0.57;
+export const BODY_FRACTION = 0.535;
 
 /**
  * Neutral face placement, calibrated against the artwork.
@@ -282,6 +282,8 @@ export interface ElementTransform {
   eyeSocketScaleY: number;
   /** Expression-only eyebrow lift; deliberately independent from blink. */
   browLift: number;
+  /** Expression-only brow tilt, independent from eye rotation. */
+  browRotation: number;
   /** Procedural mouth shape controls. */
   mouthCurve: number;
   mouthO: number;
@@ -329,6 +331,7 @@ export const NEUTRAL_ELEMENT: ElementTransform = {
   eyeSocketScaleX: 1,
   eyeSocketScaleY: 1,
   browLift: 0,
+  browRotation: 0,
   mouthCurve: 0,
   mouthO: 0,
   rippleTop: 0,

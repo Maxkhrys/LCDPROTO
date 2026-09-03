@@ -10,6 +10,7 @@ export type ExpressionCategory =
   | "Angry"
   | "Sad"
   | "Action"
+  | "Emotion"
   | "Variants";
 export type ExpressionFilter = "ALL" | ExpressionCategory;
 
@@ -101,6 +102,7 @@ export const HOME_EXPRESSION_GROUPS: readonly ExpressionGroup[] = [
     id: "Angry",
     label: "Angry",
     entries: [
+      { id: "ANGRY_BROWS", label: "Angry brows", hint: "inner corners down" },
       { id: "ANGRY_STARE", label: "Stare", hint: "tight + weighted" },
       { id: "ANGRY_SQUINT", label: "Hard squint", hint: "side compression" },
       { id: "ANGRY_TILT", label: "Angry tilt", hint: "one eye + twist" },
@@ -124,6 +126,20 @@ export const HOME_EXPRESSION_GROUPS: readonly ExpressionGroup[] = [
       { id: "WALL_IMPACT_RIGHT", label: "Wall hit right", hint: "hard squash" },
     ],
   },
+  {
+    id: "Emotion",
+    label: "Major emotions",
+    entries: [
+      { id: "HAPPY_BOUNCE", label: "Happy bounce", hint: "bright squish" },
+      { id: "SHOCKED_RECOIL", label: "Shocked recoil", hint: "wide + retreat" },
+      { id: "CONFUSED_TILT", label: "Confused tilt", hint: "crooked look" },
+      { id: "SLEEPY_MELT", label: "Sleepy melt", hint: "down + soften" },
+      { id: "LAUGH_SQUISH", label: "Laugh squish", hint: "happy compression" },
+      { id: "PLAYFUL_WINK", label: "Playful wink", hint: "wink + sway" },
+      { id: "PANIC_SHAKE", label: "Panic shake", hint: "quick wobble" },
+      { id: "PROUD_STRETCH", label: "Proud stretch", hint: "lift + hold" },
+    ],
+  },
 ] as const satisfies readonly ExpressionGroup[];
 
 export const EXPRESSION_FILTERS: readonly ExpressionFilter[] = [
@@ -136,6 +152,7 @@ export const EXPRESSION_FILTERS: readonly ExpressionFilter[] = [
   "Angry",
   "Sad",
   "Action",
+  "Emotion",
   "Variants",
 ];
 

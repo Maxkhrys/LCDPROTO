@@ -30,6 +30,15 @@ export type BehaviourId =
   | "SPIN_360"
   | "WALL_IMPACT_LEFT"
   | "WALL_IMPACT_RIGHT"
+  | "HAPPY_BOUNCE"
+  | "SHOCKED_RECOIL"
+  | "CONFUSED_TILT"
+  | "SLEEPY_MELT"
+  | "LAUGH_SQUISH"
+  | "PLAYFUL_WINK"
+  | "PANIC_SHAKE"
+  | "PROUD_STRETCH"
+  | "ANGRY_BROWS"
   | "SOFT_SQUINT"
   | "ONE_EYE_SQUINT_LEFT"
   | "ONE_EYE_SQUINT_RIGHT"
@@ -70,7 +79,8 @@ type ExpressionBehaviour =
   | "SOFT_SQUINT"
   | "ONE_EYE_SQUINT_LEFT"
   | "ONE_EYE_SQUINT_RIGHT"
-  | "CURIOUS_WIDE";
+  | "CURIOUS_WIDE"
+  | "ANGRY_BROWS";
 type MouthBehaviour =
   | "MOUTH_RELAX"
   | "MOUTH_TWITCH"
@@ -123,6 +133,8 @@ export interface PoseDelta {
   rightEyeScaleX: number;
   rightEyeScaleY: number;
   rightEyeRotation: number;
+  leftBrowRotation: number;
+  rightBrowRotation: number;
   eyeLid: number;
   leftEyeTension: number;
   rightEyeTension: number;
@@ -164,6 +176,8 @@ export const NEUTRAL_DELTA: PoseDelta = {
   rightEyeScaleX: 0,
   rightEyeScaleY: 0,
   rightEyeRotation: 0,
+  leftBrowRotation: 0,
+  rightBrowRotation: 0,
   eyeLid: 1,
   leftEyeTension: 1,
   rightEyeTension: 1,
@@ -413,6 +427,8 @@ export class BehaviourController {
   private readonly rightScaleY = new SpringAxis();
   private readonly leftRotation = new SpringAxis();
   private readonly rightRotation = new SpringAxis();
+  private readonly leftBrowRotation = new SpringAxis();
+  private readonly rightBrowRotation = new SpringAxis();
   private readonly leftTension = new SpringAxis(1);
   private readonly rightTension = new SpringAxis(1);
   private readonly mouthX = new SpringAxis();
@@ -496,6 +512,8 @@ export class BehaviourController {
     this.rightScaleY.reset();
     this.leftRotation.reset();
     this.rightRotation.reset();
+    this.leftBrowRotation.reset();
+    this.rightBrowRotation.reset();
     this.leftTension.reset(1);
     this.rightTension.reset(1);
     this.mouthX.reset();
@@ -571,7 +589,8 @@ export class BehaviourController {
       id === "SOFT_SQUINT" ||
       id === "ONE_EYE_SQUINT_LEFT" ||
       id === "ONE_EYE_SQUINT_RIGHT" ||
-      id === "CURIOUS_WIDE"
+      id === "CURIOUS_WIDE" ||
+      id === "ANGRY_BROWS"
     ) {
       this.startExpression(id);
       return;
@@ -598,7 +617,15 @@ export class BehaviourController {
       id === "SAD_SMALL" ||
       id === "IDLE_SOFT_BREATH" ||
       id === "IDLE_LOOK_AROUND" ||
-      id === "IDLE_SETTLE"
+      id === "IDLE_SETTLE" ||
+      id === "HAPPY_BOUNCE" ||
+      id === "SHOCKED_RECOIL" ||
+      id === "CONFUSED_TILT" ||
+      id === "SLEEPY_MELT" ||
+      id === "LAUGH_SQUISH" ||
+      id === "PLAYFUL_WINK" ||
+      id === "PANIC_SHAKE" ||
+      id === "PROUD_STRETCH"
     ) {
       this.startLibraryBeat(id, cfg);
       return;
@@ -620,10 +647,14 @@ export class BehaviourController {
       this.impactAt = 0;
       // Impact arrives after the travel. Compress hard, then let the body
       // spring rebound from the wall instead of holding one static squish.
-      this.bodyYTarget = 2.8;
-      this.bodyScaleYTarget = -0.095;
-      this.massYTarget = 2.4;
-      this.massScaleYTarget = -0.065;
+      this.bodyXTarget = this.impactDirection * -4.5;
+      this.bodyRotationTarget = this.impactDirection * -5.2;
+      this.massXTarget = this.impactDirection * -3.2;
+      this.massRotationTarget = this.impactDirection * -5.4;
+      this.bodyYTarget = 4.8;
+      this.bodyScaleYTarget = -0.145;
+      this.massYTarget = 3.7;
+      this.massScaleYTarget = -0.105;
       this.massSkewYTarget = this.impactDirection * 3.2;
     }
 
@@ -936,6 +967,8 @@ export class BehaviourController {
   private startExpression(id: BehaviourId) {
     const mood = MOODS[this.mood];
     let duration = 850;
+    this.leftBrowRotation.target = 0;
+    this.rightBrowRotation.target = 0;
     if (id === "SOFT_SQUINT") {
       // Squint is a real two-lid closure, not a mild scale change. Both
       // apertures narrow toward a readable centre slit.
@@ -944,15 +977,27 @@ export class BehaviourController {
       this.leftScaleX.target = mood.eyeScaleX + 0.055;
       this.rightScaleX.target = mood.eyeScaleX + 0.045;
       duration = 850 + this.rand() * 650;
+    } else if (id === "ANGRY_BROWS") {
+      this.leftTension.target = 0.32;
+      this.rightTension.target = 0.35;
+      this.leftScaleX.target = mood.eyeScaleX + 0.035;
+      this.rightScaleX.target = mood.eyeScaleX + 0.03;
+      // Inner brow corners drop toward Blob's nose. Left brow rotates clockwise,
+      // right brow counterclockwise. Brows no longer borrow eye rotation.
+      this.leftBrowRotation.target = 5.4;
+      this.rightBrowRotation.target = -5.4;
+      duration = 900 + this.rand() * 520;
     } else if (id === "ONE_EYE_SQUINT_LEFT") {
       this.leftTension.target = 0.58;
       this.rightTension.target = mood.rightTension * 0.98;
       this.leftRotation.target = -2.2;
+      this.leftBrowRotation.target = -1.6;
       duration = 680 + this.rand() * 500;
     } else if (id === "ONE_EYE_SQUINT_RIGHT") {
       this.rightTension.target = 0.58;
       this.leftTension.target = mood.leftTension * 0.98;
       this.rightRotation.target = 2.2;
+      this.rightBrowRotation.target = 1.6;
       duration = 680 + this.rand() * 500;
     } else {
       this.leftTension.target = 1.1;
@@ -961,6 +1006,8 @@ export class BehaviourController {
       this.rightScaleX.target = mood.eyeScaleX + 0.045;
       this.leftScaleY.target = mood.eyeScaleY + 0.12;
       this.rightScaleY.target = mood.eyeScaleY + 0.12;
+      this.leftBrowRotation.target = 0;
+      this.rightBrowRotation.target = 0;
       duration = 760 + this.rand() * 520;
     }
     this.lidAction = id;
@@ -1053,7 +1100,15 @@ export class BehaviourController {
       | "SAD_SMALL"
       | "IDLE_SOFT_BREATH"
       | "IDLE_LOOK_AROUND"
-      | "IDLE_SETTLE",
+      | "IDLE_SETTLE"
+      | "HAPPY_BOUNCE"
+      | "SHOCKED_RECOIL"
+      | "CONFUSED_TILT"
+      | "SLEEPY_MELT"
+      | "LAUGH_SQUISH"
+      | "PLAYFUL_WINK"
+      | "PANIC_SHAKE"
+      | "PROUD_STRETCH",
     cfg: BehaviourConfig
   ) {
     this.clearBeatCues();
@@ -1065,20 +1120,20 @@ export class BehaviourController {
 
     switch (id) {
       case "ANGRY_STARE":
-        expression = "SOFT_SQUINT";
+        expression = "ANGRY_BROWS";
         mouth = "MOUTH_FLIP";
         body = "JELLY_TWIST_RIGHT";
         duration = 1650;
         break;
       case "ANGRY_SQUINT":
-        expression = "SOFT_SQUINT";
+        expression = "ANGRY_BROWS";
         mouth = "MOUTH_FLIP";
         body = "SIDE_SQUISH_RIGHT";
         duration = 1450;
         break;
       case "ANGRY_TILT":
         gaze = "CURIOUS_TILT_RIGHT";
-        expression = "ONE_EYE_SQUINT_RIGHT";
+        expression = "ANGRY_BROWS";
         mouth = "MOUTH_FLIP";
         body = "JELLY_TWIST_RIGHT";
         duration = 1750;
@@ -1119,6 +1174,58 @@ export class BehaviourController {
         mouth = "MOUTH_RELAX";
         body = "BODY_SETTLE";
         duration = 1600;
+        break;
+      case "HAPPY_BOUNCE":
+        expression = "CURIOUS_WIDE";
+        mouth = "MOUTH_O";
+        body = "TINY_SQUISH";
+        duration = 1550;
+        break;
+      case "SHOCKED_RECOIL":
+        gaze = "LOOK_UP";
+        expression = "CURIOUS_WIDE";
+        mouth = "MOUTH_O";
+        body = "BODY_SETTLE";
+        duration = 1750;
+        break;
+      case "CONFUSED_TILT":
+        gaze = "CURIOUS_TILT_LEFT";
+        expression = "ONE_EYE_SQUINT_RIGHT";
+        mouth = "MOUTH_TWITCH";
+        body = "JELLY_TWIST_LEFT";
+        duration = 1700;
+        break;
+      case "SLEEPY_MELT":
+        gaze = "LOOK_DOWN";
+        expression = "SOFT_SQUINT";
+        mouth = "MOUTH_RELAX";
+        body = "BODY_SETTLE";
+        duration = 2100;
+        break;
+      case "LAUGH_SQUISH":
+        expression = "SOFT_SQUINT";
+        mouth = "MOUTH_TWITCH";
+        body = "SIDE_SQUISH_LEFT";
+        duration = 1450;
+        break;
+      case "PLAYFUL_WINK":
+        gaze = "GLANCE_RIGHT";
+        expression = "ONE_EYE_SQUINT_LEFT";
+        mouth = "MOUTH_TWITCH";
+        body = "SOFT_SWAY_RIGHT";
+        duration = 1500;
+        break;
+      case "PANIC_SHAKE":
+        expression = "CURIOUS_WIDE";
+        mouth = "MOUTH_O";
+        body = "JELLY_TWIST_RIGHT";
+        duration = 1300;
+        break;
+      case "PROUD_STRETCH":
+        expression = "CURIOUS_WIDE";
+        mouth = "MOUTH_RELAX";
+        body = "TALL_STRETCH";
+        duration = 1800;
         break;
     }
 
@@ -1235,8 +1342,10 @@ export class BehaviourController {
     this.clearBodyTargets();
     this.spinStartedAt = this.clock;
     this.spinRotation = 0;
-    this.mark("SPIN_360", 980);
-    this.nextBeatAt = Math.max(this.nextBeatAt, this.clock + 1240);
+    this.bodyAction = "SPIN_360";
+    this.bodyReleaseAt = this.clock + 1750;
+    this.mark("SPIN_360", 1750);
+    this.nextBeatAt = Math.max(this.nextBeatAt, this.clock + 2050);
   }
 
   private startWallImpact(
@@ -1248,15 +1357,15 @@ export class BehaviourController {
     const direction = id === "WALL_IMPACT_LEFT" ? -1 : 1;
     const strength = clamp(cfg.squash / 0.032, 0.8, 1.5);
     this.impactDirection = direction;
-    this.impactAt = this.clock + 260;
-    this.bodyXTarget = direction * 13;
-    this.bodyRotationTarget = direction * 2.2;
-    this.massXTarget = direction * 6;
-    this.massRotationTarget = direction * 2.8;
-    this.massSkewYTarget = direction * 2.4;
+    this.impactAt = this.clock + 320;
+    this.bodyXTarget = direction * 16;
+    this.bodyRotationTarget = direction * 2.8;
+    this.massXTarget = direction * 7.5;
+    this.massRotationTarget = direction * 3.8;
+    this.massSkewYTarget = direction * 3.2;
     this.massOriginXTarget = -direction;
-    this.bodyScaleYTarget = 0.018 * strength;
-    this.massScaleYTarget = 0.012 * strength;
+    this.bodyScaleYTarget = 0.025 * strength;
+    this.massScaleYTarget = 0.018 * strength;
     this.bodyAction = id;
     this.bodyReleaseAt = this.clock + 1040;
     this.mark(id, 1500);
@@ -1265,15 +1374,30 @@ export class BehaviourController {
   private updateSpin() {
     if (this.spinStartedAt < 0) return;
     const elapsed = this.clock - this.spinStartedAt;
-    const duration = 880;
+    const duration = 1320;
     const t = clamp01(elapsed / duration);
     // One unwrapped turn. At 360 degrees the orientation is identical to
     // neutral, so clearing to zero after completion does not snap visually.
     this.spinRotation = 360 * smoothstep(t);
+    const wobbleEnvelope = Math.sin(Math.PI * t);
+    const wobble = Math.sin(t * Math.PI * 5.2) * wobbleEnvelope;
+    const bob = Math.sin(t * Math.PI * 2.1) * wobbleEnvelope;
+    this.bodyXTarget = wobble * 3.6;
+    this.bodyYTarget = bob * 1.8;
+    this.bodyRotationTarget = wobble * 4.2;
+    this.bodyScaleYTarget = (-0.04 + bob * 0.022) * wobbleEnvelope;
+    this.massXTarget = wobble * 2.8;
+    this.massYTarget = bob * 1.4;
+    this.massRotationTarget = wobble * 5.1;
+    this.massScaleYTarget = -0.028 * wobbleEnvelope;
+    this.massSkewXTarget = -wobble * 4.2;
+    this.massSkewYTarget = wobble * 3.8;
     if (t >= 1) {
       this.spinStartedAt = -1;
       this.spinRotation = 0;
       this.bodyAction = "SETTLING";
+      this.clearBodyTargets();
+      this.bodyReleaseAt = this.clock + 850;
     }
   }
 
@@ -1338,6 +1462,8 @@ export class BehaviourController {
     this.rightScaleY.target = mood.eyeScaleY;
     this.leftRotation.target = 0;
     this.rightRotation.target = 0;
+    this.leftBrowRotation.target = 0;
+    this.rightBrowRotation.target = 0;
   }
 
   private applyMoodMouthTargets() {
@@ -1381,6 +1507,8 @@ export class BehaviourController {
       this.rightScaleY.step(dt, 6.7, 0.74);
       this.leftRotation.step(dt, 6.4, 0.72);
       this.rightRotation.step(dt, 6.1, 0.74);
+      this.leftBrowRotation.step(dt, 5.4, 0.74);
+      this.rightBrowRotation.step(dt, 5.4, 0.74);
       this.leftTension.step(dt, 7.8, 0.76);
       this.rightTension.step(dt, 7.2, 0.77);
       this.mouthX.step(dt, 6.4, 0.7);
@@ -1439,6 +1567,8 @@ export class BehaviourController {
     this.delta.rightEyeScaleX = this.rightScaleX.value - velocityNarrow * 0.9;
     this.delta.rightEyeScaleY = this.rightScaleY.value + velocityStretch * 0.92;
     this.delta.rightEyeRotation = this.rightRotation.value;
+    this.delta.leftBrowRotation = this.leftBrowRotation.value;
+    this.delta.rightBrowRotation = this.rightBrowRotation.value;
     this.delta.eyeLid = this.blinkLid;
     this.delta.leftEyeTension = this.leftTension.value;
     this.delta.rightEyeTension = this.rightTension.value;
