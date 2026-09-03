@@ -3,14 +3,18 @@
  *
  * R&D ONLY — this file is not wired into the production rig.
  *
- * The neutral anchor table below is not hand-guessed: it was fitted against
- * the master body artwork (public/blob/rig/yellow/body.png). The master's
- * alpha edge was traced radially from its bounding-box centre, ten anchors
- * were placed on the trace extrema (the real lobes, notches and folds), and a
- * closed Catmull-Rom -> cubic Bezier curve through them was then optimised
- * over angle / radius / tension. The result reproduces the master outline to
- * an RMS error of 0.008 and a worst-case error of 0.038 in half-width units —
- * about 0.6px RMS and 2.6px peak at the 240px authored size.
+ * The neutral anchor table is fitted, not hand-guessed. The master's alpha
+ * edge (public/blob/rig/yellow/body.png) was traced radially from its
+ * bounding-box centre; anchors were placed on the extrema of that trace and
+ * on its highest-curvature points, with the widest remaining arcs split so no
+ * stretch of the outline is left unsupported; then angle, radius and per-point
+ * tension were optimised against the trace under an ordering constraint.
+ *
+ * Eighteen anchors reproduce the master outline to an RMS of 0.003 and a
+ * worst case of 0.012 in half-width units — 0.2px and 0.8px at the authored
+ * 240px size. The previous ten-anchor table peaked at 2.6px, all of it on the
+ * right flank around 95-98 degrees, where a single Bezier span had to cover
+ * both the mid-right lobe and the cleft below it and cut the corner off both.
  *
  * Radii are fractions of the body's half-width. Angles are degrees measured
  * from straight up, increasing clockwise on screen (90 = right, 180 = down).
@@ -18,15 +22,23 @@
 
 export type AnchorId =
   | "top"
+  | "topRightDome"
   | "upperRightShoulder"
+  | "upperRightLobe"
   | "midRightLobe"
+  | "rightLobeCleft"
   | "lowerRightLobe"
+  | "lowerRightFold"
   | "bottomRight"
   | "bottomCentre"
   | "bottomLeft"
+  | "lowerLeftFold"
   | "lowerLeftLobe"
+  | "leftLobeCleft"
   | "midLeftLobe"
-  | "upperLeftShoulder";
+  | "upperLeftLobe"
+  | "upperLeftShoulder"
+  | "topLeftDome";
 
 export interface Anchor {
   id: AnchorId;
@@ -39,24 +51,34 @@ export interface Anchor {
 }
 
 /**
- * Ten major shape points, in clockwise order starting at the crown.
+ * Eighteen shape points, clockwise from the crown.
  *
- * The master Blob is deliberately asymmetrical — the right lobe sits lower and
- * wider than the left, the upper-left shoulder is the tightest point on the
- * whole outline, and the crown peaks slightly right of centre. None of that is
- * mirrored or averaged away here.
+ * The master Blob is deliberately asymmetrical and nothing here is mirrored:
+ * the crown peaks right of centre and carries a dome on each side rather than
+ * an apex, the right flank has a lobe, a cleft and a second larger lobe below
+ * it, the left has a shallower pair, the upper-left shoulder is the tightest
+ * point on the whole outline, and the bottom third is the widest and heaviest
+ * part of the body.
  */
 export const NEUTRAL_ANCHORS: readonly Anchor[] = [
-  { id: "top", angle: 4.6, radius: 1.0261, tension: 0.248 },
-  { id: "upperRightShoulder", angle: 47.6, radius: 0.8012, tension: 0.26 },
-  { id: "midRightLobe", angle: 81.2, radius: 0.9091, tension: 0.296 },
-  { id: "lowerRightLobe", angle: 121.6, radius: 1.1021, tension: 0.104 },
-  { id: "bottomRight", angle: 162.8, radius: 0.9789, tension: 0.044 },
-  { id: "bottomCentre", angle: 183.6, radius: 1.0209, tension: 0.248 },
-  { id: "bottomLeft", angle: 203.8, radius: 0.9395, tension: 0.236 },
-  { id: "lowerLeftLobe", angle: 243.4, radius: 1.0871, tension: 0.212 },
-  { id: "midLeftLobe", angle: 281.4, radius: 0.8183, tension: 0.248 },
-  { id: "upperLeftShoulder", angle: 314.6, radius: 0.7408, tension: 0.296 },
+  { id: "top", angle: 6.4, radius: 1.0266, tension: 0.31 },
+  { id: "topRightDome", angle: 25.8, radius: 0.9193, tension: 0.03 },
+  { id: "upperRightShoulder", angle: 43.6, radius: 0.7951, tension: 0.19 },
+  { id: "upperRightLobe", angle: 73.2, radius: 0.9063, tension: 0.24 },
+  { id: "midRightLobe", angle: 95.6, radius: 0.9231, tension: 0.07 },
+  { id: "rightLobeCleft", angle: 106.6, radius: 1.0397, tension: 0.03 },
+  { id: "lowerRightLobe", angle: 120.2, radius: 1.0962, tension: 0.2 },
+  { id: "lowerRightFold", angle: 138.4, radius: 1.0137, tension: 0.16 },
+  { id: "bottomRight", angle: 158.0, radius: 0.9734, tension: 0.11 },
+  { id: "bottomCentre", angle: 182.6, radius: 1.0239, tension: 0.24 },
+  { id: "bottomLeft", angle: 202.8, radius: 0.9335, tension: 0.05 },
+  { id: "lowerLeftFold", angle: 221.8, radius: 0.9829, tension: 0.14 },
+  { id: "lowerLeftLobe", angle: 242.0, radius: 1.087, tension: 0.32 },
+  { id: "leftLobeCleft", angle: 261.4, radius: 0.9569, tension: 0.02 },
+  { id: "midLeftLobe", angle: 283.2, radius: 0.8134, tension: 0.02 },
+  { id: "upperLeftLobe", angle: 298.4, radius: 0.7804, tension: 0.31 },
+  { id: "upperLeftShoulder", angle: 325.8, radius: 0.7536, tension: 0.18 },
+  { id: "topLeftDome", angle: 345.8, radius: 0.9044, tension: 0.04 },
 ] as const;
 
 /** Every value a caller can drive. All are neutral at the documented default. */
@@ -66,7 +88,7 @@ export interface ShapeParams {
   scaleY: number;
   /** Degrees, clockwise, about the body centre. */
   rotation: number;
-  /** Horizontal shear that grows with height — the top trails the base. */
+  /** Arc bend of the upper mass over a planted base. */
   lean: number;
   topHeight: number;
   leftBulge: number;
@@ -106,35 +128,95 @@ export const NEUTRAL_SHAPE: ShapeParams = {
 };
 
 /**
- * How each parameter reaches the anchors.
+ * Where each radial parameter acts, as a lobe on the outline.
  *
- * This is what keeps the deformation local. A uniform transform can only
- * scale the whole outline; these weights let one lobe swell while its
- * neighbours barely move, which is the difference between jelly and a
- * scaled PNG.
+ * With eighteen anchors, naming the affected ones individually stops being
+ * readable and starts being a table nobody can retune. A lobe centre and an
+ * angular half-width is the same information in the terms an animator thinks
+ * in, and it resolves to per-anchor weights below.
  */
-const RADIAL_INFLUENCE: Record<string, Partial<Record<AnchorId, number>>> = {
-  topHeight: { top: 1, upperRightShoulder: 0.34, upperLeftShoulder: 0.34 },
-  leftBulge: { midLeftLobe: 1, upperLeftShoulder: 0.46, lowerLeftLobe: 0.32 },
-  rightBulge: { midRightLobe: 1, upperRightShoulder: 0.46, lowerRightLobe: 0.32 },
-  lowerLeftBulge: { lowerLeftLobe: 1, bottomLeft: 0.52, midLeftLobe: 0.28 },
-  lowerRightBulge: { lowerRightLobe: 1, bottomRight: 0.52, midRightLobe: 0.28 },
-  bottomSag: { bottomCentre: 1, bottomLeft: 0.56, bottomRight: 0.56 },
+interface Lobe {
+  /** Degrees from up, clockwise. */
+  center: number;
+  /** Degrees to either side before the influence reaches zero. */
+  width: number;
+}
+
+const PARAM_LOBES: Partial<Record<keyof ShapeParams, Lobe>> = {
+  topHeight: { center: 4, width: 76 },
+  rightBulge: { center: 88, width: 62 },
+  leftBulge: { center: 276, width: 62 },
+  lowerRightBulge: { center: 126, width: 52 },
+  lowerLeftBulge: { center: 236, width: 52 },
+  bottomSag: { center: 183, width: 58 },
 };
 
+const DEG = Math.PI / 180;
+
+/** Angular distance in degrees, wrapped to 0..180. */
+function arc(a: number, b: number): number {
+  const g = Math.abs(a - b) % 360;
+  return g > 180 ? 360 - g : g;
+}
+
+/** Raised cosine: 1 at the lobe centre, 0 at its edge, smooth in between. */
+function lobeWeight(angle: number, lobe: Lobe): number {
+  const d = arc(angle, lobe.center);
+  if (d >= lobe.width) return 0;
+  return 0.5 * (1 + Math.cos((d / lobe.width) * Math.PI));
+}
+
+/**
+ * Per-anchor weights for each radial parameter, volume-corrected.
+ *
+ * A bare lobe pushes the outline out and nothing pulls it back, so the body
+ * grows a wedge instead of deforming. Real jelly conserves its volume: press
+ * one side in and the rest swells to take it.
+ *
+ * So each parameter gets a wide counter-lobe on the opposite side, and its
+ * coefficient is solved numerically so the parameter's first-order area
+ * change over the whole outline is zero. Area of a radial contour is
+ * ½∫r²dθ, so dA = ∫ r·dr dθ; summing w_i·r_i·dθ_i over the ring and matching
+ * the counter term against the lobe term is that integral discretised.
+ */
+const INFLUENCE: Partial<Record<keyof ShapeParams, number[]>> = (() => {
+  const out: Partial<Record<keyof ShapeParams, number[]>> = {};
+  const n = NEUTRAL_ANCHORS.length;
+
+  // Angular span each anchor stands for, for the discrete area integral.
+  const span = NEUTRAL_ANCHORS.map((a, i) => {
+    const prev = NEUTRAL_ANCHORS[(i - 1 + n) % n].angle;
+    const next = NEUTRAL_ANCHORS[(i + 1) % n].angle;
+    return (arc(a.angle, prev) + arc(a.angle, next)) / 2;
+  });
+
+  for (const key in PARAM_LOBES) {
+    const lobe = PARAM_LOBES[key as keyof ShapeParams] as Lobe;
+    const counter: Lobe = { center: (lobe.center + 180) % 360, width: 118 };
+
+    let lobeArea = 0;
+    let counterArea = 0;
+    const push: number[] = [];
+    const pull: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const a = NEUTRAL_ANCHORS[i];
+      const p = lobeWeight(a.angle, lobe);
+      const c = lobeWeight(a.angle, counter);
+      push.push(p);
+      pull.push(c);
+      lobeArea += p * a.radius * span[i];
+      counterArea += c * a.radius * span[i];
+    }
+    const k = counterArea > 1e-6 ? lobeArea / counterArea : 0;
+    out[key as keyof ShapeParams] = push.map((p, i) => p - k * pull[i]);
+  }
+  return out;
+})();
+
 /** Fixed per-anchor ripple phases. Deterministic, so wobble never flickers. */
-const WOBBLE_PHASE: Record<AnchorId, number> = {
-  top: 0,
-  upperRightShoulder: 1.9,
-  midRightLobe: 3.4,
-  lowerRightLobe: 5.1,
-  bottomRight: 0.7,
-  bottomCentre: 2.6,
-  bottomLeft: 4.3,
-  lowerLeftLobe: 5.9,
-  midLeftLobe: 1.2,
-  upperLeftShoulder: 3.0,
-};
+const WOBBLE_PHASE: number[] = NEUTRAL_ANCHORS.map(
+  (_, i) => (i * 2.399963) % (Math.PI * 2)
+);
 
 export interface Point {
   x: number;
@@ -159,8 +241,6 @@ export interface BlobShape {
   halfWidth: number;
 }
 
-const DEG = Math.PI / 180;
-
 const rotate = (p: Point, rad: number): Point => {
   const c = Math.cos(rad);
   const s = Math.sin(rad);
@@ -180,18 +260,17 @@ export function buildBlobShape(params: ShapeParams, halfWidth: number): BlobShap
   // any future behaviour clips read the way an animator thinks.
   const squash = p.squash - p.stretch;
 
-  const raw: Point[] = NEUTRAL_ANCHORS.map((anchor) => {
+  const raw: Point[] = NEUTRAL_ANCHORS.map((anchor, i) => {
     let radius = anchor.radius;
 
-    for (const key in RADIAL_INFLUENCE) {
-      const weight = RADIAL_INFLUENCE[key][anchor.id];
-      if (!weight) continue;
-      radius += (p[key as keyof ShapeParams] as number) * weight;
+    for (const key in INFLUENCE) {
+      const w = (INFLUENCE[key as keyof ShapeParams] as number[])[i];
+      if (w === 0) continue;
+      radius += (p[key as keyof ShapeParams] as number) * w;
     }
 
     if (p.wobbleAmount !== 0) {
-      radius +=
-        p.wobbleAmount * Math.sin(p.wobblePhase + WOBBLE_PHASE[anchor.id]);
+      radius += p.wobbleAmount * Math.sin(p.wobblePhase + WOBBLE_PHASE[i]);
     }
 
     const a = anchor.angle * DEG;
@@ -213,17 +292,31 @@ export function buildBlobShape(params: ShapeParams, halfWidth: number): BlobShap
       x += Math.sign(x || 1) * squash * side * halfWidth * 0.16;
     }
 
-    // Lean shears the upper mass sideways while the base stays planted.
-    if (p.lean !== 0) {
-      const height = (halfWidth - y) / (halfWidth * 2);
-      x += p.lean * height * height * halfWidth * 0.95;
-    }
-
     return { x, y };
   });
 
+  // Lean bends the body over a planted base rather than shearing it. A shear
+  // slides the top sideways while the vertical spans stay vertical, which
+  // reads as a wedge; rotating each point about a low pivot by an amount that
+  // grows with its height keeps local widths intact, so the body curves.
+  if (p.lean !== 0) {
+    const pivotY = halfWidth * 1.35;
+    for (const q of raw) {
+      const h = (pivotY - q.y) / (pivotY + halfWidth);
+      const t = p.lean * 0.62 * h * h;
+      const c = Math.cos(t);
+      const s = Math.sin(t);
+      const dy = q.y - pivotY;
+      const nx = q.x * c - dy * s;
+      const ny = q.x * s + dy * c;
+      q.x = nx;
+      q.y = ny + pivotY;
+    }
+  }
+
   // Centre shift moves mass rather than the whole body: anchors facing the
-  // shift travel with it, trailing anchors follow only partly and so compress.
+  // shift travel with it while trailing anchors follow only partly and so
+  // compress, which is the same volume-redistribution idea as the lobes.
   const shiftX = p.centerShiftX * halfWidth;
   const shiftY = p.centerShiftY * halfWidth;
   const shiftLen = Math.hypot(shiftX, shiftY);
@@ -317,13 +410,15 @@ const SURFACE_SAMPLES = 96;
 export class SurfaceRing {
   private readonly ring: Point[] = [];
   readonly center: Point;
+  /** Average centroid-to-surface distance; the radius depth 1.0 means. */
+  readonly meanReach: number;
 
   constructor(shape: BlobShape) {
     this.center = shape.center;
     const buckets: (Point | null)[] = new Array(SURFACE_SAMPLES).fill(null);
     for (const seg of shape.segments) {
-      for (let i = 0; i < 24; i++) {
-        const t = i / 24;
+      for (let i = 0; i < 14; i++) {
+        const t = i / 14;
         const u = 1 - t;
         const b0 = u * u * u;
         const b1 = 3 * u * u * t;
@@ -361,12 +456,9 @@ export class SurfaceRing {
     this.meanReach = sum / this.ring.length;
   }
 
-  /** Average centroid-to-surface distance; the radius depth 1.0 corresponds to. */
-  readonly meanReach: number;
-
   /** Surface point at the given angle (degrees from up, clockwise). */
   surfaceAt(angle: number): Point {
-    const t = ((angle % 360) + 360) % 360 / 360 * SURFACE_SAMPLES;
+    const t = ((((angle % 360) + 360) % 360) / 360) * SURFACE_SAMPLES;
     const i = Math.floor(t) % SURFACE_SAMPLES;
     const j = (i + 1) % SURFACE_SAMPLES;
     const f = t - Math.floor(t);

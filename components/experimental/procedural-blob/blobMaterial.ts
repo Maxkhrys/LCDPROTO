@@ -6,21 +6,22 @@
  * compositing. The palettes were sampled out of the master artwork rather
  * than invented.
  *
- * The structure follows what the master actually is, which is not a flat
- * gradient with stripes on it:
+ * The structure follows what the master actually is:
  *
- *   - a bright translucent SHELL filling the whole silhouette,
- *   - several nested SHELL LOBES inset from the outline at different offsets,
- *     whose overlapping edges are what read as internal folds,
- *   - a DEPTH SHADING curve measured off the master, which darkens the
- *     mid-depths where a viewing ray passes through the most gel,
- *   - internal illumination suspended in the core,
- *   - sparks, star flares and bubbles suspended in the core,
- *   - specular highlights on the shell,
- *   - a thin hot rim thread on the outline.
+ *   - a translucent SHELL filling the silhouette,
+ *   - a DEPTH CURVE measured off the master, laid down as nested copies of
+ *     the silhouette so the shading follows the outline rather than a circle,
+ *   - seven named VOLUME LAYERS — a dark core, a front shell, an upper cap,
+ *     three lower folds and a right-side reflection — each a sub-blob filled
+ *     with a soft gradient that fades out before its own edge, so they read
+ *     as masses inside the gel and never as outlines,
+ *   - suspended sparks, bubbles and star flares,
+ *   - specular highlights,
+ *   - a thin rim whose brightness varies by angle.
  *
- * The lobes and the core are traced from the live silhouette, so every fold
- * deforms with the body for free — squash the blob and its folds squash too.
+ * Every layer and feature is derived from the live silhouette or authored in
+ * (angle, depth) around the centroid, so the whole material deforms with the
+ * body for free.
  */
 
 import {
@@ -37,15 +38,15 @@ export type PaletteId = "amber" | "violet";
 export interface Palette {
   id: PaletteId;
   label: string;
-  /** Bright translucent gel between the core and the outline. */
+  /** Translucent gel between the volume layers and the outline. */
   shell: string;
   /** Shell in shadow, toward the base. */
   shellDeep: string;
-  /** The denser inner mass. */
+  /** The dense inner mass. */
   core: string;
-  /** Bottom of the core, where the gel is thickest. */
+  /** Deepest gel, where the body is thickest. */
   coreDeep: string;
-  /** Illumination suspended inside the core. */
+  /** Illumination suspended inside the body. */
   glow: string;
   /** Inner edge of the rim light. */
   rimInner: string;
@@ -58,18 +59,17 @@ export interface Palette {
 /**
  * The master reference supplied for this experiment is the amber body, so it
  * is the default. The violet palette is the production Blob's own colour,
- * sampled from public/blob/rig/body.png, so the same material can be checked
- * against the shipping look.
+ * sampled from public/blob/rig/body.png.
  */
 export const PALETTES: Record<PaletteId, Palette> = {
   amber: {
     id: "amber",
     label: "Amber (master)",
-    shell: "#ffc50a",
-    shellDeep: "#d18f01",
-    core: "#a86e01",
-    coreDeep: "#2c1a00",
-    glow: "#ffb400",
+    shell: "#ffbe05",
+    shellDeep: "#c58001",
+    core: "#7a5001",
+    coreDeep: "#231400",
+    glow: "#ffa500",
     rimInner: "#ffd21a",
     rimOuter: "#fff6c0",
     spark: "#fff2b0",
@@ -78,10 +78,10 @@ export const PALETTES: Record<PaletteId, Palette> = {
     id: "violet",
     label: "Violet (production)",
     shell: "#4a0dc4",
-    shellDeep: "#26025f",
-    core: "#1c0148",
-    coreDeep: "#04000c",
-    glow: "#7b3df5",
+    shellDeep: "#230157",
+    core: "#170140",
+    coreDeep: "#03000a",
+    glow: "#6a1fe8",
     rimInner: "#6f0af0",
     rimOuter: "#d9c2ff",
     spark: "#e6d4ff",
@@ -89,42 +89,17 @@ export const PALETTES: Record<PaletteId, Palette> = {
 };
 
 /**
- * A nested copy of the silhouette.
- *
- * Offsets are fractions of the half-width. Each lobe is a translucent sheet
- * of gel; where two of them overlap the master shows a brighter crease, and
- * so does this.
- */
-interface Lobe {
-  scale: number;
-  dx: number;
-  dy: number;
-  /** Degrees, to break the nesting so it does not read as concentric rings. */
-  rot: number;
-  fill: number;
-  edge: number;
-}
-
-/** Read off the master: the folds run low and to the right, plus a crown lobe. */
-const LOBES: readonly Lobe[] = [
-  { scale: 0.95, dx: 0.03, dy: -0.05, rot: -4, fill: 0.07, edge: 0.32 },
-  { scale: 0.88, dx: 0.11, dy: 0.06, rot: 7, fill: 0.06, edge: 0.3 },
-  { scale: 0.86, dx: -0.09, dy: 0.14, rot: -9, fill: 0.06, edge: 0.28 },
-  { scale: 0.74, dx: 0.05, dy: 0.24, rot: 5, fill: 0.05, edge: 0.25 },
-  { scale: 0.66, dx: -0.16, dy: -0.02, rot: 12, fill: 0.045, edge: 0.2 },
-] as const;
-
-/** The dense inner mass, as a fraction of the silhouette. */
-/**
- * Measured off the master: [depth, deep-tone alpha]. See the comment at the
- * depth-shading layer for how this curve was read.
+ * Measured off the master: [depth, deep-tone alpha] from the centroid out to
+ * the surface. Not a simple falloff — the master is dark in the core, darkest
+ * around 45% of the way out where a viewing ray passes through the most gel,
+ * then climbs steeply into the shell and rim.
  */
 const DEPTH_PROFILE: readonly [number, number][] = [
   [1, 0],
-  [0.93, 0.02],
-  [0.82, 0.2],
-  [0.65, 0.7],
-  [0.45, 0.87],
+  [0.93, 0.04],
+  [0.82, 0.1],
+  [0.65, 0.46],
+  [0.45, 0.76],
 ];
 
 /** How many nested shells approximate that curve. */
@@ -143,6 +118,106 @@ function depthAlpha(d: number): number {
   return p[p.length - 1][1];
 }
 
+/**
+ * One internal mass, expressed as a sub-blob of the silhouette.
+ *
+ * Offsets are fractions of the half-width. Each layer is filled with a
+ * radial gradient that reaches zero alpha before the layer's own contour, so
+ * it reads as a body of gel rather than a drawn shape. `lip` adds a faint
+ * catch of light along the contour — enough to suggest a fold edge, far short
+ * of an outline.
+ */
+interface VolumeLayer {
+  id: string;
+  scale: number;
+  dx: number;
+  dy: number;
+  /** Degrees, to break the nesting so it does not read as concentric rings. */
+  rot: number;
+  /** Where the gradient is brightest, in (angle, depth) of the layer itself. */
+  focusAngle: number;
+  focusDepth: number;
+  /**
+   * Direction of the contour arc that actually shows, in degrees from up.
+   *
+   * A layer offset upward has its readable edge along its underside, not its
+   * top — the top is off the body and gets clipped away. Reusing the focus
+   * angle here puts the fold's brightest point outside the silhouette and
+   * only its faint tail survives, which is why the folds have to name their
+   * visible edge separately.
+   */
+  lipAngle: number;
+  /** Tone: 'dark' deepens, 'light' lifts. */
+  dark?: boolean;
+  alpha: number;
+  lip: number;
+}
+
+/**
+ * The seven masses read off the master, roughly back to front.
+ *
+ * The master is not one gradient: it is a stack of overlapping translucent
+ * bodies, and the places where two of them overlap are what give it weight.
+ */
+const VOLUMES: readonly VolumeLayer[] = [
+  // A broad dark mass filling the middle, sitting slightly high.
+  { id: "core", scale: 0.76, dx: 0.0, dy: -0.06, rot: 0, focusAngle: 190, focusDepth: 0.35, dark: true, alpha: 0.24, lipAngle: 0, lip: 0 },
+  // The large translucent front shell, lit from its upper left.
+  { id: "frontShell", scale: 0.88, dx: 0.03, dy: 0.09, rot: -5, focusAngle: 320, focusDepth: 0.28, alpha: 0.42, lipAngle: 168, lip: 0.24 },
+  // The cap over the crown, and three folds across the heavy lower third.
+  //
+  // Each of these is offset far enough that only a shallow cap of it crosses
+  // the body. That is what puts its visible edge out in the outer third,
+  // running roughly parallel to the outline, which is where the master's
+  // folds sit — a mass centred on the body instead draws its edge straight
+  // through the middle, and the core should stay clean.
+  { id: "upperCap", scale: 0.92, dx: 0.12, dy: -1.4, rot: -6, focusAngle: 0, focusDepth: 0.5, alpha: 0.22, lipAngle: 178, lip: 0.34 },
+  { id: "lowerLeftFold", scale: 0.8, dx: -0.5, dy: 1.18, rot: -12, focusAngle: 250, focusDepth: 0.5, alpha: 0.2, lipAngle: 30, lip: 0.34 },
+  { id: "lowerCentreFold", scale: 0.96, dx: 0.02, dy: 1.46, rot: 4, focusAngle: 190, focusDepth: 0.5, alpha: 0.19, lipAngle: 4, lip: 0.32 },
+  { id: "lowerRightFold", scale: 0.8, dx: 0.58, dy: 1.12, rot: 10, focusAngle: 130, focusDepth: 0.5, alpha: 0.2, lipAngle: 332, lip: 0.34 },
+  // A subtle inner reflection down the right flank.
+  { id: "rightReflection", scale: 0.8, dx: 1.05, dy: -0.06, rot: 6, focusAngle: 90, focusDepth: 0.5, alpha: 0.17, lipAngle: 264, lip: 0.3 },
+] as const;
+
+/**
+ * Rim intensity by angle, read off the master: hot along the whole lower
+ * perimeter and on the side lobes, quiet across the upper right and the
+ * crown. A rim of even brightness is what makes a coded blob look like a
+ * vector shape with a stroke on it.
+ */
+const RIM_PROFILE: readonly [number, number][] = [
+  [0, 0.3],
+  [30, 0.22],
+  [50, 0.2],
+  [75, 0.5],
+  [100, 0.9],
+  [122, 0.95],
+  [145, 1],
+  [183, 1],
+  [208, 0.96],
+  [242, 1],
+  [266, 0.72],
+  [288, 0.72],
+  [318, 0.46],
+  [345, 0.36],
+];
+
+/** Cyclic linear read of RIM_PROFILE. */
+function rimAt(angle: number): number {
+  const a = ((angle % 360) + 360) % 360;
+  const p = RIM_PROFILE;
+  for (let i = 0; i < p.length; i++) {
+    const cur = p[i];
+    const next = p[(i + 1) % p.length];
+    const end = i === p.length - 1 ? next[0] + 360 : next[0];
+    if (a >= cur[0] && a < end) {
+      return cur[1] + (next[1] - cur[1]) * ((a - cur[0]) / (end - cur[0]));
+    }
+  }
+  return p[0][1];
+}
+
+/** Positions authored against the master's bounding box, in 0..1 uv. */
 interface Uv {
   u: number;
   v: number;
@@ -155,7 +230,11 @@ interface FeatureSpec {
   depth: number;
 }
 
-/** Measured off the master: the bright regions that survive at 240px. */
+/**
+ * Measured off the master. Three readable speculars plus two faint catches —
+ * the master has no single dominant hotspot, it has a family of them at
+ * different strengths.
+ */
 const HIGHLIGHTS: {
   at: Uv;
   rx: number;
@@ -163,23 +242,23 @@ const HIGHLIGHTS: {
   tilt: number;
   alpha: number;
 }[] = [
-  // The signature elongated specular on the upper-left shoulder.
-  { at: { u: 0.275, v: 0.3 }, rx: 0.12, ry: 0.245, tilt: -0.62, alpha: 1 },
-  // The crown streak, running along the top edge to the right of centre.
-  { at: { u: 0.5, v: 0.085 }, rx: 0.072, ry: 0.175, tilt: 1.15, alpha: 0.95 },
+  // The large soft specular on the upper-left shoulder.
+  { at: { u: 0.278, v: 0.305 }, rx: 0.115, ry: 0.235, tilt: -0.6, alpha: 0.88 },
+  // The smaller crown highlight, right of centre on the top edge.
+  { at: { u: 0.5, v: 0.085 }, rx: 0.07, ry: 0.165, tilt: 1.15, alpha: 0.82 },
   // Subtle reflection down the right flank.
-  { at: { u: 0.79, v: 0.31 }, rx: 0.035, ry: 0.085, tilt: -0.25, alpha: 0.5 },
+  { at: { u: 0.79, v: 0.3 }, rx: 0.04, ry: 0.1, tilt: -0.25, alpha: 0.46 },
   // Small catch on the lower-left lobe.
-  { at: { u: 0.09, v: 0.76 }, rx: 0.04, ry: 0.055, tilt: -0.9, alpha: 0.55 },
-  // Faint catch under the main specular.
-  { at: { u: 0.19, v: 0.45 }, rx: 0.03, ry: 0.05, tilt: -0.5, alpha: 0.3 },
+  { at: { u: 0.09, v: 0.76 }, rx: 0.04, ry: 0.055, tilt: -0.9, alpha: 0.5 },
+  // Faint catch trailing under the main specular.
+  { at: { u: 0.19, v: 0.45 }, rx: 0.03, ry: 0.05, tilt: -0.5, alpha: 0.26 },
 ];
 
 /** Bright four-point flares in the core, as in the master. */
 const FLARES: { at: Uv; size: number; alpha: number }[] = [
-  { at: { u: 0.41, v: 0.5 }, size: 0.11, alpha: 0.85 },
-  { at: { u: 0.6, v: 0.55 }, size: 0.13, alpha: 0.95 },
-  { at: { u: 0.25, v: 0.6 }, size: 0.07, alpha: 0.5 },
+  { at: { u: 0.41, v: 0.5 }, size: 0.11, alpha: 0.8 },
+  { at: { u: 0.6, v: 0.55 }, size: 0.13, alpha: 0.9 },
+  { at: { u: 0.25, v: 0.6 }, size: 0.07, alpha: 0.45 },
 ];
 
 interface Particle {
@@ -236,8 +315,6 @@ function features(): MaterialFeatures {
 
   const rand = mulberry(0x5f0b);
   const particles: Particle[] = [];
-  // Sparse star-like specks, concentrated in the core the way the master's
-  // are, and kept off the rim so the outline stays clean.
   for (let i = 0; i < 52; i++) {
     particles.push({
       spec: { angle: rand() * 360, depth: 0.05 + rand() * rand() * 0.72 },
@@ -246,7 +323,6 @@ function features(): MaterialFeatures {
       bubble: false,
     });
   }
-  // A handful of bubbles, biased low where the master has them.
   for (let i = 0; i < 6; i++) {
     particles.push({
       spec: { angle: 110 + rand() * 180, depth: 0.45 + rand() * 0.4 },
@@ -275,7 +351,24 @@ function withAlpha(hex: string, alpha: number): string {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
-/** Traces the silhouette scaled and offset about its own centroid. */
+/** Maps a silhouette point into a sub-blob's space. */
+function lobeMapper(shape: BlobShape, scale: number, dx: number, dy: number, rot: number) {
+  const c = shape.center;
+  const hw = shape.halfWidth;
+  const r = (rot * Math.PI) / 180;
+  const cos = Math.cos(r);
+  const sin = Math.sin(r);
+  return (p: Point): Point => {
+    const x = (p.x - c.x) * scale;
+    const y = (p.y - c.y) * scale;
+    return {
+      x: c.x + x * cos - y * sin + dx * hw,
+      y: c.y + x * sin + y * cos + dy * hw,
+    };
+  };
+}
+
+/** Traces the silhouette scaled, rotated and offset about its own centroid. */
 function traceLobe(
   ctx: CanvasRenderingContext2D,
   shape: BlobShape,
@@ -284,19 +377,7 @@ function traceLobe(
   dy: number,
   rot = 0
 ) {
-  const c = shape.center;
-  const hw = shape.halfWidth;
-  const r = (rot * Math.PI) / 180;
-  const cos = Math.cos(r);
-  const sin = Math.sin(r);
-  const map = (p: Point): Point => {
-    const x = (p.x - c.x) * scale;
-    const y = (p.y - c.y) * scale;
-    return {
-      x: c.x + x * cos - y * sin + dx * hw,
-      y: c.y + x * sin + y * cos + dy * hw,
-    };
-  };
+  const map = lobeMapper(shape, scale, dx, dy, rot);
   const s = shape.segments;
   ctx.beginPath();
   const start = map(s[0].p0);
@@ -332,45 +413,33 @@ export function paintBlobBody(
   const ring = new SurfaceRing(shape);
   const hw = shape.halfWidth;
   const b = shape.bounds;
+
   // Every full-body wash is bounded to the silhouette's own box plus a small
   // margin. Filling a generous square instead costs about four times the
   // pixels for nothing, and these washes are the bulk of the frame.
   const pad = hw * 0.12;
   const fillAll = () =>
-    ctx.fillRect(
-      b.minX - pad,
-      b.minY - pad,
-      b.maxX - b.minX + pad * 2,
-      b.maxY - b.minY + pad * 2
-    );
+    ctx.fillRect(b.minX - pad, b.minY - pad, b.maxX - b.minX + pad * 2, b.maxY - b.minY + pad * 2);
 
   ctx.save();
   tracePath(ctx, shape);
   ctx.clip();
 
-  // 1. SHELL — the bright translucent gel, densest and darkest at the base.
+  // 1. SHELL — the translucent gel, densest and darkest at the base.
   const shell = ctx.createLinearGradient(0, b.minY, 0, b.maxY);
   shell.addColorStop(0, palette.shell);
   shell.addColorStop(0.5, palette.shell);
-  shell.addColorStop(0.88, palette.shellDeep);
+  shell.addColorStop(0.86, palette.shellDeep);
   shell.addColorStop(1, palette.shellDeep);
   ctx.fillStyle = shell;
   fillAll();
 
-  // 2. DEPTH SHADING — the single most important layer for making this read
-  // as a volume rather than a vector fill.
-  //
-  // The master's luminance profile, measured from its centroid out to the
-  // surface, is not a simple falloff: it is moderately dark in the core,
-  // darkest around 45% of the way out (where a viewing ray passes through the
-  // most gel) and then climbs steeply into the hot shell and rim.
-  //
-  // A radial gradient gets the curve right but the wrong shape — it leaves
-  // the lobes pale and the flats dark. So the curve is laid down as nested
-  // copies of the silhouette instead, which puts the bright shell band at a
-  // constant distance inside the outline the whole way round, and deforms
-  // with the body. Each shell carries only the alpha needed to reach the
-  // measured cumulative value, so the stack composites to the profile.
+  // 2. DEPTH SHADING — the measured luminance curve, laid down as nested
+  // copies of the silhouette. A radial gradient gets the curve right but the
+  // wrong shape: it leaves the lobes pale and the flats dark. Nested
+  // silhouettes keep the bright shell band a constant distance inside the
+  // outline the whole way round, and deform with the body. Each shell carries
+  // only the alpha needed to reach the measured cumulative value.
   let reached = 0;
   for (let i = 1; i <= DEPTH_STEPS; i++) {
     const d = 1 - (i / DEPTH_STEPS) * (1 - 0.42);
@@ -389,39 +458,64 @@ export function paintBlobBody(
   // The gel is thickest at the base, so the lower body sits deeper still.
   const deep = ctx.createLinearGradient(0, c.y, 0, b.maxY);
   deep.addColorStop(0, withAlpha(palette.coreDeep, 0));
-  deep.addColorStop(1, withAlpha(palette.coreDeep, 0.34));
+  deep.addColorStop(1, withAlpha(palette.coreDeep, 0.4));
   ctx.fillStyle = deep;
   fillAll();
 
-  // 3. SHELL LOBES — nested sheets of gel. Their overlapping edges are the
-  // internal folds; because they are traced from the live silhouette they
-  // deform with the body rather than sliding across it.
-  ctx.lineJoin = "round";
-  for (const lobe of LOBES) {
-    traceLobe(ctx, shape, lobe.scale, lobe.dx, lobe.dy, lobe.rot);
-    ctx.fillStyle = withAlpha(palette.shell, lobe.fill);
-    ctx.fill();
-    ctx.strokeStyle = withAlpha(palette.rimInner, lobe.edge);
-    ctx.lineWidth = hw * 0.014;
-    ctx.stroke();
-  }
-
-  // 4. INTERNAL ILLUMINATION — light suspended inside the core, slightly high
-  // and left, which is what stops the middle reading as a hole.
+  // 3. INTERNAL ILLUMINATION — light suspended in the body, high and left,
+  // which is what stops the middle reading as a hole. It goes down before the
+  // volume layers, not after: the masses float in front of the light, and a
+  // wash laid over them would flatten every fold edge back out again.
   const litAt = ring.at(345 + highlightShift * 40, 0.28);
-  const lit = ctx.createRadialGradient(litAt.x, litAt.y, 0, litAt.x, litAt.y, reach * 0.95);
-  lit.addColorStop(0, withAlpha(palette.glow, 0.62));
-  lit.addColorStop(0.5, withAlpha(palette.glow, 0.3));
+  const lit = ctx.createRadialGradient(litAt.x, litAt.y, 0, litAt.x, litAt.y, reach * 0.7);
+  lit.addColorStop(0, withAlpha(palette.glow, 0.74));
+  lit.addColorStop(0.5, withAlpha(palette.glow, 0.36));
   lit.addColorStop(1, withAlpha(palette.glow, 0));
   ctx.fillStyle = lit;
   fillAll();
+
+  // 4. VOLUME LAYERS — the seven internal masses. Each is clipped to its own
+  // sub-blob and filled with a gradient that fades to nothing before that
+  // contour, so what shows is a body of gel, not a drawn shape.
+  for (const v of VOLUMES) {
+    ctx.save();
+    traceLobe(ctx, shape, v.scale, v.dx, v.dy, v.rot);
+    ctx.clip();
+
+    const map = lobeMapper(shape, v.scale, v.dx, v.dy, v.rot);
+    const focus = map(ring.at(v.focusAngle, v.focusDepth));
+    const radius = reach * v.scale * 0.95;
+    const tone = v.dark ? palette.coreDeep : palette.shell;
+    const g = ctx.createRadialGradient(focus.x, focus.y, 0, focus.x, focus.y, radius);
+    g.addColorStop(0, withAlpha(tone, v.alpha));
+    g.addColorStop(0.5, withAlpha(tone, v.alpha * 0.62));
+    g.addColorStop(1, withAlpha(tone, 0));
+    ctx.fillStyle = g;
+    fillAll();
+    ctx.restore();
+
+    // A faint catch of light along the mass's own contour. Enough to suggest
+    // a fold edge; well short of an outline.
+    if (v.lip > 0) {
+      traceLobe(ctx, shape, v.scale, v.dx, v.dy, v.rot);
+      const lipAt = map(ring.at(v.lipAngle, 1));
+      const lip = ctx.createRadialGradient(lipAt.x, lipAt.y, 0, lipAt.x, lipAt.y, radius * 0.95);
+      // Warm, not white: a near-white fold edge reads as a pencil line over
+      // the gel rather than light caught in it.
+      lip.addColorStop(0, withAlpha(palette.rimInner, v.lip));
+      lip.addColorStop(0.4, withAlpha(palette.shell, v.lip * 0.6));
+      lip.addColorStop(1, withAlpha(palette.shell, 0));
+      ctx.strokeStyle = lip;
+      ctx.lineWidth = hw * 0.03;
+      ctx.stroke();
+    }
+  }
 
   // 5. PARTICLES — deterministic, generated once, never regenerated per frame.
   for (const p of f.particles) {
     const at = ring.at(p.spec.angle, p.spec.depth);
     const r = p.size * hw;
     if (p.bubble) {
-      // A bubble is a wall plus a tiny catchlight, not a filled dot.
       ctx.beginPath();
       ctx.arc(at.x, at.y, r, 0, Math.PI * 2);
       ctx.strokeStyle = withAlpha(palette.spark, p.alpha);
@@ -466,7 +560,7 @@ export function paintBlobBody(
     ctx.stroke();
   }
 
-  // 7. SPECULAR — soft elliptical gradients on the shell, no blur filter.
+  // 7. SPECULAR — soft elliptical gradients, no blur filter.
   for (const hl of f.highlights) {
     const at = ring.at(hl.angle + highlightShift * 26, hl.depth);
     ctx.save();
@@ -475,7 +569,7 @@ export function paintBlobBody(
     ctx.scale(hl.rx, hl.ry);
     const g = ctx.createRadialGradient(0, 0, 0, 0, 0, hw);
     g.addColorStop(0, `rgba(255, 255, 255, ${hl.alpha})`);
-    g.addColorStop(0.45, `rgba(255, 255, 255, ${hl.alpha * 0.72})`);
+    g.addColorStop(0.45, `rgba(255, 255, 255, ${hl.alpha * 0.7})`);
     g.addColorStop(0.78, withAlpha(palette.rimOuter, hl.alpha * 0.25));
     g.addColorStop(1, withAlpha(palette.rimOuter, 0));
     ctx.fillStyle = g;
@@ -485,30 +579,61 @@ export function paintBlobBody(
     ctx.restore();
   }
 
-  // 8. RIM — stroked inside the clip so only the inner half of the line
-  // survives. That keeps the light thread hard against the silhouette
-  // instead of blooming outward into a halo.
-  const s = opts.rimStrength;
-  const wide = ctx.createLinearGradient(0, b.minY, 0, b.maxY);
-  wide.addColorStop(0, withAlpha(palette.rimInner, 0.8 * s));
-  wide.addColorStop(0.3, withAlpha(palette.rimInner, 0.95 * s));
-  wide.addColorStop(0.72, withAlpha(palette.rimInner, 1 * s));
-  wide.addColorStop(1, withAlpha(palette.rimInner, 0.95 * s));
-  tracePath(ctx, shape);
-  ctx.strokeStyle = wide;
-  ctx.lineWidth = hw * 0.2;
-  ctx.stroke();
-
-  tracePath(ctx, shape);
-  ctx.strokeStyle = withAlpha(palette.rimOuter, 0.5 * s);
-  ctx.lineWidth = hw * 0.07;
-  ctx.stroke();
-
-  // The hot thread itself: thin, and clipped to half its width.
-  tracePath(ctx, shape);
-  ctx.strokeStyle = withAlpha(palette.rimOuter, 0.95 * s);
-  ctx.lineWidth = hw * 0.018;
-  ctx.stroke();
+  // 8. RIM — thin, crisp, and uneven.
+  //
+  // Canvas cannot vary a stroke's alpha along a path, and a single even
+  // stroke is exactly what makes a coded blob read as a vector shape. So the
+  // rim is walked as short arcs of the surface ring, each carrying its own
+  // intensity from RIM_PROFILE, with a one-step overlap so there are no
+  // seams. All of it is inside the clip, so only the inner half of each line
+  // survives and the edge stays hard rather than blooming into a halo.
+  paintRim(ctx, ring, hw, palette, opts.rimStrength);
 
   ctx.restore();
+}
+
+const RIM_ARCS = 32;
+const RIM_SAMPLES = 96;
+
+function paintRim(
+  ctx: CanvasRenderingContext2D,
+  ring: SurfaceRing,
+  hw: number,
+  palette: Palette,
+  strength: number
+) {
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  const per = RIM_SAMPLES / RIM_ARCS;
+
+  for (let pass = 0; pass < 2; pass++) {
+    // Pass 0 is the soft inner bloom, pass 1 the hot thread on top of it.
+    const width = pass === 0 ? hw * 0.3 : hw * 0.062;
+    const colour = pass === 0 ? palette.rimInner : palette.rimOuter;
+    const base = pass === 0 ? 1 : 1;
+
+    for (let arcIndex = 0; arcIndex < RIM_ARCS; arcIndex++) {
+      const from = arcIndex * per;
+      const mid = ((from + per / 2) / RIM_SAMPLES) * 360;
+      const intensity = rimAt(mid);
+      const alpha = base * intensity * strength;
+      if (alpha < 0.01) continue;
+      // Intensity thins the line as well as dimming it. A rim that only
+      // fades keeps its full width all the way round and still reads as a
+      // stroke on a vector shape; the master's edge is a hot band low down
+      // and barely a thread across the crown.
+      const arcWidth = width * (0.34 + 0.66 * intensity);
+
+      ctx.beginPath();
+      for (let s = 0; s <= per + 1; s++) {
+        const angle = ((from + s) / RIM_SAMPLES) * 360;
+        const p = ring.surfaceAt(angle);
+        if (s === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      }
+      ctx.strokeStyle = withAlpha(colour, alpha);
+      ctx.lineWidth = arcWidth;
+      ctx.stroke();
+    }
+  }
 }
