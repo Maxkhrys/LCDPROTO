@@ -11,6 +11,7 @@ import {
   type BlobFrame,
 } from "@/lib/blobConfig";
 import { anchorOf, computeLayout, frameScale } from "./blobLayout";
+import { drawDownscaled } from "./downscale";
 
 interface BlobStageProps {
   /** Native screen size in pixels (240). */
@@ -22,6 +23,12 @@ interface BlobStageProps {
   runId: number;
   fps: number;
   calibration?: BlobCalibration;
+  /**
+   * Pixels rasterised per 240-space pixel. All drawing stays in 240-space —
+   * this only decides how finely it is sampled, so the artwork survives being
+   * magnified on a desktop display. 1 shows true hardware pixels.
+   */
+  renderScale: number;
 }
 
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2);
@@ -42,6 +49,7 @@ export default function BlobStage({
   runId,
   fps,
   calibration = DEFAULT_CALIBRATION,
+  renderScale,
 }: BlobStageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [images, setImages] = useState<Record<BlobFrame, HTMLImageElement> | null>(
@@ -102,11 +110,13 @@ export default function BlobStage({
 
     const bake = (frame: BlobFrame, masked: boolean) => {
       const buf = document.createElement("canvas");
-      buf.width = size;
-      buf.height = size;
+      buf.width = size * renderScale;
+      buf.height = size * renderScale;
       const bctx = buf.getContext("2d");
       if (!bctx) return buf;
       bctx.imageSmoothingQuality = "high";
+      // Draw in 240-space; the backing store just carries more samples.
+      bctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
 
       const a = anchorOf(BLOB_ASSETS[frame]);
       const asset = BLOB_ASSETS[frame];
@@ -115,8 +125,11 @@ export default function BlobStage({
       const ax = layout.anchorX + cal.offsetX;
       const ay = layout.anchorY + cal.offsetY;
 
-      bctx.drawImage(
+      drawDownscaled(
+        bctx,
         images[frame],
+        asset.width,
+        asset.height,
         ax - a.midX * s,
         ay - a.midY * s,
         asset.width * s,
@@ -147,13 +160,14 @@ export default function BlobStage({
     };
 
     return { body: bake("home", false), face: bake("reaction", true) };
-  }, [images, size, calibration]);
+  }, [images, size, calibration, renderScale]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx || !layers) return;
 
+    ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
     const center = size / 2;
     const target = expression === "reaction" ? 1 : 0;
     const faceDuration = REACTION.faceEnd - REACTION.faceStart;
@@ -205,10 +219,10 @@ export default function BlobStage({
       ctx.translate(center, center + float);
       ctx.scale(scale, scale);
       ctx.translate(-center, -center);
-      ctx.drawImage(layers.body, 0, 0);
+      ctx.drawImage(layers.body, 0, 0, size, size);
       if (p > 0.001) {
         ctx.globalAlpha = easeInOut(p);
-        ctx.drawImage(layers.face, 0, 0);
+        ctx.drawImage(layers.face, 0, 0, size, size);
         ctx.globalAlpha = 1;
       }
       ctx.restore();
@@ -262,15 +276,20 @@ export default function BlobStage({
     if (playing) frameId = requestAnimationFrame(loop);
 
     return () => cancelAnimationFrame(frameId);
-  }, [layers, size, expression, playing, speed, fps]);
+  }, [layers, size, expression, playing, speed, fps, renderScale]);
 
   return (
     <canvas
       ref={canvasRef}
-      width={size}
-      height={size}
+      width={size * renderScale}
+      height={size * renderScale}
       className="block rounded-full bg-black"
-      style={{ width: size, height: size }}
+      style={{
+        width: size,
+        height: size,
+        // At 1:1 show real hardware pixels rather than a smoothed guess.
+        imageRendering: renderScale === 1 ? "pixelated" : "auto",
+      }}
     />
   );
 }

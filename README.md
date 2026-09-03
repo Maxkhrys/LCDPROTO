@@ -31,9 +31,24 @@ lib/deviceConfig.ts      resolution, bezel, fps/speed options
 lib/deviceStates.ts      DeviceState type, state table, StateViewProps
 ```
 
-Everything inside the panel is authored at the native 240×240 resolution and
-scaled up as a whole, so the prototype can never rely on more pixels than the
-hardware has.
+## Design space vs rasterisation
+
+Everything inside the panel is **laid out and animated in 240×240 space**, so
+the prototype can never rely on more pixels than the hardware has.
+
+Rasterisation is a separate concern. Drawing into a literal 240×240 buffer and
+magnifying it to ~500pt on a desktop display throws away ~87% of the artwork's
+linear detail and looks mushy — softness the real 32mm panel will not have. So
+the canvas backing store is sized to the resolution the panel is actually
+displayed at (`renderScale`, capped at 4×), while every coordinate stays in
+240-space. Design fidelity is unchanged; only sampling improves.
+
+The **1:1** dev button forces a true 240×240 buffer with nearest-neighbour
+scaling, to check exactly what the hardware will show.
+
+Large source art is downscaled by repeated halving (`components/blob/downscale.ts`)
+rather than one big `drawImage`, which canvas does with cheap bilinear
+filtering.
 
 ## Blob character (HOME -> REACTION)
 

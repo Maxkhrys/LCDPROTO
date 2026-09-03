@@ -35,6 +35,16 @@ export default function DeviceSimulator() {
   const [calibration, setCalibration] =
     useState<BlobCalibration>(DEFAULT_CALIBRATION);
   const [showCalibration, setShowCalibration] = useState(false);
+  /** When true the panel rasterises at exactly 240x240 — real hardware pixels. */
+  const [nativePixels, setNativePixels] = useState(false);
+  const [dpr, setDpr] = useState(1);
+
+  useEffect(() => {
+    const read = () => setDpr(window.devicePixelRatio || 1);
+    read();
+    window.addEventListener("resize", read);
+    return () => window.removeEventListener("resize", read);
+  }, []);
 
   // The outer size is decided by CSS so there is no layout shift; JS only
   // measures it to work out the 240 -> CSS pixel scale factor.
@@ -56,12 +66,22 @@ export default function DeviceSimulator() {
     setState(DEFAULT_STATE);
     setSpeed(1);
     setPlaying(true);
+    setNativePixels(false);
     setCalibration(DEFAULT_CALIBRATION);
     setRunId((n) => n + 1);
   }, []);
 
   const screenSize = Math.round(outerSize / BEZEL_FACTOR);
   const meta = getStateMeta(state);
+
+  // Rasterise at the resolution the panel is actually displayed at, so the
+  // 240-space design is sampled finely enough to survive magnification.
+  const renderScale = nativePixels
+    ? 1
+    : Math.min(
+        4,
+        Math.max(1, Math.ceil((screenSize * dpr) / DEVICE_CONFIG.resolution))
+      );
 
   return (
     <div className="flex w-full flex-col items-center gap-7 sm:gap-8">
@@ -79,6 +99,7 @@ export default function DeviceSimulator() {
             runId={runId}
             fps={fps}
             calibration={calibration}
+            renderScale={renderScale}
           />
         </DeviceBezel>
       </div>
@@ -131,6 +152,13 @@ export default function DeviceSimulator() {
         </DevGroup>
 
         <DevButton
+          active={nativePixels}
+          onClick={() => setNativePixels((v) => !v)}
+        >
+          1:1
+        </DevButton>
+
+        <DevButton
           active={showCalibration}
           onClick={() => setShowCalibration((v) => !v)}
         >
@@ -157,6 +185,10 @@ export default function DeviceSimulator() {
           /
         </span>
         <span>{fps} fps</span>
+        <span aria-hidden className="text-white/10">
+          /
+        </span>
+        <span>{nativePixels ? "1:1 pixels" : `${renderScale}x sampled`}</span>
         <span aria-hidden className="text-white/10">
           /
         </span>

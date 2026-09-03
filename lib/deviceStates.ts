@@ -59,4 +59,10 @@ export interface StateViewProps {
   fps: number;
   /** Temporary reaction-frame calibration from the dev controls. */
   calibration: BlobCalibration;
+  /**
+   * Pixels rasterised per 240-space pixel. Layout and animation always work in
+   * 240-space; this only controls sampling fidelity so artwork stays sharp when
+   * the panel is magnified on a desktop display. 1 = true hardware pixels.
+   */
+  renderScale: number;
 }
