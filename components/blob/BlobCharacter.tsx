@@ -183,6 +183,41 @@ function eyePalette(colour: BlobColour) {
         wash: "rgba(108, 217, 75, 0.38)",
         washEdge: "rgba(108, 217, 75, 0)",
       };
+    case "blue":
+      return {
+        shade: "#082b58",
+        rim: "#1c75c7",
+        wash: "rgba(64, 170, 255, 0.38)",
+        washEdge: "rgba(64, 170, 255, 0)",
+      };
+    case "red":
+      return {
+        shade: "#4b0d19",
+        rim: "#c92b3d",
+        wash: "rgba(255, 80, 76, 0.38)",
+        washEdge: "rgba(255, 80, 76, 0)",
+      };
+    case "pink":
+      return {
+        shade: "#4a0a35",
+        rim: "#d72a83",
+        wash: "rgba(255, 83, 190, 0.4)",
+        washEdge: "rgba(255, 83, 190, 0)",
+      };
+    case "orange":
+      return {
+        shade: "#4b2105",
+        rim: "#d96d16",
+        wash: "rgba(255, 156, 45, 0.38)",
+        washEdge: "rgba(255, 156, 45, 0)",
+      };
+    case "galaxy":
+      return {
+        shade: "#20134f",
+        rim: "#5b55c8",
+        wash: "rgba(91, 136, 255, 0.38)",
+        washEdge: "rgba(91, 136, 255, 0)",
+      };
     default:
       return {
         shade: "#1b0c42",

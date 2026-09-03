@@ -65,6 +65,11 @@ public/blob/rig/green/body.png   593x591
 public/blob/rig/green/eye-left.png 275x405
 public/blob/rig/green/eye-right.png 279x421
 public/blob/rig/green/mouth-home.png 429x171
+public/blob/rig/blue/body.png    509x504
+public/blob/rig/red/body.png     506x504
+public/blob/rig/pink/body.png    572x567
+public/blob/rig/orange/body.png  569x579
+public/blob/rig/galaxy/body.png  570x579
 ```
 
 All rigs are produced from their matching parts sheet by
@@ -73,6 +78,16 @@ All rigs are produced from their matching parts sheet by
 ```bash
 node scripts/extractBlobParts.mjs [sheet]
 ```
+
+Body-only colour sheets use the companion extractor:
+
+```bash
+node scripts/extractBlobColourBodies.mjs [sheet] [output-directory]
+```
+
+Current colour selector: purple, teal, yellow, green, blue, red, pink,
+orange, and galaxy. New colour bodies reuse the same procedural eye, eyebrow,
+mouth, socket, and HOME physics rig.
 
 ### How transparency is recovered
 
