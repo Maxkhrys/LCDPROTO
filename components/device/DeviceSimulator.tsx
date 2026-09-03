@@ -34,6 +34,7 @@ export default function DeviceSimulator() {
   const [fps, setFps] = useState<Fps>(60);
   const [speed, setSpeed] = useState<Speed>(1);
   const [runId, setRunId] = useState(0);
+  const [displayMode, setDisplayMode] = useState<"dark" | "light">("dark");
 
   // Temporary facial-layer alignment controls. The measured anchors in
   // lib/blobRig.ts already reproduce the master, so these start at 0/0/1x.
@@ -84,6 +85,7 @@ export default function DeviceSimulator() {
     setSpeed(1);
     setPlaying(true);
     setNativePixels(false);
+    setDisplayMode("dark");
     setCalibration(DEFAULT_FACE_CALIBRATION);
     setIdle(DEFAULT_IDLE);
     setBehaviourEnabled(true);
@@ -125,6 +127,7 @@ export default function DeviceSimulator() {
             behaviourEnabled={behaviourEnabled}
             triggerRequest={trigger}
             onBehaviourStatus={setStatus}
+            displayMode={displayMode}
           />
         </DeviceBezel>
       </div>
@@ -195,6 +198,13 @@ export default function DeviceSimulator() {
           onClick={() => setNativePixels((v) => !v)}
         >
           1:1
+        </DevButton>
+
+        <DevButton
+          active={displayMode === "light"}
+          onClick={() => setDisplayMode((v) => (v === "dark" ? "light" : "dark"))}
+        >
+          Light
         </DevButton>
 
         <DevButton
@@ -584,6 +594,8 @@ const TRIGGERS: { id: BehaviourId; label: string }[] = [
   { id: "TINY_SQUISH", label: "Squish" },
   { id: "SOFT_SWAY_LEFT", label: "Sway left" },
   { id: "SOFT_SWAY_RIGHT", label: "Sway right" },
+  { id: "SOFT_SQUINT", label: "Soft squint" },
+  { id: "BREATH_STRETCH", label: "Breath stretch" },
   { id: "MOUTH_RELAX", label: "Mouth relax" },
   { id: "MOUTH_TWITCH", label: "Mouth twitch" },
 ];

@@ -41,6 +41,7 @@ interface DeviceScreenProps extends Omit<StateViewProps, "size"> {
 export default function DeviceScreen({
   state,
   screenSize,
+  displayMode,
   ...viewProps
 }: DeviceScreenProps) {
   const native = DEVICE_CONFIG.resolution;
@@ -49,8 +50,12 @@ export default function DeviceScreen({
 
   return (
     <div
-      className="relative overflow-hidden rounded-full bg-black"
-      style={{ width: screenSize, height: screenSize }}
+      className="relative overflow-hidden rounded-full"
+      style={{
+        width: screenSize,
+        height: screenSize,
+        background: displayMode === "light" ? "#eeeaf4" : "#000",
+      }}
     >
       <div
         style={{
@@ -70,7 +75,7 @@ export default function DeviceScreen({
             transition={{ duration: 0.45, ease: "easeInOut" }}
             style={{ width: native, height: native }}
           >
-            <View size={native} {...viewProps} />
+            <View size={native} displayMode={displayMode} {...viewProps} />
           </motion.div>
         </AnimatePresence>
       </div>

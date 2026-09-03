@@ -66,11 +66,11 @@ export class BlobJellyPhysics {
       const steps = Math.max(1, Math.ceil(seconds * 120));
       const dt = seconds / steps;
       for (let i = 0; i < steps; i += 1) {
-        this.x.step(target.x, dt, 2.75, 0.7);
-        this.y.step(target.y, dt, 2.9, 0.68);
-        this.rotation.step(target.rotation, dt, 2.65, 0.64);
-        this.scaleX.step(target.scaleX, dt, 3.35, 0.56);
-        this.scaleY.step(target.scaleY, dt, 3.35, 0.56);
+        this.x.step(target.x, dt, 2.6, 0.64);
+        this.y.step(target.y, dt, 2.7, 0.61);
+        this.rotation.step(target.rotation, dt, 2.5, 0.6);
+        this.scaleX.step(target.scaleX, dt, 3.05, 0.48);
+        this.scaleY.step(target.scaleY, dt, 3.05, 0.48);
       }
     }
 

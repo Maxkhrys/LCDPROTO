@@ -27,9 +27,9 @@ export interface IdleConfig {
 
 export const DEFAULT_IDLE: IdleConfig = {
   enabled: true,
-  floatPx: 1.8,
-  breathAmount: 0.012,
-  squashAmount: 0.014,
+  floatPx: 2,
+  breathAmount: 0.014,
+  squashAmount: 0.028,
   blinkInterval: 5.9,
   gazeDriftPx: 3.5,
   rotationDeg: 0.6,
@@ -39,7 +39,7 @@ export const DEFAULT_IDLE: IdleConfig = {
 export const IDLE_LIMITS = {
   floatPx: { min: 0, max: 4, step: 0.1 },
   breathAmount: { min: 0, max: 0.02, step: 0.0005 },
-  squashAmount: { min: 0, max: 0.02, step: 0.0005 },
+  squashAmount: { min: 0, max: 0.05, step: 0.0005 },
   blinkInterval: { min: 4, max: 10, step: 0.1 },
   gazeDriftPx: { min: 0, max: 4, step: 0.1 },
   rotationDeg: { min: 0, max: 1, step: 0.05 },
@@ -60,7 +60,7 @@ const HORIZONTAL_MAX = 1.5;
 const JELLY_TAU = 210;
 /** Deformation per pixel of lead, and the cap on it. */
 const JELLY_GAIN = 0.006;
-const JELLY_MAX = 0.0045;
+const JELLY_MAX = 0.009;
 
 const TAU = Math.PI * 2;
 /** Smootherstep — zero first and second derivative at both ends. */
@@ -187,7 +187,7 @@ export class AmbientDrift {
     const shapeWave =
       Math.sin((this.clock / SHAPE_PERIOD_A) * TAU) * 0.55 +
       Math.sin((this.clock / SHAPE_PERIOD_B) * TAU) * 0.45;
-    const shape = shapeWave * cfg.squashAmount * 0.42;
+    const shape = shapeWave * cfg.squashAmount * 0.5;
 
     // Soft-body lag: the body trails its own motion, so a downward move
     // compresses it slightly and it rebounds as it settles.

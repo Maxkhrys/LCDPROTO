@@ -69,4 +69,6 @@ export interface StateViewProps {
    * the panel is magnified on a desktop display. 1 = true hardware pixels.
    */
   renderScale: number;
+  /** Dev-only panel contrast preview. Hardware/default remains dark. */
+  displayMode: "dark" | "light";
 }

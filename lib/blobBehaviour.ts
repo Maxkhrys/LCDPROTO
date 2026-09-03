@@ -26,6 +26,8 @@ export type BehaviourId =
   | "TINY_SQUISH"
   | "SOFT_SWAY_LEFT"
   | "SOFT_SWAY_RIGHT"
+  | "SOFT_SQUINT"
+  | "BREATH_STRETCH"
   | "MOUTH_RELAX"
   | "MOUTH_TWITCH";
 
@@ -40,6 +42,9 @@ export interface PoseDelta {
   eyeY: number;
   /** Multiplier on eye scaleY, for lid closure. */
   eyeLid: number;
+  /** Independent resting lid tension; multiplied by eyeLid. */
+  leftEyeTension: number;
+  rightEyeTension: number;
   mouthX: number;
   mouthY: number;
   mouthScaleX: number;
@@ -56,6 +61,8 @@ export const NEUTRAL_DELTA: PoseDelta = {
   eyeX: 0,
   eyeY: 0,
   eyeLid: 1,
+  leftEyeTension: 1,
+  rightEyeTension: 1,
   mouthX: 0,
   mouthY: 0,
   mouthScaleX: 0,
@@ -122,10 +129,12 @@ function glance(dir: 1 | -1): BehaviourDef["evaluate"] {
     const body = envelope(p, 0.2, 0.27, BODY_LAG);
     out.eyeX = dir * cfg.gazePx * eye;
     out.eyeY = -0.18 * eye;
-    out.blobRotation = dir * 1.1 * body;
-    out.blobX = dir * 1.15 * body;
-    out.blobScaleX = cfg.squash * 0.32 * body;
-    out.blobScaleY = -cfg.squash * 0.32 * body;
+    out.blobRotation = dir * 1.2 * body;
+    out.blobX = dir * 1.45 * body;
+    out.blobScaleX = cfg.squash * 0.48 * body;
+    out.blobScaleY = -cfg.squash * 0.4 * body;
+    out.mouthX = dir * 0.32 * eye;
+    out.mouthRotation = dir * 0.55 * eye;
   };
 }
 
@@ -135,10 +144,12 @@ function softSway(dir: 1 | -1): BehaviourDef["evaluate"] {
     const body = envelope(p, 0.24, 0.28, BODY_LAG);
     // Face shifts first, then mass follows and is last to settle.
     out.eyeX = dir * 0.8 * face;
-    out.blobX = dir * 1.6 * body;
-    out.blobRotation = dir * 0.7 * body;
-    out.blobScaleX = cfg.squash * 0.3 * body;
-    out.blobScaleY = -cfg.squash * 0.22 * body;
+    out.blobX = dir * 2.15 * body;
+    out.blobRotation = dir * 1.0 * body;
+    out.blobScaleX = cfg.squash * 0.72 * body;
+    out.blobScaleY = -cfg.squash * 0.55 * body;
+    out.mouthX = dir * 0.42 * face;
+    out.mouthRotation = dir * 0.8 * face;
   };
 }
 
@@ -177,7 +188,9 @@ export const BEHAVIOURS: Record<BehaviourId, BehaviourDef> = {
       // Reaching up reads as a slight vertical stretch.
       out.blobScaleY = cfg.squash * 0.76 * body;
       out.blobScaleX = -cfg.squash * 0.5 * body;
-      out.blobY = -0.6 * body;
+      out.blobY = -1.0 * body;
+      out.mouthScaleY = 0.045 * eye;
+      out.mouthY = -0.25 * eye;
     },
   },
 
@@ -187,9 +200,13 @@ export const BEHAVIOURS: Record<BehaviourId, BehaviourDef> = {
     evaluate: (p, cfg, out) => {
       // One weighted drop and soft recovery. No repeated bounce.
       const drop = Math.sin(Math.PI * p) + 0.1 * Math.sin(2 * Math.PI * p);
-      out.blobY = 1.35 * drop;
-      out.blobScaleY = -cfg.squash * 0.95 * drop;
-      out.blobScaleX = cfg.squash * 0.82 * drop;
+      out.blobY = 2.25 * drop;
+      out.blobScaleY = -cfg.squash * 1.05 * drop;
+      out.blobScaleX = cfg.squash * 0.92 * drop;
+      out.leftEyeTension = 1 - 0.06 * drop;
+      out.rightEyeTension = 1 - 0.045 * drop;
+      out.mouthScaleX = 0.035 * drop;
+      out.mouthScaleY = -0.05 * drop;
     },
   },
 
@@ -201,13 +218,52 @@ export const BEHAVIOURS: Record<BehaviourId, BehaviourDef> = {
         p < 0.72
           ? Math.sin(Math.PI * (p / 0.72))
           : -0.13 * Math.sin(Math.PI * ((p - 0.72) / 0.28));
-      out.blobScaleX = cfg.squash * 1.18 * s;
+      out.blobScaleX = cfg.squash * 1.32 * s;
       out.blobScaleY = -cfg.squash * 1.18 * s;
+      out.blobY = 0.85 * Math.max(0, s);
+      out.leftEyeTension = 1 - 0.055 * Math.max(0, s);
+      out.rightEyeTension = 1 - 0.045 * Math.max(0, s);
+      out.mouthScaleX = 0.045 * s;
+      out.mouthScaleY = -0.06 * s;
     },
   },
 
   SOFT_SWAY_LEFT: { duration: 1600, weight: 8, evaluate: softSway(-1) },
   SOFT_SWAY_RIGHT: { duration: 1600, weight: 8, evaluate: softSway(1) },
+
+  SOFT_SQUINT: {
+    duration: 1750,
+    weight: 12,
+    evaluate: (p, cfg, out) => {
+      const face = envelope(p, 0.24, 0.38);
+      const body = envelope(p, 0.29, 0.25, BODY_LAG);
+      out.leftEyeTension = 1 - 0.17 * face;
+      out.rightEyeTension = 1 - 0.13 * face;
+      out.mouthY = 0.38 * face;
+      out.mouthScaleX = 0.04 * face;
+      out.mouthScaleY = -0.035 * face;
+      out.blobY = 0.75 * body;
+      out.blobScaleX = cfg.squash * 0.48 * body;
+      out.blobScaleY = -cfg.squash * 0.42 * body;
+    },
+  },
+
+  BREATH_STRETCH: {
+    duration: 1900,
+    weight: 11,
+    evaluate: (p, cfg, out) => {
+      const face = envelope(p, 0.3, 0.42);
+      const body = envelope(p, 0.32, 0.3, BODY_LAG);
+      out.eyeY = -0.45 * face;
+      out.leftEyeTension = 1 - 0.045 * face;
+      out.rightEyeTension = 1 - 0.035 * face;
+      out.mouthScaleX = -0.035 * face;
+      out.mouthScaleY = 0.06 * face;
+      out.blobY = -0.8 * body;
+      out.blobScaleX = -cfg.squash * 0.92 * body;
+      out.blobScaleY = cfg.squash * 1.18 * body;
+    },
+  },
 
   MOUTH_RELAX: {
     duration: 1550,
@@ -241,8 +297,10 @@ const PICKABLE: readonly BehaviourId[] = [
   "TINY_SQUISH",
   "GLANCE_RIGHT",
   "LOOK_UP",
+  "SOFT_SQUINT",
   "MOUTH_TWITCH",
   "SOFT_SWAY_LEFT",
+  "BREATH_STRETCH",
 ];
 
 /** Small, fast, deterministic PRNG. */
@@ -371,7 +429,7 @@ export class BehaviourController {
     if (this.initialized) return;
     this.initialized = true;
     this.nextBlinkAt = this.clock + this.blinkDuration(cfg);
-    this.nextBehaviourAt = this.clock + 1200 + this.rand() * 800;
+    this.nextBehaviourAt = this.clock + 750 + this.rand() * 650;
   }
 
   private blinkDuration(cfg: BehaviourConfig): number {
@@ -383,9 +441,9 @@ export class BehaviourController {
   }
 
   private restDuration(paceScale: number): number {
-    let d = 1300 + this.rand() * 1500;
+    let d = 850 + this.rand() * 1250;
     // Rare longer breath. Most action starts remain roughly 2-5s apart.
-    if (this.rand() < 0.12) d += 1300 + this.rand() * 900;
+    if (this.rand() < 0.1) d += 1100 + this.rand() * 850;
     return d * paceScale;
   }
 

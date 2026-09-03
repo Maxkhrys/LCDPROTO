@@ -14,7 +14,9 @@ import { NEUTRAL_BLOB, NEUTRAL_ELEMENT, type BlobRig } from "@/lib/blobRig";
 import type { StateViewProps } from "@/lib/deviceStates";
 
 /** Safety cap on total body deformation, whatever the layers add up to. */
-const MAX_DEFORM = 0.02;
+const MAX_DEFORM = 0.045;
+const FACE_DEFORM_SHARE = 0.28;
+const BODY_DEFORM_SHARE = 0.72;
 const clampDeform = (v: number) =>
   v < -MAX_DEFORM ? -MAX_DEFORM : v > MAX_DEFORM ? MAX_DEFORM : v;
 
@@ -54,6 +56,7 @@ export default function HomeState({
   behaviourEnabled,
   triggerRequest,
   onBehaviourStatus,
+  displayMode,
 }: StateViewProps) {
   const [rig, setRig] = useState<BlobRig>(() =>
     applyCalibration(
@@ -149,8 +152,10 @@ export default function HomeState({
         ...NEUTRAL_ELEMENT,
         x: active ? d.eyeX : 0,
         y: active ? d.eyeY : 0,
-        scaleY: active ? d.eyeLid : 1,
       };
+
+      const deformX = clampDeform(physical.scaleX);
+      const deformY = clampDeform(physical.scaleY);
 
       return applyCalibration(
         {
@@ -158,17 +163,29 @@ export default function HomeState({
             x: physical.x,
             y: physical.y,
             scale: 1 + amb.breath,
-            scaleX: 1 + clampDeform(physical.scaleX),
-            scaleY: 1 + clampDeform(physical.scaleY),
+            // Face inherits only part of the deformation. Body mass moves more,
+            // making features feel suspended inside jelly instead of printed on it.
+            scaleX: 1 + deformX * FACE_DEFORM_SHARE,
+            scaleY: 1 + deformY * FACE_DEFORM_SHARE,
             rotation: latestRotation,
             opacity: 1,
           },
           // The body carries no transform of its own: lean and deformation are
           // applied to the whole character, which is what keeps the face welded
           // to the body instead of sliding across it.
-          body: { ...NEUTRAL_ELEMENT },
-          leftEye: { ...eye },
-          rightEye: { ...eye },
+          body: {
+            ...NEUTRAL_ELEMENT,
+            scaleX: 1 + deformX * BODY_DEFORM_SHARE,
+            scaleY: 1 + deformY * BODY_DEFORM_SHARE,
+          },
+          leftEye: {
+            ...eye,
+            scaleY: active ? d.eyeLid * d.leftEyeTension : 1,
+          },
+          rightEye: {
+            ...eye,
+            scaleY: active ? d.eyeLid * d.rightEyeTension : 1,
+          },
           mouth: {
             ...NEUTRAL_ELEMENT,
             x: active ? d.mouthX : 0,
@@ -223,7 +240,10 @@ export default function HomeState({
   }, [playing, speed, fps, runId]);
 
   return (
-    <div className="relative h-full w-full bg-black">
+    <div
+      className="relative h-full w-full"
+      style={{ background: displayMode === "light" ? "#eeeaf4" : "#000" }}
+    >
       <BlobCharacter size={size} renderScale={renderScale} rig={rig} />
     </div>
   );
