@@ -4,6 +4,7 @@ import type { BehaviourId, HomeActivityStatus } from "./blobBehaviour";
 import type { HomeMood } from "./blobBehaviour";
 import type { BlobColour } from "./blobRig";
 import type { BlobDestination, BlobIntention } from "./blobMind";
+import type { EnvironmentConfig, EnvironmentStatus } from "./environmentConfig";
 
 export type DisplayMode = "dark" | "warm" | "brown";
 
@@ -94,14 +95,18 @@ export interface StateViewProps {
   mood: HomeMood | null;
   /** Shows a small light pupil inside each procedural eye. */
   showPupils: boolean;
-  /** Dev-only: draws the contact shadow hot and outlined to verify placement. */
-  debugShadow: boolean;
   /** Dev-only rig colour preview; every colour uses identical transforms. */
   blobColour: BlobColour;
+  /** Dev-only whole Blob scale, centred inside the circular display. */
+  characterScale: number;
   /** Optional director override for the current Blob intention. */
   mindIntention: BlobIntention | null;
   /** Optional director override for the current travel destination. */
   mindDestination: BlobDestination | null;
   /** Optional normalised depth override; positive moves Blob closer. */
   mindDepth: number | null;
+  /** Prototype environment controls; character rigs do not read these. */
+  environment: EnvironmentConfig;
+  /** Live environment values for the developer readout. */
+  onEnvironmentStatus?: (status: EnvironmentStatus) => void;
 }

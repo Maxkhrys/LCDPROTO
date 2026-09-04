@@ -37,9 +37,14 @@ import {
   type DisplayMode,
   type DeviceState,
 } from "@/lib/deviceStates";
+import {
+  DEFAULT_ENVIRONMENT,
+  type EnvironmentConfig,
+  type EnvironmentStatus,
+} from "@/lib/environmentConfig";
 
 const BEZEL_FACTOR = 1 + DEVICE_CONFIG.bezelRatio * 2;
-const MAX_OUTER = Math.round(DEVICE_CONFIG.desktopScreenSize * BEZEL_FACTOR);
+const DEFAULT_OUTER = Math.round(DEVICE_CONFIG.desktopScreenSize * BEZEL_FACTOR);
 
 /**
  * Prototype shell: the virtual device plus the state selector and the
@@ -55,8 +60,11 @@ export default function DeviceSimulator() {
   const [displayMode, setDisplayMode] = useState<DisplayMode>("dark");
   const [screenColour, setScreenColour] = useState(DISPLAY_BACKGROUNDS.dark);
   const [blobColour, setBlobColour] = useState<BlobColour>("teal");
+  const [characterScale, setCharacterScale] = useState(1);
+  const [screenScale, setScreenScale] = useState(1.2);
+  const [environment, setEnvironment] = useState<EnvironmentConfig>(DEFAULT_ENVIRONMENT);
+  const [environmentStatus, setEnvironmentStatus] = useState<EnvironmentStatus | null>(null);
   const [showPupils, setShowPupils] = useState(false);
-  const [debugShadow, setDebugShadow] = useState(false);
   const [blobToolsOpen, setBlobToolsOpen] = useState(false);
   const [activeBlobTool, setActiveBlobTool] = useState<"colour" | "face" | "pupils" | null>(null);
   const [mood, setMood] = useState<HomeMood | null>(null);
@@ -82,6 +90,7 @@ export default function DeviceSimulator() {
   );
   const [showCalibration, setShowCalibration] = useState(false);
   const [showExpressions, setShowExpressions] = useState(false);
+  const [openMenu, setOpenMenu] = useState<TopMenuId | null>(null);
   const [expressionFilter, setExpressionFilter] =
     useState<ExpressionFilter>("ALL");
   const [expressionQuery, setExpressionQuery] = useState("");
@@ -98,6 +107,7 @@ export default function DeviceSimulator() {
 
   useEffect(() => {
     setStatus(null);
+    setEnvironmentStatus(null);
   }, [state]);
 
   useEffect(() => {
@@ -110,7 +120,7 @@ export default function DeviceSimulator() {
   // The outer size is decided by CSS so there is no layout shift; JS only
   // measures it to work out the 466 -> CSS pixel scale factor.
   const frameRef = useRef<HTMLDivElement>(null);
-  const [outerSize, setOuterSize] = useState(MAX_OUTER);
+  const [outerSize, setOuterSize] = useState(DEFAULT_OUTER);
 
   useEffect(() => {
     const el = frameRef.current;
@@ -131,6 +141,10 @@ export default function DeviceSimulator() {
     setDisplayMode("dark");
     setScreenColour(DISPLAY_BACKGROUNDS.dark);
     setBlobColour("teal");
+    setCharacterScale(1);
+    setScreenScale(1.2);
+    setEnvironment(DEFAULT_ENVIRONMENT);
+    setEnvironmentStatus(null);
     setShowPupils(false);
     setBlobToolsOpen(false);
     setActiveBlobTool(null);
@@ -144,6 +158,7 @@ export default function DeviceSimulator() {
     setTrigger(null);
     setSaved(null);
     setShowExpressions(false);
+    setOpenMenu(null);
     setExpressionFilter("ALL");
     setExpressionQuery("");
     setRunId((n) => n + 1);
@@ -162,316 +177,189 @@ export default function DeviceSimulator() {
       );
 
   return (
-    <div className="sim-ui relative flex w-full flex-col items-center gap-7 sm:gap-8">
-      <div className="flex w-full max-w-[920px] flex-col items-center gap-7 lg:flex-row lg:items-start lg:justify-center lg:gap-8">
-        <div className="flex shrink-0 flex-col items-center">
-          <div
-            ref={frameRef}
-            className="aspect-square w-full"
-            style={{ width: `min(100%, ${MAX_OUTER}px, 50vh)` }}
-          >
-            <DeviceBezel screenSize={screenSize}>
-              <div className="relative">
-                <DeviceScreen
-                  state={state}
-                  screenSize={screenSize}
-                  playing={playing}
-                  speed={speed}
-                  runId={runId}
-                  fps={fps}
-                  calibration={calibration}
-                  renderScale={renderScale}
-                  idle={idle}
-                  autoBehaviourEnabled={autoBehaviourEnabled}
-                  triggerRequest={trigger}
-                  onBehaviourStatus={setStatus}
-                  displayMode={displayMode}
-                  screenColour={screenColour}
-                  onOpenBlobTools={() => {
-                    if (!blobToolsOpen) {
-                      setBlobToolsOpen(true);
-                      setActiveBlobTool(null);
-                    }
-                  }}
-                  onCloseBlobTools={() => {
-                    setBlobToolsOpen(false);
-                    setActiveBlobTool(null);
-                  }}
-                  blobToolsOpen={blobToolsOpen}
-                  mood={mood}
-                  showPupils={showPupils}
-                  debugShadow={debugShadow}
-                  blobColour={blobColour}
-                  mindIntention={mindIntention}
-                  mindDestination={mindDestination}
-                  mindDepth={mindDepth}
-                />
-                <BlobToolOrbs
-                  open={blobToolsOpen}
-                  active={activeBlobTool}
-                  screenSize={screenSize}
-                  blobColour={blobColour}
-                  showPupils={showPupils}
-                  onSelect={(tool) => {
-                    setActiveBlobTool(tool);
-                    if (tool === "face") setShowExpressions(true);
-                    if (tool === "pupils") setShowPupils((value) => !value);
-                  }}
-                  onColourChange={setBlobColour}
-                />
-              </div>
-            </DeviceBezel>
-          </div>
-
-        </div>
-
-        {/* The tuning rail stays beside Blob on desktop so edits are visible. */}
-        <aside className="flex w-full max-w-md shrink-0 flex-col gap-4 lg:max-h-[min(80vh,720px)] lg:overflow-y-auto lg:pr-1">
-          {/* Developer controls — deliberately secondary */}
-          <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border border-white/[0.06] bg-white/[0.015] p-4">
-            <div className="flex items-center gap-1.5">
-              <DevButton onClick={() => setPlaying((p) => !p)}>
-                {playing ? "Pause" : "Play"}
-              </DevButton>
-              <DevButton onClick={reset}>Reset</DevButton>
+    <div className="sim-ui relative flex min-h-[calc(100dvh-24px)] w-full flex-col items-center gap-3 sm:gap-4">
+      <div className="sticky top-0 z-50 w-full max-w-[1500px] pt-2">
+        <nav
+          aria-label="Simulator settings"
+          className="relative flex flex-wrap items-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.035] p-1.5 shadow-[0_12px_30px_rgba(0,0,0,0.14)] backdrop-blur-md"
+        >
+          <TopMenu label="State" summary={meta.label} open={openMenu === "state"} onToggle={() => setOpenMenu((v) => v === "state" ? null : "state")}>
+            <p className="menu-kicker">Display state</p>
+            <p className="menu-help">Choose device state to preview.</p>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {DEVICE_STATES.map((item) => (
+                <DevButton key={item.id} active={item.id === state} onClick={() => setState(item.id)}>
+                  {item.label}
+                </DevButton>
+              ))}
             </div>
+          </TopMenu>
 
-            <DevGroup label="FPS">
-              {DEVICE_CONFIG.fpsOptions.map((f) => (
-                <DevButton key={f} active={f === fps} onClick={() => setFps(f)}>
-                  {f}
-                </DevButton>
-              ))}
-            </DevGroup>
-
-            <DevGroup label="Speed">
-              {DEVICE_CONFIG.speedOptions.map((s) => (
-                <DevButton key={s} active={s === speed} onClick={() => setSpeed(s)}>
-                  {s}x
-                </DevButton>
-              ))}
-            </DevGroup>
-
-            <DevGroup label="Blob">
-              {BLOB_COLOURS.map((colour) => (
-                <DevButton
-                  key={colour.id}
-                  active={blobColour === colour.id}
-                  onClick={() => setBlobColour(colour.id)}
-                >
-                  {colour.label}
-                </DevButton>
-              ))}
-            </DevGroup>
-
-            <DevButton
-              active={idle.enabled}
-              onClick={() => setIdle((v) => ({ ...v, enabled: !v.enabled }))}
-            >
-              Idle
-            </DevButton>
-
-            <DevButton
-              active={autoBehaviourEnabled}
-              onClick={() => setAutoBehaviourEnabled((v) => !v)}
-            >
-              Auto
-            </DevButton>
-
-            <DevGroup label="Mood">
-              <DevButton active={mood === null} onClick={() => setMood(null)}>
-                Auto
-              </DevButton>
-              {(["CONTENT", "CURIOUS", "SLEEPY", "AMUSED", "DISTRACTED", "THOUGHTFUL"] as const).map(
-                (option) => (
-                  <DevButton
-                    key={option}
-                    active={mood === option}
-                    onClick={() => setMood(option)}
-                  >
-                    {option.toLowerCase()}
-                  </DevButton>
-                )
-              )}
-            </DevGroup>
-
-            <DevGroup label="Mind">
-              <DevButton
-                active={mindIntention === null}
-                onClick={() => setMindIntention(null)}
-              >
-                Auto
-              </DevButton>
-              {INTENTIONS.filter((option) => option !== "REST").map((option) => (
-                <DevButton
-                  key={option}
-                  active={mindIntention === option}
-                  onClick={() => setMindIntention(option)}
-                >
-                  {option.toLowerCase()}
-                </DevButton>
-              ))}
-            </DevGroup>
-
-            <DevGroup label="Target">
-              <DevButton
-                active={mindDestination === null}
-                onClick={() => setMindDestination(null)}
-              >
-                Auto
-              </DevButton>
-              {DESTINATIONS.filter((option) => option !== "CENTER").map((option) => (
-                <DevButton
-                  key={option}
-                  active={mindDestination === option}
-                  onClick={() => setMindDestination(option)}
-                >
-                  {option.replace("_", " ").toLowerCase()}
-                </DevButton>
-              ))}
-            </DevGroup>
-
-            <div className="flex min-w-[220px] flex-1 items-center gap-2">
-              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/25">
-                Depth
-              </span>
-              <input
-                aria-label="Blob depth override"
-                type="range"
-                min={-0.2}
-                max={0.2}
-                step={0.01}
-                value={mindDepth ?? 0}
-                onChange={(event) => setMindDepth(Number(event.currentTarget.value))}
-                className="h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-white/10 accent-[#8A60E8]"
-              />
-              <span className="w-12 shrink-0 text-right font-mono text-[10px] tabular-nums text-white/40">
-                {mindDepth === null ? "auto" : mindDepth.toFixed(2)}
-              </span>
-              <DevButton active={mindDepth === null} onClick={() => setMindDepth(null)}>
-                Auto
-              </DevButton>
+          <TopMenu label="Playback" summary={`${fps} fps · ${speed}x`} open={openMenu === "playback"} onToggle={() => setOpenMenu((v) => v === "playback" ? null : "playback")}>
+            <p className="menu-kicker">Playback</p>
+            <p className="menu-help">Control time and preview frame rate.</p>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <DevButton onClick={() => setPlaying((p) => !p)}>{playing ? "Pause" : "Play"}</DevButton>
+              {DEVICE_CONFIG.fpsOptions.map((f) => <DevButton key={f} active={f === fps} onClick={() => setFps(f)}>FPS {f}</DevButton>)}
+              {DEVICE_CONFIG.speedOptions.map((s) => <DevButton key={s} active={s === speed} onClick={() => setSpeed(s)}>{s}x</DevButton>)}
             </div>
+          </TopMenu>
 
-            <DevGroup label="3D">
+          <TopMenu label="Blob" summary={`${blobColour} · ${characterScale.toFixed(2)}x`} open={openMenu === "blob"} onToggle={() => setOpenMenu((v) => v === "blob" ? null : "blob")}>
+            <p className="menu-kicker">Blob character</p>
+            <p className="menu-help">Colour, idle life, mood and automatic behaviour.</p>
+            <ChoiceGroup label="Colour">
+              {BLOB_COLOURS.map((colour) => <DevButton key={colour.id} active={blobColour === colour.id} onClick={() => setBlobColour(colour.id)}>{colour.label}</DevButton>)}
+            </ChoiceGroup>
+            <ChoiceGroup label="Size">
+              {[{ label: "Small", value: 0.88 }, { label: "Standard", value: 1 }, { label: "Large", value: 1.12 }].map((option) => <DevButton key={option.label} active={characterScale === option.value} onClick={() => setCharacterScale(option.value)}>{option.label}</DevButton>)}
+            </ChoiceGroup>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <DevButton active={idle.enabled} onClick={() => setIdle((v) => ({ ...v, enabled: !v.enabled }))}>Idle {idle.enabled ? "on" : "off"}</DevButton>
+              <DevButton active={autoBehaviourEnabled} onClick={() => setAutoBehaviourEnabled((v) => !v)}>Auto {autoBehaviourEnabled ? "on" : "off"}</DevButton>
+            </div>
+            <ChoiceGroup label="Mood">
+              <DevButton active={mood === null} onClick={() => setMood(null)}>Auto</DevButton>
+              {(["CONTENT", "CURIOUS", "SLEEPY", "AMUSED", "DISTRACTED", "THOUGHTFUL"] as const).map((option) => <DevButton key={option} active={mood === option} onClick={() => setMood(option)}>{option.toLowerCase()}</DevButton>)}
+            </ChoiceGroup>
+          </TopMenu>
+
+          <TopMenu label="Motion" summary={mindDestination?.toLowerCase().replace("_", " ") ?? "auto"} open={openMenu === "motion"} onToggle={() => setOpenMenu((v) => v === "motion" ? null : "motion")}>
+            <p className="menu-kicker">Motion and depth</p>
+            <p className="menu-help">Direct Blob’s attention, destination and 3D preview.</p>
+            <ChoiceGroup label="Mind">
+              <DevButton active={mindIntention === null} onClick={() => setMindIntention(null)}>Auto</DevButton>
+              {INTENTIONS.filter((option) => option !== "REST").map((option) => <DevButton key={option} active={mindIntention === option} onClick={() => setMindIntention(option)}>{option.toLowerCase()}</DevButton>)}
+            </ChoiceGroup>
+            <ChoiceGroup label="Target">
+              <DevButton active={mindDestination === null} onClick={() => setMindDestination(null)}>Auto</DevButton>
+              {DESTINATIONS.filter((option) => option !== "CENTER").map((option) => <DevButton key={option} active={mindDestination === option} onClick={() => setMindDestination(option)}>{option.replace("_", " ").toLowerCase()}</DevButton>)}
+            </ChoiceGroup>
+            <div className="mt-3 flex items-center gap-3">
+              <span className="w-12 shrink-0 font-mono text-[10px] uppercase tracking-[0.15em] text-white/30">Depth</span>
+              <input aria-label="Blob depth override" type="range" min={-0.2} max={0.2} step={0.01} value={mindDepth ?? 0} onChange={(event) => setMindDepth(Number(event.currentTarget.value))} className="h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-white/10 accent-[#8A60E8]" />
+              <span className="w-12 shrink-0 text-right font-mono text-[10px] tabular-nums text-white/40">{mindDepth === null ? "auto" : mindDepth.toFixed(2)}</span>
+              <DevButton active={mindDepth === null} onClick={() => setMindDepth(null)}>Auto</DevButton>
+            </div>
+            <ChoiceGroup label="3D tests">
               <DevButton onClick={() => fire("SPIN_360")}>Spin</DevButton>
-              <DevButton onClick={() => fire("WALL_IMPACT_LEFT")}>Impact L</DevButton>
-              <DevButton onClick={() => fire("WALL_IMPACT_RIGHT")}>Impact R</DevButton>
-            </DevGroup>
+              <DevButton onClick={() => fire("WALL_IMPACT_LEFT")}>Impact left</DevButton>
+              <DevButton onClick={() => fire("WALL_IMPACT_RIGHT")}>Impact right</DevButton>
+            </ChoiceGroup>
+          </TopMenu>
 
-            <DevButton
-              active={nativePixels}
-              onClick={() => setNativePixels((v) => !v)}
-            >
-              1:1
-            </DevButton>
-
-            <DevButton
-              active={debugShadow}
-              onClick={() => setDebugShadow((v) => !v)}
-            >
-              Shadow
-            </DevButton>
-
-            <DevGroup label="Screen">
-              {(["dark", "warm", "brown"] as const).map((mode) => (
-                <DevButton
-                  key={mode}
-                  active={displayMode === mode}
-                  onClick={() => {
-                    setDisplayMode(mode);
-                    setScreenColour(DISPLAY_BACKGROUNDS[mode]);
-                  }}
-                >
-                  {mode}
-                </DevButton>
-              ))}
-            </DevGroup>
-
-            <label className="flex items-center gap-2">
-              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/25">
-                LCD colour
-              </span>
-              <input
-                aria-label="LCD screen background colour"
-                type="color"
-                value={screenColour}
-                onChange={(event) => setScreenColour(event.currentTarget.value)}
-                className="h-7 w-9 cursor-pointer rounded border border-white/[0.1] bg-transparent p-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
-              />
-              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-white/35">
-                {screenColour}
-              </span>
+          <TopMenu label="Screen" summary={`${displayMode} · ${screenScale.toFixed(2)}x`} open={openMenu === "screen"} onToggle={() => setOpenMenu((v) => v === "screen" ? null : "screen")}>
+            <p className="menu-kicker">AMOLED screen</p>
+            <p className="menu-help">Set the editable viewport size and preview the native pixel surface.</p>
+            <ControlRange label="Viewport" value={screenScale} min={0.72} max={1.5} step={0.01} display={`${screenScale.toFixed(2)}x`} onChange={setScreenScale} />
+            <label className="mt-3 flex items-center gap-2">
+              <span className="w-14 shrink-0 font-mono text-[10px] uppercase tracking-[0.15em] text-white/30">Custom</span>
+              <input aria-label="LCD screen background colour" type="color" value={screenColour} onChange={(event) => { setScreenColour(event.currentTarget.value); setDisplayMode("dark"); }} className="h-7 w-9 cursor-pointer rounded border border-white/[0.1] bg-transparent p-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50" />
+              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-white/40">{screenColour}</span>
             </label>
+            <DevButton active={nativePixels} onClick={() => setNativePixels((v) => !v)}>Native pixels 1:1 {nativePixels ? "on" : "off"}</DevButton>
+          </TopMenu>
 
-            <DevButton
-              active={showCalibration}
-              onClick={() => setShowCalibration((v) => !v)}
-            >
-              Tune
-            </DevButton>
+          <TopMenu label="Environment" summary={environment.enabled ? "sand · live" : "off"} open={openMenu === "environment"} onToggle={() => setOpenMenu((v) => v === "environment" ? null : "environment")} wide>
+            <p className="menu-kicker">Miniature world</p>
+            <p className="menu-help">Tune the sand, contact shadow, warm light and sparse dust around Blob.</p>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <DevButton active={environment.enabled} onClick={() => setEnvironment((value) => ({ ...value, enabled: !value.enabled }))}>Environment {environment.enabled ? "on" : "off"}</DevButton>
+              <DevButton active={environment.shadowEnabled} onClick={() => setEnvironment((value) => ({ ...value, shadowEnabled: !value.shadowEnabled }))}>Shadow</DevButton>
+              <DevButton active={environment.particlesEnabled} onClick={() => setEnvironment((value) => ({ ...value, particlesEnabled: !value.particlesEnabled }))}>Dust</DevButton>
+              <DevButton active={environment.bounceEnabled} onClick={() => setEnvironment((value) => ({ ...value, bounceEnabled: !value.bounceEnabled }))}>Bounce light</DevButton>
+              <DevButton active={environment.parallaxEnabled} onClick={() => setEnvironment((value) => ({ ...value, parallaxEnabled: !value.parallaxEnabled }))}>Parallax</DevButton>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <ControlRange label="Shadow width" value={environment.shadowWidth} min={0.65} max={1.4} step={0.01} display={`${environment.shadowWidth.toFixed(2)}x`} onChange={(value) => setEnvironment((current) => ({ ...current, shadowWidth: value }))} />
+              <ControlRange label="Shadow height" value={environment.shadowHeight} min={0.55} max={1.5} step={0.01} display={`${environment.shadowHeight.toFixed(2)}x`} onChange={(value) => setEnvironment((current) => ({ ...current, shadowHeight: value }))} />
+              <ControlRange label="Shadow opacity" value={environment.shadowOpacity} min={0.1} max={0.9} step={0.01} display={environment.shadowOpacity.toFixed(2)} onChange={(value) => setEnvironment((current) => ({ ...current, shadowOpacity: value }))} />
+              <ControlRange label="Softness" value={environment.shadowSoftness} min={0.35} max={0.95} step={0.01} display={environment.shadowSoftness.toFixed(2)} onChange={(value) => setEnvironment((current) => ({ ...current, shadowSoftness: value }))} />
+              <ControlRange label="Shadow lag" value={environment.shadowLag} min={40} max={180} step={1} display={`${Math.round(environment.shadowLag)}ms`} onChange={(value) => setEnvironment((current) => ({ ...current, shadowLag: value }))} />
+              <ControlRange label="Shadow Y" value={environment.shadowYOffset} min={-12} max={18} step={1} display={`${Math.round(environment.shadowYOffset)}px`} onChange={(value) => setEnvironment((current) => ({ ...current, shadowYOffset: value }))} />
+              <ControlRange label="Dust count" value={environment.particleCount} min={0} max={8} step={1} display={`${Math.round(environment.particleCount)}`} onChange={(value) => setEnvironment((current) => ({ ...current, particleCount: value }))} />
+              <ControlRange label="Dust speed" value={environment.particleSpeed} min={0.25} max={2} step={0.01} display={`${environment.particleSpeed.toFixed(2)}x`} onChange={(value) => setEnvironment((current) => ({ ...current, particleSpeed: value }))} />
+              <ControlRange label="Ambient light" value={environment.ambientLight} min={0} max={1} step={0.01} display={environment.ambientLight.toFixed(2)} onChange={(value) => setEnvironment((current) => ({ ...current, ambientLight: value }))} />
+              <ControlRange label="Bounce light" value={environment.bounceLight} min={0} max={1} step={0.01} display={environment.bounceLight.toFixed(2)} onChange={(value) => setEnvironment((current) => ({ ...current, bounceLight: value }))} />
+              <ControlRange label="Parallax" value={environment.parallax} min={0} max={1} step={0.01} display={environment.parallax.toFixed(2)} onChange={(value) => setEnvironment((current) => ({ ...current, parallax: value }))} />
+            </div>
+            <div className="mt-4 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+              <p className="menu-kicker">Environment readout</p>
+              <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-white/45">
+                <span>Blob height <b className="font-normal text-white/75">{environmentStatus?.blobHeight.toFixed(2) ?? "—"}</b></span>
+                <span>Particles <b className="font-normal text-white/75">{environmentStatus?.particleCount ?? "—"}</b></span>
+                <span>Shadow X <b className="font-normal text-white/75">{environmentStatus?.shadowScaleX.toFixed(2) ?? "—"}</b></span>
+                <span>Shadow Y <b className="font-normal text-white/75">{environmentStatus?.shadowScaleY.toFixed(2) ?? "—"}</b></span>
+                <span>Shadow alpha <b className="font-normal text-white/75">{environmentStatus?.shadowOpacity.toFixed(2) ?? "—"}</b></span>
+                <span>Shadow offset <b className="font-normal text-white/75">{environmentStatus ? `${environmentStatus.shadowOffset.toFixed(1)}px` : "—"}</b></span>
+              </div>
+            </div>
+          </TopMenu>
+
+          <TopMenu label="Tools" summary={showExpressions ? "library open" : "tuning"} open={openMenu === "tools"} onToggle={() => setOpenMenu((v) => v === "tools" ? null : "tools")} wide>
+            <p className="menu-kicker">Animation tools</p>
+            <p className="menu-help">Tune motion, fire individual cues and browse state libraries.</p>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <DevButton active={showCalibration} onClick={() => setShowCalibration((v) => !v)}>{showCalibration ? "Hide tuning" : "Show tuning"}</DevButton>
+              <DevButton active={showExpressions} onClick={() => setShowExpressions((v) => !v)}>{showExpressions ? "Hide library" : "Open library"}</DevButton>
+            </div>
+            {showCalibration && <div className="mt-3 flex max-h-[min(64vh,620px)] flex-col gap-3 overflow-y-auto pr-1">
+              <BehaviourPanel status={status} autoEnabled={autoBehaviourEnabled} onToggle={() => setAutoBehaviourEnabled((v) => !v)} onTrigger={fire} />
+              <IdlePanel value={idle} onChange={setIdle} onReset={() => setIdle(DEFAULT_IDLE)} />
+              <CalibrationPanel value={calibration} onChange={setCalibration} onReset={() => { setCalibration(DEFAULT_FACE_CALIBRATION); setSaved(null); }} saved={saved} onSave={() => setSaved(formatCalibration(calibration))} />
+            </div>}
+          </TopMenu>
+
+          <TopMenu label="Activity" summary={status?.id ?? "rest"} open={openMenu === "activity"} onToggle={() => setOpenMenu((v) => v === "activity" ? null : "activity")} wide>
+            <p className="menu-kicker">Live activity</p>
+            <p className="menu-help">Current intent, expression, body state and timing.</p>
+            <div className="mt-3"><ActivityReadout status={status} playing={playing} autoEnabled={autoBehaviourEnabled} idleEnabled={idle.enabled} /></div>
+          </TopMenu>
+          <div className="ml-auto">
+            <DevButton onClick={reset}>Reset</DevButton>
           </div>
-
-          <ActivityReadout
-            status={status}
-            playing={playing}
-            autoEnabled={autoBehaviourEnabled}
-            idleEnabled={idle.enabled}
-          />
-
-          {showCalibration && (
-            <BehaviourPanel
-              status={status}
-              autoEnabled={autoBehaviourEnabled}
-              onToggle={() => setAutoBehaviourEnabled((v) => !v)}
-              onTrigger={fire}
-            />
-          )}
-
-          {showCalibration && (
-            <IdlePanel
-              value={idle}
-              onChange={setIdle}
-              onReset={() => setIdle(DEFAULT_IDLE)}
-            />
-          )}
-
-          {showCalibration && (
-            <CalibrationPanel
-              value={calibration}
-              onChange={setCalibration}
-              onReset={() => {
-                setCalibration(DEFAULT_FACE_CALIBRATION);
-                setSaved(null);
-              }}
-              saved={saved}
-              onSave={() => setSaved(formatCalibration(calibration))}
-            />
-          )}
-        </aside>
+        </nav>
       </div>
 
-      {/* State selector stays below activity and tuning controls on mobile. */}
-      <div className="flex w-full max-w-2xl flex-wrap justify-center gap-1.5">
-        {DEVICE_STATES.map((s) => {
-          const active = s.id === state;
-          return (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => setState(s.id)}
-              aria-pressed={active}
-              className={`rounded-full border px-3.5 py-1.5 text-[11px] uppercase tracking-[0.14em] transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50 ${
-                active
-                  ? "border-white/20 bg-white/[0.07] text-white"
-                  : "border-white/[0.07] text-white/40 hover:border-white/15 hover:text-white/70"
-              }`}
-            >
-              {s.label}
-            </button>
-          );
-        })}
+      <div className="flex min-h-0 w-full flex-1 items-center justify-center">
+        <div ref={frameRef} className="flex aspect-square w-full max-w-full items-center justify-center" style={{ width: `min(100%, ${Math.round(DEFAULT_OUTER * screenScale)}px, max(280px, calc(100dvh - 176px)))` }}>
+          <DeviceBezel screenSize={screenSize}>
+            <div className="relative">
+              <DeviceScreen
+                state={state}
+                screenSize={screenSize}
+                playing={playing}
+                speed={speed}
+                runId={runId}
+                fps={fps}
+                calibration={calibration}
+                renderScale={renderScale}
+                idle={idle}
+                autoBehaviourEnabled={autoBehaviourEnabled}
+                triggerRequest={trigger}
+                onBehaviourStatus={setStatus}
+                displayMode={displayMode}
+                screenColour={screenColour}
+                onOpenBlobTools={() => { if (!blobToolsOpen) { setBlobToolsOpen(true); setActiveBlobTool(null); } }}
+                onCloseBlobTools={() => { setBlobToolsOpen(false); setActiveBlobTool(null); }}
+                blobToolsOpen={blobToolsOpen}
+                mood={mood}
+                showPupils={showPupils}
+                blobColour={blobColour}
+                characterScale={characterScale}
+                mindIntention={mindIntention}
+                mindDestination={mindDestination}
+                mindDepth={mindDepth}
+                environment={environment}
+                onEnvironmentStatus={setEnvironmentStatus}
+              />
+                <BlobToolOrbs open={blobToolsOpen} active={activeBlobTool} screenSize={screenSize} blobColour={blobColour} showPupils={showPupils} onSelect={(tool) => { setActiveBlobTool(tool); if (tool === "face") setShowExpressions(true); if (tool === "pupils") setShowPupils((value) => !value); }} onColourChange={setBlobColour} />
+            </div>
+          </DeviceBezel>
+        </div>
       </div>
+
+      <SceneColourDots value={displayMode} onChange={(mode) => { setDisplayMode(mode); setScreenColour(DISPLAY_BACKGROUNDS[mode]); }} />
 
       {/* Dev readout — outside the device, never inside the panel */}
       <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 font-mono text-[10px] uppercase tracking-[0.18em] text-white/25">
@@ -532,7 +420,52 @@ export default function DeviceSimulator() {
   );
 }
 
-function DevGroup({
+type TopMenuId = "state" | "playback" | "blob" | "motion" | "screen" | "environment" | "tools" | "activity";
+
+function TopMenu({
+  label,
+  summary,
+  open,
+  onToggle,
+  wide = false,
+  children,
+}: {
+  label: string;
+  summary: string;
+  open: boolean;
+  onToggle: () => void;
+  wide?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="relative">
+      <button type="button" aria-expanded={open} onClick={onToggle} className={`top-menu-trigger ${open ? "top-menu-trigger-active" : ""}`}>
+        <span className="top-menu-label">{label}</span>
+        <span className="top-menu-summary">{summary}</span>
+        <span aria-hidden className={`top-menu-chevron ${open ? "rotate-180" : ""}`}>⌄</span>
+      </button>
+      {open && <div className={`top-menu-popover ${wide ? "top-menu-popover-wide" : ""}`}>{children}</div>}
+    </div>
+  );
+}
+
+function SceneColourDots({ value, onChange }: { value: DisplayMode; onChange: (mode: DisplayMode) => void }) {
+  const options: { mode: DisplayMode; label: string; colour: string }[] = [
+    { mode: "dark", label: "True black AMOLED", colour: "#000000" },
+    { mode: "warm", label: "Warm inspection screen", colour: "#d4c9bb" },
+    { mode: "brown", label: "Brown inspection screen", colour: "#a58d76" },
+  ];
+  return (
+    <div className="flex items-center gap-3" aria-label="Scene colour">
+      <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/30">Scene</span>
+      <div className="flex items-center gap-2">
+        {options.map((option) => <button key={option.mode} type="button" aria-label={option.label} aria-pressed={value === option.mode} onClick={() => onChange(option.mode)} className={`scene-colour-dot ${value === option.mode ? "scene-colour-dot-active" : ""}`} style={{ backgroundColor: option.colour }} />)}
+      </div>
+    </div>
+  );
+}
+
+function ChoiceGroup({
   label,
   children,
 }: {
@@ -540,12 +473,51 @@ function DevGroup({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/25">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+      <span className="w-14 shrink-0 font-mono text-[10px] uppercase tracking-[0.15em] text-white/30">
         {label}
       </span>
-      <div className="flex items-center gap-1.5">{children}</div>
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5">{children}</div>
     </div>
+  );
+}
+
+function ControlRange({
+  label,
+  value,
+  min,
+  max,
+  step,
+  display,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  display: string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="flex min-w-0 items-center gap-2 rounded-md border border-white/[0.05] bg-white/[0.015] px-2.5 py-2">
+      <span className="w-20 shrink-0 font-mono text-[9px] uppercase tracking-[0.12em] text-white/35">
+        {label}
+      </span>
+      <input
+        aria-label={label}
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(event) => onChange(Number(event.currentTarget.value))}
+        className="h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-white/10 accent-[#8A60E8]"
+      />
+      <output className="w-12 shrink-0 text-right font-mono text-[10px] tabular-nums text-white/55">
+        {display}
+      </output>
+    </label>
   );
 }
 
@@ -575,27 +547,26 @@ function BlobToolOrbs({
     top: screenSize * top,
     width: orbSize,
     height: orbSize,
-    transform: "translateX(-50%)",
   });
 
   return (
     <div className="pointer-events-none absolute inset-0 z-30">
       <div
-        className="pointer-events-auto absolute"
-        style={{ ...orbStyle("25%", 0.13), transform: "translateX(-50%) rotate(-12deg)" }}
+        className="blob-tool-orb blob-tool-orb-left pointer-events-auto absolute"
+        style={orbStyle("25%", 0.13)}
       >
         <OrbButton active={active === "colour"} label="Blob colour" onClick={() => onSelect("colour")}>
           <span className="h-4 w-4 rounded-full border border-white/70" style={{ background: blobColourSwatch(blobColour) }} />
         </OrbButton>
       </div>
-      <div className="pointer-events-auto absolute" style={orbStyle("50%", 0.055)}>
+      <div className="blob-tool-orb blob-tool-orb-center pointer-events-auto absolute" style={orbStyle("50%", 0.055)}>
         <OrbButton active={active === "face"} label="Eyes and mouth settings" onClick={() => onSelect("face")}>
           <span className="text-[17px] leading-none">☺</span>
         </OrbButton>
       </div>
       <div
-        className="pointer-events-auto absolute"
-        style={{ ...orbStyle("75%", 0.13), transform: "translateX(-50%) rotate(12deg)" }}
+        className="blob-tool-orb blob-tool-orb-right pointer-events-auto absolute"
+        style={orbStyle("75%", 0.13)}
       >
         <OrbButton active={active === "pupils"} label={showPupils ? "Hide pupils" : "Show pupils"} onClick={() => onSelect("pupils")}>
           <span className="relative block h-4 w-4 rounded-full border border-white/75">
