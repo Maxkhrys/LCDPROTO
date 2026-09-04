@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import DeviceBezel from "./DeviceBezel";
 import ScreenStage from "@/components/screens/ScreenStage";
 import ScreenBrowser from "@/components/screens/ScreenBrowser";
@@ -48,6 +49,9 @@ import {
 
 const BEZEL_FACTOR = 1 + DEVICE_CONFIG.bezelRatio * 2;
 const DEFAULT_OUTER = Math.round(DEVICE_CONFIG.desktopScreenSize * BEZEL_FACTOR);
+const DEFAULT_DISPLAY_MODE: DisplayMode = "brown";
+const DEFAULT_BLOB_COLOUR: BlobColour = "blue";
+const DEFAULT_CHARACTER_SCALE = 0.88;
 
 /**
  * Prototype shell: the virtual device plus the state selector and the
@@ -60,10 +64,10 @@ export default function DeviceSimulator() {
   const [fps, setFps] = useState<Fps>(60);
   const [speed, setSpeed] = useState<Speed>(1);
   const [runId, setRunId] = useState(0);
-  const [displayMode, setDisplayMode] = useState<DisplayMode>("dark");
-  const [screenColour, setScreenColour] = useState(DISPLAY_BACKGROUNDS.dark);
-  const [blobColour, setBlobColour] = useState<BlobColour>("teal");
-  const [characterScale, setCharacterScale] = useState(1);
+  const [displayMode, setDisplayMode] = useState<DisplayMode>(DEFAULT_DISPLAY_MODE);
+  const [screenColour, setScreenColour] = useState(DISPLAY_BACKGROUNDS[DEFAULT_DISPLAY_MODE]);
+  const [blobColour, setBlobColour] = useState<BlobColour>(DEFAULT_BLOB_COLOUR);
+  const [characterScale, setCharacterScale] = useState(DEFAULT_CHARACTER_SCALE);
   const [screenScale, setScreenScale] = useState(1.2);
   const [environment, setEnvironment] = useState<EnvironmentConfig>(DEFAULT_ENVIRONMENT);
   const [environmentStatus, setEnvironmentStatus] = useState<EnvironmentStatus | null>(null);
@@ -75,6 +79,7 @@ export default function DeviceSimulator() {
   const [mindDestination, setMindDestination] = useState<BlobDestination | null>(null);
   const [mindDepth, setMindDepth] = useState<number | null>(null);
   const [showScreens, setShowScreens] = useState(false);
+  const [showActivity, setShowActivity] = useState(false);
 
   // Screen lifecycle. It owns only which screen is up and how far through it
   // is — Blob's personality keeps running underneath, untouched.
@@ -185,10 +190,10 @@ export default function DeviceSimulator() {
     setSpeed(1);
     setPlaying(true);
     setNativePixels(false);
-    setDisplayMode("dark");
-    setScreenColour(DISPLAY_BACKGROUNDS.dark);
-    setBlobColour("teal");
-    setCharacterScale(1);
+    setDisplayMode(DEFAULT_DISPLAY_MODE);
+    setScreenColour(DISPLAY_BACKGROUNDS[DEFAULT_DISPLAY_MODE]);
+    setBlobColour(DEFAULT_BLOB_COLOUR);
+    setCharacterScale(DEFAULT_CHARACTER_SCALE);
     setScreenScale(1.2);
     setEnvironment(DEFAULT_ENVIRONMENT);
     setEnvironmentStatus(null);
@@ -205,6 +210,8 @@ export default function DeviceSimulator() {
     setTrigger(null);
     setSaved(null);
     setShowExpressions(false);
+    setShowScreens(false);
+    setShowActivity(false);
     setOpenMenu(null);
     setExpressionFilter("ALL");
     setExpressionQuery("");
@@ -225,10 +232,10 @@ export default function DeviceSimulator() {
 
   return (
     <div className="sim-ui relative flex min-h-[calc(100dvh-24px)] w-full flex-col items-center gap-3 sm:gap-4">
-      <div className="sticky top-0 z-50 w-full max-w-[1500px] pt-2">
+      <div className="sticky top-0 z-40 w-full max-w-[1500px] pt-2">
         <nav
           aria-label="Simulator settings"
-          className="relative flex flex-wrap items-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.035] p-1.5 shadow-[0_12px_30px_rgba(0,0,0,0.14)] backdrop-blur-md"
+          className="simulator-toolbar relative rounded-xl border border-white/[0.08] bg-white/[0.035] p-1.5 shadow-[0_12px_30px_rgba(0,0,0,0.14)] backdrop-blur-md"
         >
           <TopMenu label="State" summary={meta.label} open={openMenu === "state"} onToggle={() => setOpenMenu((v) => v === "state" ? null : "state")}>
             <p className="menu-kicker">Display state</p>
@@ -259,7 +266,13 @@ export default function DeviceSimulator() {
               {BLOB_COLOURS.map((colour) => <DevButton key={colour.id} active={blobColour === colour.id} onClick={() => setBlobColour(colour.id)}>{colour.label}</DevButton>)}
             </ChoiceGroup>
             <ChoiceGroup label="Size">
-              {[{ label: "Small", value: 0.88 }, { label: "Standard", value: 1 }, { label: "Large", value: 1.12 }].map((option) => <DevButton key={option.label} active={characterScale === option.value} onClick={() => setCharacterScale(option.value)}>{option.label}</DevButton>)}
+              {[
+                { label: "Micro", value: 0.68 },
+                { label: "Tiny", value: 0.78 },
+                { label: "Small", value: DEFAULT_CHARACTER_SCALE },
+                { label: "Standard", value: 1 },
+                { label: "Large", value: 1.12 },
+              ].map((option) => <DevButton key={option.label} active={characterScale === option.value} onClick={() => setCharacterScale(option.value)}>{option.label}</DevButton>)}
             </ChoiceGroup>
             <div className="mt-3 flex flex-wrap gap-1.5">
               <DevButton active={idle.enabled} onClick={() => setIdle((v) => ({ ...v, enabled: !v.enabled }))}>Idle {idle.enabled ? "on" : "off"}</DevButton>
@@ -349,7 +362,6 @@ export default function DeviceSimulator() {
             <div className="mt-3 flex flex-wrap gap-1.5">
               <DevButton active={showCalibration} onClick={() => setShowCalibration((v) => !v)}>{showCalibration ? "Hide tuning" : "Show tuning"}</DevButton>
               <DevButton active={showExpressions} onClick={() => setShowExpressions((v) => !v)}>{showExpressions ? "Hide library" : "Open library"}</DevButton>
-              <DevButton active={showScreens} onClick={() => setShowScreens((v) => !v)}>{showScreens ? "Hide screens" : "Screen browser"}</DevButton>
             </div>
             {showCalibration && <div className="mt-3 flex max-h-[min(64vh,620px)] flex-col gap-3 overflow-y-auto pr-1">
               <BehaviourPanel status={status} autoEnabled={autoBehaviourEnabled} onToggle={() => setAutoBehaviourEnabled((v) => !v)} onTrigger={fire} />
@@ -358,35 +370,13 @@ export default function DeviceSimulator() {
             </div>}
           </TopMenu>
 
-          <TopMenu label="Activity" summary={status?.id ?? "rest"} open={openMenu === "activity"} onToggle={() => setOpenMenu((v) => v === "activity" ? null : "activity")} wide>
-            <p className="menu-kicker">Live activity</p>
-            <p className="menu-help">Current intent, expression, body state and timing.</p>
-            <div className="mt-3"><ActivityReadout status={status} playing={playing} autoEnabled={autoBehaviourEnabled} idleEnabled={idle.enabled} /></div>
-          </TopMenu>
-          <div className="ml-auto">
+          <div className="simulator-toolbar-reset">
             <DevButton onClick={reset}>Reset</DevButton>
           </div>
         </nav>
       </div>
 
-      <div className="flex min-h-0 w-full flex-1 items-stretch justify-center gap-3">
-        {/* Developer-only screen browser. Never rendered inside the LCD. */}
-        {showScreens && (
-          <div className="hidden max-h-[min(78vh,760px)] self-center lg:block">
-            <ScreenBrowser
-              snapshot={screenSnapshot}
-              fps={fps}
-              nativeResolution={DEVICE_CONFIG.resolution}
-              onSelect={selectScreen}
-              onPlayFlow={playFlow}
-              onPlay={() => { lifecycle.current.play(); setPlaying(true); }}
-              onPause={() => lifecycle.current.pause()}
-              onReplay={() => lifecycle.current.replay()}
-              onReset={() => lifecycle.current.reset()}
-              onFps={(value) => setFps(value as Fps)}
-            />
-          </div>
-        )}
+      <div className="flex min-h-0 w-full flex-1 items-center justify-center">
         <div ref={frameRef} className="flex aspect-square w-full max-w-full items-center justify-center" style={{ width: `min(100%, ${Math.round(DEFAULT_OUTER * screenScale)}px, max(280px, calc(100dvh - 176px)))` }}>
           <DeviceBezel screenSize={screenSize}>
             <div className="relative">
@@ -426,6 +416,42 @@ export default function DeviceSimulator() {
           </DeviceBezel>
         </div>
       </div>
+
+      <ScreenDrawer
+        open={showScreens}
+        snapshot={screenSnapshot}
+        fps={fps}
+        onToggle={() => {
+          setShowScreens((value) => {
+            const next = !value;
+            if (next) setShowActivity(false);
+            return next;
+          });
+          setOpenMenu(null);
+        }}
+        onSelect={selectScreen}
+        onPlayFlow={playFlow}
+        onPlay={() => { lifecycle.current.play(); setPlaying(true); }}
+        onPause={() => lifecycle.current.pause()}
+        onReplay={() => lifecycle.current.replay()}
+        onReset={() => lifecycle.current.reset()}
+        onFps={(value) => setFps(value as Fps)}
+      />
+
+      <ActivityDrawer
+        open={showActivity}
+        status={status}
+        playing={playing}
+        autoEnabled={autoBehaviourEnabled}
+        idleEnabled={idle.enabled}
+        onToggle={() => {
+          setShowActivity((value) => {
+            const next = !value;
+            if (next) setShowScreens(false);
+            return next;
+          });
+        }}
+      />
 
       <SceneColourDots value={displayMode} onChange={(mode) => { setDisplayMode(mode); setScreenColour(DISPLAY_BACKGROUNDS[mode]); }} />
 
@@ -488,7 +514,7 @@ export default function DeviceSimulator() {
   );
 }
 
-type TopMenuId = "state" | "playback" | "blob" | "motion" | "screen" | "environment" | "tools" | "activity";
+type TopMenuId = "state" | "playback" | "blob" | "motion" | "screen" | "environment" | "tools";
 
 function TopMenu({
   label,
@@ -505,14 +531,91 @@ function TopMenu({
   wide?: boolean;
   children: React.ReactNode;
 }) {
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const [popoverPosition, setPopoverPosition] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPopoverPosition(null);
+      return;
+    }
+
+    const updatePosition = () => {
+      const anchor = anchorRef.current;
+      if (!anchor) return;
+
+      const rect = anchor.getBoundingClientRect();
+      const viewportPadding = 12;
+      const viewportWidth =
+        document.documentElement.clientWidth || window.innerWidth;
+      const width = Math.min(
+        wide ? 540 : 420,
+        Math.max(0, viewportWidth - viewportPadding * 2)
+      );
+      const maxHeight = Math.min(window.innerHeight * 0.7, 620);
+      const top = Math.max(
+        viewportPadding,
+        Math.min(
+          rect.bottom + 8,
+          window.innerHeight - maxHeight - viewportPadding
+        )
+      );
+      const left = Math.max(
+        viewportPadding,
+        Math.min(rect.left, viewportWidth - width - viewportPadding)
+      );
+
+      setPopoverPosition((previous) =>
+        previous &&
+        previous.top === top &&
+        previous.left === left &&
+        previous.width === width
+          ? previous
+          : { top, left, width }
+      );
+    };
+
+    updatePosition();
+    const anchor = anchorRef.current;
+    const resizeObserver = anchor ? new ResizeObserver(updatePosition) : null;
+    if (anchor && resizeObserver) resizeObserver.observe(anchor);
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open, wide]);
+
   return (
-    <div className="relative">
+    <div ref={anchorRef} className="top-menu-anchor relative">
       <button type="button" aria-expanded={open} onClick={onToggle} className={`top-menu-trigger ${open ? "top-menu-trigger-active" : ""}`}>
         <span className="top-menu-label">{label}</span>
         <span className="top-menu-summary">{summary}</span>
         <span aria-hidden className={`top-menu-chevron ${open ? "rotate-180" : ""}`}>⌄</span>
       </button>
-      {open && <div className={`top-menu-popover ${wide ? "top-menu-popover-wide" : ""}`}>{children}</div>}
+      {open &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className={`top-menu-popover ${wide ? "top-menu-popover-wide" : ""}`}
+            style={{
+              top: popoverPosition?.top ?? 64,
+              left: popoverPosition?.left ?? 12,
+              width:
+                popoverPosition?.width ??
+                Math.min(wide ? 540 : 420, Math.max(0, window.innerWidth - 24)),
+            }}
+          >
+            {children}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
@@ -1012,6 +1115,150 @@ function Slider({
   );
 }
 
+function ScreenDrawer({
+  open,
+  snapshot,
+  fps,
+  onToggle,
+  onSelect,
+  onPlayFlow,
+  onPlay,
+  onPause,
+  onReplay,
+  onReset,
+  onFps,
+}: {
+  open: boolean;
+  snapshot: LifecycleSnapshot;
+  fps: Fps;
+  onToggle: () => void;
+  onSelect: (id: ScreenId) => void;
+  onPlayFlow: (flow: FlowId) => void;
+  onPlay: () => void;
+  onPause: () => void;
+  onReplay: () => void;
+  onReset: () => void;
+  onFps: (fps: number) => void;
+}) {
+  return (
+    <div className="screen-drawer-shell pointer-events-none fixed left-0 z-50">
+      <div
+        className="screen-drawer-track flex items-end transition-transform duration-200 ease-out"
+        style={{ transform: open ? "translateX(0)" : "translateX(calc(-100% + 2.75rem))" }}
+      >
+        <aside
+          id="screen-browser"
+          aria-label="Screen browser"
+          className="screen-drawer-panel pointer-events-auto flex min-h-0 flex-col overflow-hidden rounded-r-xl border border-l-0 shadow-2xl"
+          style={{
+            background: "var(--dev-panel-bg)",
+            borderColor: "var(--dev-panel-border)",
+          }}
+        >
+          <ScreenBrowser
+            snapshot={snapshot}
+            fps={fps}
+            nativeResolution={DEVICE_CONFIG.resolution}
+            onSelect={onSelect}
+            onPlayFlow={onPlayFlow}
+            onPlay={onPlay}
+            onPause={onPause}
+            onReplay={onReplay}
+            onReset={onReset}
+            onFps={onFps}
+            onClose={onToggle}
+          />
+        </aside>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          aria-controls="screen-browser"
+          className="drawer-tab drawer-tab-screens pointer-events-auto flex shrink-0 items-center justify-center rounded-r-xl border border-l-0 bg-black/40 text-white/55 shadow-xl transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
+        >
+          <span
+            className="font-mono text-[9px] uppercase tracking-[0.2em]"
+            style={{ writingMode: "vertical-rl" }}
+          >
+            Screens
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ActivityDrawer({
+  open,
+  status,
+  playing,
+  autoEnabled,
+  idleEnabled,
+  onToggle,
+}: {
+  open: boolean;
+  status: HomeActivityStatus | null;
+  playing: boolean;
+  autoEnabled: boolean;
+  idleEnabled: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="activity-drawer-shell pointer-events-none fixed bottom-4 left-0 z-50">
+      <div
+        className="activity-drawer-track flex items-end transition-transform duration-200 ease-out"
+        style={{ transform: open ? "translateX(0)" : "translateX(calc(-100% + 2.75rem))" }}
+      >
+        <aside
+          id="activity-readout"
+          aria-label="Live activity"
+          className="activity-drawer-panel pointer-events-auto flex min-h-0 flex-col gap-3 overflow-y-auto rounded-r-xl border border-l-0 p-4 shadow-2xl"
+          style={{
+            background: "var(--dev-panel-bg)",
+            borderColor: "var(--dev-panel-border)",
+          }}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="menu-kicker">Live activity</p>
+              <p className="menu-help">Current intent, expression, body state and timing.</p>
+            </div>
+            <button
+              type="button"
+              onClick={onToggle}
+              aria-label="Close activity panel"
+              className="rounded-md px-1.5 text-lg leading-none text-white/35 transition-colors hover:text-white/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
+            >
+              ×
+            </button>
+          </div>
+          <ActivityReadout
+            status={status}
+            playing={playing}
+            autoEnabled={autoEnabled}
+            idleEnabled={idleEnabled}
+            compact
+          />
+        </aside>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          aria-controls="activity-readout"
+          className="drawer-tab drawer-tab-activity pointer-events-auto flex shrink-0 items-center justify-center rounded-r-xl border border-l-0 bg-black/40 text-white/55 shadow-xl transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
+        >
+          <span
+            className="font-mono text-[9px] uppercase tracking-[0.2em]"
+            style={{ writingMode: "vertical-rl" }}
+          >
+            Activity
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Temporary window onto the HOME behaviour scheduler: what is running now, and
  * a way to fire each behaviour on demand for inspection.
@@ -1151,7 +1398,7 @@ function ExpressionDrawer({
   const meta = getStateMeta(state);
 
   return (
-    <div className="pointer-events-none fixed inset-y-0 right-0 z-50 flex items-center">
+    <div className="expression-drawer-shell pointer-events-none fixed inset-y-0 z-50 flex items-center">
       <div
         className="pointer-events-auto flex items-stretch transition-transform duration-200 ease-out"
         style={{
@@ -1347,11 +1594,13 @@ function ActivityReadout({
   playing,
   autoEnabled,
   idleEnabled,
+  compact = false,
 }: {
   status: HomeActivityStatus | null;
   playing: boolean;
   autoEnabled: boolean;
   idleEnabled: boolean;
+  compact?: boolean;
 }) {
   const behaviour = autoEnabled
     ? (status?.id ?? "REST")
@@ -1372,7 +1621,7 @@ function ActivityReadout({
   const blink = status?.blinkState ?? "open";
 
   return (
-    <div className="grid w-full max-w-2xl grid-cols-2 gap-x-5 gap-y-3 rounded-lg border border-white/[0.06] bg-white/[0.015] px-4 py-3 font-mono text-[10px] sm:grid-cols-5">
+    <div className={`grid w-full max-w-2xl grid-cols-2 gap-x-5 gap-y-3 rounded-lg border border-white/[0.06] bg-white/[0.015] px-4 py-3 font-mono text-[10px] ${compact ? "" : "sm:grid-cols-5"}`}>
       <ActivityValue label="Activity" value={behaviour} accent />
       <ActivityValue label="Next" value={next} />
       <ActivityValue label="Mood" value={status?.mood ?? "CONTENT"} />

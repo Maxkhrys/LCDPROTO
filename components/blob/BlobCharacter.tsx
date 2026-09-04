@@ -27,6 +27,8 @@ interface BlobCharacterProps {
   size: number;
   /** Pixels rasterised per 466-space pixel. */
   renderScale: number;
+  /** Visible CSS diameter; drawing coordinates remain in native space. */
+  viewportSize?: number;
   /** Per-element transforms. Defaults to the neutral HOME pose. */
   rig?: BlobRig;
   /** Dev-only colour testing; geometry and motion are shared. */
@@ -419,6 +421,7 @@ function drawRippleBody(
  */
 export default function BlobCharacter({
   size,
+  viewportSize,
   renderScale,
   rig = NEUTRAL_RIG,
   colour = "purple",
@@ -699,6 +702,7 @@ export default function BlobCharacter({
   };
 
   const tapAllowed = () => performance.now() >= tapBlockedUntil.current;
+  const cssSize = viewportSize ?? size;
 
   return (
     <canvas
@@ -719,8 +723,8 @@ export default function BlobCharacter({
         if (!settingsOpen && onOpenTools && isBlobHit(event)) onOpenTools();
       }}
       style={{
-        width: size,
-        height: size,
+        width: cssSize,
+        height: cssSize,
         imageRendering: "auto",
         touchAction: drag ? "none" : undefined,
         cursor: drag ? (grabbing ? "grabbing" : "grab") : undefined,

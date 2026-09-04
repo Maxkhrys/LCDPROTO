@@ -35,8 +35,8 @@ interface DeviceScreenProps extends Omit<StateViewProps, "size"> {
 
 /**
  * The panel itself. Everything inside is authored at the native 466x466
- * resolution and then scaled as a whole, so the prototype can never
- * accidentally rely on more pixels than the hardware has.
+ * resolution and displayed at the measured viewport size, so the prototype
+ * can never accidentally rely on more authored pixels than the hardware has.
  */
 export default function DeviceScreen({
   state,
@@ -46,7 +46,6 @@ export default function DeviceScreen({
   ...viewProps
 }: DeviceScreenProps) {
   const native = DEVICE_CONFIG.resolution;
-  const scale = screenSize / native;
   const View = STATE_VIEWS[state];
 
   return (
@@ -60,10 +59,8 @@ export default function DeviceScreen({
     >
       <div
         style={{
-          width: native,
-          height: native,
-          transform: `scale(${scale})`,
-          transformOrigin: "top left",
+          width: screenSize,
+          height: screenSize,
         }}
       >
         <AnimatePresence mode="sync" initial={false}>
@@ -74,13 +71,14 @@ export default function DeviceScreen({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.45, ease: "easeInOut" }}
-            style={{ width: native, height: native }}
+            style={{ width: screenSize, height: screenSize }}
           >
             <View
+              {...viewProps}
               size={native}
+              viewportSize={screenSize}
               displayMode={displayMode}
               screenColour={screenColour}
-              {...viewProps}
             />
           </motion.div>
         </AnimatePresence>

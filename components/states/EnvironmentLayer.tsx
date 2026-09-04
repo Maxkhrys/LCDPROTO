@@ -31,6 +31,7 @@ const SHADOW_BASE_HEIGHT = SHADOW_BASE_WIDTH * 0.17;
 
 interface EnvironmentLayerProps {
   size: number;
+  viewportSize?: number;
   renderScale: number;
   playing: boolean;
   speed: number;
@@ -214,6 +215,7 @@ function drawShadow(
  */
 export default function EnvironmentLayer({
   size,
+  viewportSize = size,
   renderScale,
   playing,
   speed,
@@ -239,11 +241,10 @@ export default function EnvironmentLayer({
 
   useEffect(() => {
     const canvas = document.createElement("canvas");
-    canvas.width = size * renderScale;
-    canvas.height = size * renderScale;
+    canvas.width = size;
+    canvas.height = size;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
     drawStaticScene(ctx, size, displayMode, screenColour);
     staticSceneRef.current = canvas;
     shadowX.current.reset();
@@ -427,7 +428,7 @@ export default function EnvironmentLayer({
         height={size * renderScale}
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 z-0 block"
-        style={{ width: size, height: size, imageRendering: "auto" }}
+        style={{ width: viewportSize, height: viewportSize, imageRendering: "auto" }}
       />
       <canvas
         ref={foregroundRef}
@@ -435,7 +436,7 @@ export default function EnvironmentLayer({
         height={size * renderScale}
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 z-20 block"
-        style={{ width: size, height: size, imageRendering: "auto" }}
+        style={{ width: viewportSize, height: viewportSize, imageRendering: "auto" }}
       />
     </>
   );

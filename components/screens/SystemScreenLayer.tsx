@@ -444,6 +444,8 @@ function drawScreen(
 interface SystemScreenLayerProps {
   /** Native screen size in pixels (466). */
   size: number;
+  /** Visible CSS diameter; drawing coordinates remain in native space. */
+  viewportSize?: number;
   renderScale: number;
   screen: ScreenId;
   progress: number;
@@ -462,6 +464,7 @@ interface SystemScreenLayerProps {
  */
 export default function SystemScreenLayer({
   size,
+  viewportSize = size,
   renderScale,
   screen,
   progress,
@@ -495,8 +498,8 @@ export default function SystemScreenLayer({
         position: "absolute",
         left: 0,
         top: 0,
-        width: size,
-        height: size,
+        width: viewportSize,
+        height: viewportSize,
         pointerEvents: "none",
         zIndex: 5,
         imageRendering: renderScale === 1 ? "pixelated" : "auto",

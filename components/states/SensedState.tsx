@@ -82,6 +82,7 @@ const SENSED_FACE = {
  */
 export default function SensedState({
   size,
+  viewportSize,
   playing,
   speed,
   runId,
@@ -103,6 +104,7 @@ export default function SensedState({
   mindDestination,
   mindDepth,
 }: StateViewProps) {
+  const cssSize = viewportSize ?? size;
   const [rig, setRig] = useState<BlobRig>(() =>
     applyCalibration(
       {
@@ -374,6 +376,7 @@ export default function SensedState({
     >
       <SensedField
         size={size}
+        viewportSize={cssSize}
         renderScale={renderScale}
         playing={playing}
         speed={speed}
@@ -381,6 +384,7 @@ export default function SensedState({
       <div className="relative z-10 h-full w-full">
         <BlobCharacter
           size={size}
+          viewportSize={cssSize}
           renderScale={renderScale}
           rig={rig}
           colour={blobColour}
