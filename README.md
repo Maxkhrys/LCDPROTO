@@ -39,6 +39,9 @@ lib/deviceConfig.ts      resolution, bezel, fps/speed options
 lib/deviceStates.ts      DeviceState type, state table, StateViewProps
 lib/blobMind.ts          deterministic intention, mood, story and destination director
 lib/blobPhysics.ts       lightweight soft-body spring follow-through
+components/screens/      ScreenStage, SystemScreenLayer, ScreenBrowser
+lib/screenCatalogue.ts   every screen, its timing and its flows (data only)
+lib/screenLifecycle.ts   which screen is up and how far through it is
 ```
 
 ## Design space vs rasterisation
@@ -225,3 +228,93 @@ Edit that state's file in `components/states/`. Each file is isolated — replac
 the `StatePlaceholder` body with the real animation and no other state changes.
 HOME and SENSED are built; SENSED owns its field in `components/states/` and
 reuses the layered rig without changing HOME's physics.
+
+## System screens
+
+The device lifecycle — boot, loading, sleep, pairing, faults, updates — lives in
+a screen library that is separate from Blob. Blob's rig, face, behaviour system
+and environment are untouched by it.
+
+### The catalogue
+
+`lib/screenCatalogue.ts` is the single source of truth and contains no
+rendering code. Every screen declares its `id`, `category`, `label`,
+`description`, `durationMs`, `interruptible` and `previewable` flags, its
+`transitionIn` / `transitionOut`, whether it `showsBlob`, and whether it is
+`complete` or a `placeholder`. The eight existing device states are listed
+there too, so the browser can reach every screen from one place.
+
+Transitions come from one shared vocabulary — `cut`, `fade`, `dim`, `rise`,
+`bloom` — and the timing for all of them lives in a single `envelope()` in
+`SystemScreenLayer.tsx`. A screen picks a name; it never writes its own timing.
+
+### Lifecycle flows
+
+`lib/screenLifecycle.ts` owns only which screen is showing and how far through
+it is. It knows nothing about moods or behaviours, which keep running
+underneath whichever screen is up.
+
+```
+Initial boot   BOOT_BLACK → DISPLAY_INIT → ASSET_LOADING → BLOB_WAKE → BLOB_READY → HOME
+Sleep          HOME → PAUSE → DIMMED_PAUSE → SLEEP
+Wake           SLEEP → WAKE → BLOB_READY → HOME
+Connectivity   SEARCHING → PAIRING → CONNECTING → CONNECTED_CONFIRMATION → HOME
+Failure        CONNECTING → OFFLINE → RECONNECTING → HOME
+```
+
+`LCDPROTO_MARK` is deliberately not in the boot flow. It is reachable on its own
+for brand work; the device boots straight into loading.
+
+### Previewing one screen
+
+Open **Tools → Screen browser** in the top nav. The browser is a developer tool
+and is rendered outside the circular display — nothing in it is ever drawn
+inside the 466×466 canvas.
+
+Click any screen to preview it alone, without running a flow. Play, Pause,
+Replay and Reset act on the current screen; the Auto sequence buttons run a
+whole flow. The readout shows the active screen, elapsed against duration,
+progress, native resolution, whether the screen is interruptible, and its
+status. Single-screen previews loop so motion can be watched, except screens
+that end by cutting to black (SLEEP), which hold their final frame — looping a
+sleep preview back to a bright Blob would misrepresent the device.
+
+### How Blob screens work
+
+Screens that show Blob mount the ordinary HOME view: same rig, same behaviour
+system, same environment. The screen controls only two things — a veil, which
+decides how much of him the panel reveals, and a speed multiplier, which
+quietens his motion without freezing it. That is why PAUSE, DIMMED_PAUSE and
+SLEEP needed no new Blob code, and why his breathing still runs on a paused
+device.
+
+### Simulated timing, and replacing it with firmware events
+
+All timing is simulated and deterministic — no `Math.random`, and no clock
+reads beyond the frame delta the controller is handed. Loading, pairing and
+update arcs read `snapshot.simulated`, an eased ramp across the screen's
+duration.
+
+Two hooks replace that with real events, and nothing else has to change:
+
+- `lifecycle.setProgress(0..1)` drives an arc from a real source — an OTA
+  progress callback, a BLE pairing state machine — instead of the clock. Pass
+  `null` to hand control back. The readout marks the screen `ext` while an
+  external source is driving it.
+- `lifecycle.complete()` ends the current screen immediately and advances the
+  flow, for when the real event finishes early or late.
+
+`lifecycle.interrupt(id)` is the entry point for an unsolicited event (a
+disconnect arriving mid-flow). It refuses when the running screen sets
+`interruptible: false`, which is what protects `BOOT_BLACK` and
+`FIRMWARE_UPDATE`. Selecting a screen in the developer browser deliberately
+bypasses that guard — an editor tool must always be able to jump anywhere.
+
+### What is complete and what is a placeholder
+
+Complete: every BOOT, STARTUP, POWER, CONNECTIVITY, PROBLEMS and MAINTENANCE
+screen, plus HOME and SENSED.
+
+Placeholder: APPROACHING, VERY_CLOSE, TOGETHER, SYNC, CONNECTED and RECOGNIZED
+still render their existing `StatePlaceholder` bodies. They are marked `wip` in
+the browser and carry `status: "placeholder"` in the catalogue.

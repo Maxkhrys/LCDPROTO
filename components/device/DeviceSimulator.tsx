@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import DeviceBezel from "./DeviceBezel";
-import DeviceScreen from "./DeviceScreen";
+import ScreenStage from "@/components/screens/ScreenStage";
+import ScreenBrowser from "@/components/screens/ScreenBrowser";
+import { ScreenLifecycle, type LifecycleSnapshot } from "@/lib/screenLifecycle";
+import { isDeviceState, type FlowId, type ScreenId } from "@/lib/screenCatalogue";
 import { DEVICE_CONFIG, type Fps, type Speed } from "@/lib/deviceConfig";
 import {
   DEFAULT_FACE_CALIBRATION,
@@ -71,6 +74,16 @@ export default function DeviceSimulator() {
   const [mindIntention, setMindIntention] = useState<BlobIntention | null>(null);
   const [mindDestination, setMindDestination] = useState<BlobDestination | null>(null);
   const [mindDepth, setMindDepth] = useState<number | null>(null);
+  const [showScreens, setShowScreens] = useState(false);
+
+  // Screen lifecycle. It owns only which screen is up and how far through it
+  // is — Blob's personality keeps running underneath, untouched.
+  const lifecycle = useRef<ScreenLifecycle>(null as never);
+  if (lifecycle.current === null) lifecycle.current = new ScreenLifecycle();
+  const [screenSnapshot, setScreenSnapshot] = useState<LifecycleSnapshot>(() =>
+    lifecycle.current.update(0)
+  );
+  const [screenTime, setScreenTime] = useState(0);
 
   // Temporary facial-layer alignment controls. The measured anchors in
   // lib/blobRig.ts already reproduce the master, so these start at 0/0/1x.
@@ -119,6 +132,40 @@ export default function DeviceSimulator() {
 
   // The outer size is decided by CSS so there is no layout shift; JS only
   // measures it to work out the 466 -> CSS pixel scale factor.
+  // One loop drives the lifecycle clock. Screen visuals are then pure
+  // functions of the snapshot, so pausing genuinely freezes them.
+  useEffect(() => {
+    let frameId = 0;
+    let last = performance.now();
+    let clock = 0;
+    const tick = (now: number) => {
+      frameId = requestAnimationFrame(tick);
+      const delta = Math.min(now - last, 100);
+      last = now;
+      const snapshot = lifecycle.current.update(playing ? delta * speed : 0);
+      if (playing && snapshot.playing) clock += delta * speed;
+      setScreenTime(clock);
+      setScreenSnapshot({ ...snapshot });
+    };
+    frameId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frameId);
+  }, [playing, speed]);
+
+  // Picking a device state from the top nav is the same action as picking it
+  // in the screen browser.
+  useEffect(() => {
+    lifecycle.current.select(state);
+  }, [state]);
+
+  const selectScreen = useCallback((id: ScreenId) => {
+    lifecycle.current.select(id);
+    if (isDeviceState(id)) setState(id);
+  }, []);
+
+  const playFlow = useCallback((flow: FlowId) => {
+    lifecycle.current.playFlow(flow);
+  }, []);
+
   const frameRef = useRef<HTMLDivElement>(null);
   const [outerSize, setOuterSize] = useState(DEFAULT_OUTER);
 
@@ -302,6 +349,7 @@ export default function DeviceSimulator() {
             <div className="mt-3 flex flex-wrap gap-1.5">
               <DevButton active={showCalibration} onClick={() => setShowCalibration((v) => !v)}>{showCalibration ? "Hide tuning" : "Show tuning"}</DevButton>
               <DevButton active={showExpressions} onClick={() => setShowExpressions((v) => !v)}>{showExpressions ? "Hide library" : "Open library"}</DevButton>
+              <DevButton active={showScreens} onClick={() => setShowScreens((v) => !v)}>{showScreens ? "Hide screens" : "Screen browser"}</DevButton>
             </div>
             {showCalibration && <div className="mt-3 flex max-h-[min(64vh,620px)] flex-col gap-3 overflow-y-auto pr-1">
               <BehaviourPanel status={status} autoEnabled={autoBehaviourEnabled} onToggle={() => setAutoBehaviourEnabled((v) => !v)} onTrigger={fire} />
@@ -321,12 +369,32 @@ export default function DeviceSimulator() {
         </nav>
       </div>
 
-      <div className="flex min-h-0 w-full flex-1 items-center justify-center">
+      <div className="flex min-h-0 w-full flex-1 items-stretch justify-center gap-3">
+        {/* Developer-only screen browser. Never rendered inside the LCD. */}
+        {showScreens && (
+          <div className="hidden max-h-[min(78vh,760px)] self-center lg:block">
+            <ScreenBrowser
+              snapshot={screenSnapshot}
+              fps={fps}
+              nativeResolution={DEVICE_CONFIG.resolution}
+              onSelect={selectScreen}
+              onPlayFlow={playFlow}
+              onPlay={() => { lifecycle.current.play(); setPlaying(true); }}
+              onPause={() => lifecycle.current.pause()}
+              onReplay={() => lifecycle.current.replay()}
+              onReset={() => lifecycle.current.reset()}
+              onFps={(value) => setFps(value as Fps)}
+            />
+          </div>
+        )}
         <div ref={frameRef} className="flex aspect-square w-full max-w-full items-center justify-center" style={{ width: `min(100%, ${Math.round(DEFAULT_OUTER * screenScale)}px, max(280px, calc(100dvh - 176px)))` }}>
           <DeviceBezel screenSize={screenSize}>
             <div className="relative">
-              <DeviceScreen
-                state={state}
+              <ScreenStage
+                screen={screenSnapshot.screen}
+                progress={screenSnapshot.progress}
+                simulated={screenSnapshot.simulated}
+                time={screenTime}
                 screenSize={screenSize}
                 playing={playing}
                 speed={speed}
