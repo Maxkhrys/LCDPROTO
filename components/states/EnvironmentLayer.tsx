@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { BlobRig } from "@/lib/blobRig";
+import { BODY_FRACTION, type BlobRig } from "@/lib/blobRig";
 import type {
   EnvironmentConfig,
   EnvironmentStatus,
@@ -9,6 +9,25 @@ import type {
 
 const TAU = Math.PI * 2;
 const CENTRE = 233;
+/**
+ * Half-height of Blob's solid silhouette at 1.00x, in 466-space pixels.
+ *
+ * BODY_FRACTION of the display wide, scaled by the body artwork's aspect, and
+ * then by 0.94 because the PNG carries transparent padding and his underside
+ * is rounded — his lowest drawn pixel sits above the image edge. Measured
+ * against the rendered canvas.
+ */
+const BODY_HALF_HEIGHT = 233 * BODY_FRACTION * (589 / 598) * 0.94;
+/** Largest background shift, in 466-space pixels. Restrained on purpose. */
+const PARALLAX_LIMIT = 2;
+/** Gap between that foot and the centre of the contact patch. */
+const SHADOW_DROP = 10;
+/**
+ * Resting patch size. Scaled from Blob's solid core rather than fixed: at 76px
+ * the shadow was narrower than his own base and stayed hidden behind him.
+ */
+const SHADOW_BASE_WIDTH = 233 * BODY_FRACTION * 0.86;
+const SHADOW_BASE_HEIGHT = SHADOW_BASE_WIDTH * 0.17;
 
 interface EnvironmentLayerProps {
   size: number;
@@ -168,16 +187,20 @@ function drawShadow(
   softness: number,
   colour: string
 ) {
-  const width = 76 * scaleX;
-  const height = 13 * scaleY;
-  const gradient = ctx.createRadialGradient(x, y, 0, x, y, width * 0.58);
+  const width = SHADOW_BASE_WIDTH * scaleX;
+  const height = SHADOW_BASE_HEIGHT * scaleY;
   const edge = clamp(softness, 0.35, 0.95);
-  gradient.addColorStop(0, rgba(colour, opacity));
-  gradient.addColorStop(edge, rgba(colour, opacity * 0.42));
-  gradient.addColorStop(1, rgba(colour, 0));
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(1, height / Math.max(width, 1));
+  // The gradient has to be built AFTER the transform and centred on the local
+  // origin. Built in page space beforehand, the translate below moved its
+  // centre to roughly (2x, 2y) — far outside the ellipse — so every pixel of
+  // the shadow sampled the transparent tail and nothing was drawn at all.
+  const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, width * 0.58);
+  gradient.addColorStop(0, rgba(colour, opacity));
+  gradient.addColorStop(edge, rgba(colour, opacity * 0.42));
+  gradient.addColorStop(1, rgba(colour, 0));
   ctx.fillStyle = gradient;
   ctx.beginPath();
   ctx.ellipse(0, 0, width, width, 0, 0, TAU);
@@ -253,8 +276,19 @@ export default function EnvironmentLayer({
       foregroundCtx.clearRect(0, 0, size, size);
       const staticScene = staticSceneRef.current;
       if (staticScene) {
-        const parallaxX = active.parallaxEnabled ? -currentRig.blob.x * active.parallax : 0;
-        backgroundCtx.drawImage(staticScene, parallaxX, 0, size, size);
+        // Clamped, then drawn with overscan. Unclamped this reached ~40px when
+        // Blob was dragged, which both overpowered the parallax and slid the
+        // scene off its own edge, leaving a bare strip down one side.
+        const parallaxX = active.parallaxEnabled
+          ? clamp(-currentRig.blob.x * active.parallax, -PARALLAX_LIMIT, PARALLAX_LIMIT)
+          : 0;
+        backgroundCtx.drawImage(
+          staticScene,
+          parallaxX - PARALLAX_LIMIT,
+          -PARALLAX_LIMIT,
+          size + PARALLAX_LIMIT * 2,
+          size + PARALLAX_LIMIT * 2
+        );
       }
 
       if (!active.enabled) {
@@ -272,21 +306,47 @@ export default function EnvironmentLayer({
         0.24,
         1.22
       );
-      const targetShadowX = currentRig.blob.x * 0.46 + currentRig.body.x * 0.32;
-      const targetShadowY = currentRig.blob.y * 0.2 + currentRig.body.y * 0.22;
-      shadowX.current.step(targetShadowX, dt, 2.2 - active.shadowLag / 260, 0.72);
-      shadowY.current.step(targetShadowY, dt, 2.1 - active.shadowLag / 280, 0.75);
+      // Both axes track Blob's real contact point. The springs below supply
+      // the ~100ms trail, so the shadow no longer needs a fractional follow
+      // factor — that only ever left it sitting beside him rather than under.
+      const depthScale = clamp(1 + currentRig.blob.depth * 0.28, 0.84, 1.16);
+      const yawWidth =
+        0.34 + Math.abs(Math.cos((currentRig.blob.yaw * Math.PI) / 180)) * 0.66;
+      const wholeScaleX =
+        currentRig.blob.scale * depthScale * yawWidth * currentRig.blob.scaleX;
+      const wholeScaleY =
+        currentRig.blob.scale * depthScale * currentRig.blob.scaleY;
+
+      const footX = currentRig.blob.x + currentRig.body.x * wholeScaleX;
+      const footY =
+        currentRig.blob.y +
+        (currentRig.body.y + BODY_HALF_HEIGHT * currentRig.body.scaleY) *
+          wholeScaleY;
+      // The ground does not move with him. Dropping follows fully; rising
+      // barely follows at all, so he separates from his own shadow.
+      const restFootY = BODY_HALF_HEIGHT * wholeScaleY;
+      const sink = footY - restFootY;
+      const groundedY = restFootY + (sink > 0 ? sink : sink * 0.25);
+
+      shadowX.current.step(footX, dt, 2.2 - active.shadowLag / 260, 0.72);
+      shadowY.current.step(groundedY, dt, 2.1 - active.shadowLag / 280, 0.75);
       shadowHeight.current.step(verticalSignal, dt, 2.25 - active.shadowLag / 300, 0.76);
       const height = clamp(shadowHeight.current.value, 0.2, 1.24);
       const squash = Math.max(0, bodyDeformY) + Math.max(0, bodyDeformX) * 0.35;
-      const shadowScaleX = active.shadowWidth * (0.88 + (1 - height) * 0.2 + squash * 1.7);
-      const shadowScaleY = active.shadowHeight * (0.8 + height * 0.24);
+      // Proportional to how wide Blob actually is, so the patch still reads
+      // when he is scaled down and never looks like a pebble under him.
+      const spread = Math.max(0.35, currentRig.body.scaleX * wholeScaleX);
+      const shadowScaleX =
+        active.shadowWidth * spread * (0.88 + (1 - height) * 0.2 + squash * 1.7);
+      const shadowScaleY =
+        active.shadowHeight * spread * (0.8 + height * 0.24);
       const shadowOpacity = clamp(
         active.shadowOpacity * (0.78 + (1 - height) * 0.32),
         0,
         0.9
       );
-      const shadowYPosition = 364 + shadowY.current.value + active.shadowYOffset;
+      const shadowYPosition =
+        CENTRE + shadowY.current.value + SHADOW_DROP + active.shadowYOffset;
 
       if (active.bounceEnabled) {
         const bounce = backgroundCtx.createRadialGradient(
