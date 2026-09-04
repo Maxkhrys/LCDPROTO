@@ -34,7 +34,7 @@ export interface JellyTarget {
 }
 
 export interface JellyPose extends JellyTarget {
-  /** Combined translational speed, 240-space pixels per second. */
+  /** Combined translational speed, 466-space pixels per second. */
   bodySpeed: number;
   /** Four low-amplitude body-surface ripple offsets, top to bottom. */
   rippleTop: number;
@@ -182,7 +182,12 @@ export class BlobJellyPhysics {
         // Depth and turn are deliberately slower than the eye-leading face.
         // That gives a small parallax catch-up without introducing a 3D engine.
         this.depth.step(target.depth, dt, 1.8, 0.66);
-        this.yaw.step(target.yaw, dt, 1.95, 0.62);
+        // Angles repeat every 360°. Choose equivalent target so finishing a
+        // full turn settles at 360°/0° instead of unwinding through another
+        // visible rotation.
+        const yawTarget =
+          target.yaw + Math.round((this.yaw.value - target.yaw) / 360) * 360;
+        this.yaw.step(yawTarget, dt, 2.35, 0.68);
         this.pitch.step(target.pitch, dt, 1.8, 0.66);
         this.rotation.step(target.rotation, dt, 2.5, 0.6);
         this.scaleX.step(target.scaleX, dt, 3.05, 0.48);
@@ -192,12 +197,12 @@ export class BlobJellyPhysics {
         // cues. That is what makes a slow float feel like a soft object with
         // weight instead of a rigid icon translated on a screen.
         const bodyLagX = Math.max(
-          -2.8,
-          Math.min(3.6, -this.x.velocity * 0.11 * jellyAmount)
+          -5.4,
+          Math.min(7, -this.x.velocity * 0.22 * jellyAmount)
         );
         const bodyLagY = Math.max(
-          -3.2,
-          Math.min(4.2, -this.y.velocity * 0.13 * jellyAmount)
+          -6.2,
+          Math.min(8.2, -this.y.velocity * 0.26 * jellyAmount)
         );
         const bodyLagRotation = Math.max(
           -1.4,
@@ -213,8 +218,8 @@ export class BlobJellyPhysics {
         );
         const bodyLagScaleX = 1 / (1 + bodyLagScaleY) - 1;
         const bodyLagSkewX = Math.max(
-          -1.8,
-          Math.min(2.4, -this.x.velocity * 0.12 * jellyAmount)
+          -3.5,
+          Math.min(4.7, -this.x.velocity * 0.24 * jellyAmount)
         );
         const bodyLagSkewY = Math.max(
           -1.4,
@@ -266,7 +271,7 @@ export class BlobJellyPhysics {
       motionX - this.previousMotionX,
       motionY - this.previousMotionY
     );
-    // Spring velocity is in 240-space pixels/second. The previous ripple
+    // Spring velocity is in 466-space pixels/second. The previous ripple
     // impulse was sub-pixel, so it could not survive native-size sampling.
     // This is still capped tightly: one visible wave, then decay.
     const rippleAmount = Math.max(0, Math.min(2, target.rippleAmount));

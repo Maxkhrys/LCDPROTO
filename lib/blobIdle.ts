@@ -9,7 +9,7 @@
 
 export interface IdleConfig {
   enabled: boolean;
-  /** Vertical wander amplitude either side of centre, in 240-space pixels. */
+  /** Vertical wander amplitude either side of centre, in 466-space pixels. */
   floatPx: number;
   /** Multiplier for the broad gravity-like drift clock. */
   driftSpeed: number;
@@ -23,7 +23,7 @@ export interface IdleConfig {
   rippleAmount: number;
   /** Mean seconds between scheduled blinks, before deterministic jitter. */
   blinkInterval: number;
-  /** Peak eye travel for a glance, in 240-space pixels. */
+  /** Peak eye travel for a glance, in 466-space pixels. */
   gazeDriftPx: number;
   /** Ambient rotation amplitude either side of centre, in degrees. */
   rotationDeg: number;
@@ -35,27 +35,27 @@ export const DEFAULT_IDLE: IdleConfig = {
   enabled: true,
   // Blob now travels through a small, safe orbit around the display instead
   // of only breathing in place. The spring layer keeps the movement soft.
-  floatPx: 6.5,
+  floatPx: 12.6,
   driftSpeed: 1,
   breathAmount: 0.018,
   squashAmount: 0.05,
   jellyAmount: 1.55,
   rippleAmount: 1.65,
   blinkInterval: 5.9,
-  gazeDriftPx: 3.5,
+  gazeDriftPx: 6.8,
   rotationDeg: 0.6,
   activityPace: 0.78,
 };
 
 export const IDLE_LIMITS = {
-  floatPx: { min: 0, max: 12, step: 0.1 },
+  floatPx: { min: 0, max: 24, step: 0.1 },
   driftSpeed: { min: 0.35, max: 1.6, step: 0.05 },
   breathAmount: { min: 0, max: 0.024, step: 0.0005 },
   squashAmount: { min: 0, max: 0.055, step: 0.0005 },
   jellyAmount: { min: 0.5, max: 1.6, step: 0.05 },
   rippleAmount: { min: 0, max: 2, step: 0.05 },
   blinkInterval: { min: 4, max: 10, step: 0.1 },
-  gazeDriftPx: { min: 0, max: 4, step: 0.1 },
+  gazeDriftPx: { min: 0, max: 8, step: 0.1 },
   rotationDeg: { min: 0, max: 1, step: 0.05 },
   activityPace: { min: 0.65, max: 1.8, step: 0.05 },
 } as const;
@@ -69,7 +69,7 @@ const WANDER_MIN = 2200;
 const WANDER_MAX = 4200;
 /** Horizontal travel is slightly narrower than vertical travel. */
 const HORIZONTAL_RATIO = 0.84;
-const HORIZONTAL_MAX = 10;
+const HORIZONTAL_MAX = 20;
 /** Small current layered over the broad path prevents dead plateaus. */
 const MICRO_WANDER_MIN = 650;
 const MICRO_WANDER_MAX = 1250;
@@ -184,8 +184,8 @@ export class AmbientDrift {
   }
 
   private beginMicroLeg(cfg: IdleConfig) {
-    const xAmplitude = Math.min(1.05, 0.35 + cfg.floatPx * MICRO_X_RATIO);
-    const yAmplitude = Math.min(0.78, 0.24 + cfg.floatPx * MICRO_Y_RATIO);
+    const xAmplitude = Math.min(2.05, 0.7 + cfg.floatPx * MICRO_X_RATIO);
+    const yAmplitude = Math.min(1.5, 0.48 + cfg.floatPx * MICRO_Y_RATIO);
     this.microFromX = this.microToX;
     this.microFromY = this.microToY;
     this.microToX = this.target(xAmplitude, this.microFromX);

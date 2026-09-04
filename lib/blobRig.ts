@@ -206,7 +206,7 @@ export type FaceLayerId = keyof typeof FACE_LAYERS;
 export const FACE_ORDER: readonly FaceLayerId[] = ["leftEye", "rightEye", "mouth"];
 
 /**
- * Share of the 240px screen diameter the body's solid core spans.
+ * Share of the 466px screen diameter the body's solid core spans.
  *
  * V3 reduced this from 0.68 so Blob floats inside the display rather than
  * filling it, leaving room for leaning, squash and future state transitions.
@@ -237,7 +237,7 @@ export function bodyScale(screen: number, colour: BlobColour = "purple"): number
   return (screen * BODY_FRACTION) / RIG_ASSETS[colour].body.solidWidth;
 }
 
-/** Neutral geometry of a facial layer in 240-space pixels. */
+/** Neutral geometry of a facial layer in 466-space pixels. */
 export function faceAnchor(
   id: FaceLayerId,
   screen: number,
@@ -259,7 +259,7 @@ export function faceAnchor(
 
 /** Independent transform available on the body and every facial element. */
 export interface ElementTransform {
-  /** Offset from the measured neutral position, in 240-space pixels. */
+  /** Offset from the measured neutral position, in 466-space pixels. */
   x: number;
   y: number;
   scaleX: number;
@@ -287,7 +287,7 @@ export interface ElementTransform {
   /** Procedural mouth shape controls. */
   mouthCurve: number;
   mouthO: number;
-  /** Body-only surface ripple offsets, in 240-space pixels. */
+  /** Body-only surface ripple offsets, in 466-space pixels. */
   rippleTop: number;
   rippleUpper: number;
   rippleLower: number;

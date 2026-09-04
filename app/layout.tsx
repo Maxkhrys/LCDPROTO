@@ -2,9 +2,9 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LCDPROTO — 1.28\" Round Display Simulator",
+  title: "LCDPROTO — 1.43\" AMOLED Round Display Simulator",
   description:
-    "Browser prototype for a 240x240 round ESP32 LCD device. UI and animation testing only.",
+    "Browser prototype for a 466x466 round ESP32-S3 AMOLED device. UI and animation testing only.",
 };
 
 export const viewport: Viewport = {

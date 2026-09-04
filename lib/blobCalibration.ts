@@ -4,7 +4,7 @@ import { NEUTRAL_ELEMENT, NEUTRAL_BLOB } from "./blobRig";
 /**
  * Temporary per-element calibration, driven by the dev controls.
  *
- * Offsets are in 240-space pixels — 1 unit is one real pixel on the target
+ * Offsets are in 466-space pixels — 1 unit is one real pixel on the target
  * panel. Scale is a multiplier on the measured neutral size. All defaults are
  * 0 / 0 / 1 because the measured anchors in blobRig.ts already reproduce the
  * master's face placement; these exist so the placement can be nudged by eye
@@ -83,7 +83,7 @@ export function formatCalibration(cal: FaceCalibration): string {
       .padStart(7)}   scale: ${c.scale.toFixed(3)}`;
   };
   return [
-    "// 240-space pixels; paste back so these can be hardcoded",
+    "// 466-space pixels; paste back so these can be hardcoded",
     line("leftEye", "LEFT EYE"),
     line("rightEye", "RIGHT EYE"),
     line("mouth", "MOUTH"),

@@ -5,16 +5,16 @@ import { useEffect, useRef } from "react";
 /**
  * The SENSED proximity field is intentionally quieter than a radar:
  * five hairline orbits and a small, fixed set of green signal points.
- * Positions are authored in the panel's native 240-space so this remains
+ * Positions are authored in the panel's native 466-space so this remains
  * straightforward to reproduce on the eventual display firmware.
  */
-const CENTRE = 120;
+const CENTRE = 233;
 const RINGS = [
-  { radius: 31, alpha: 0.18 },
-  { radius: 48, alpha: 0.14 },
-  { radius: 67, alpha: 0.12 },
-  { radius: 87, alpha: 0.1 },
-  { radius: 106, alpha: 0.08 },
+  { radius: 60, alpha: 0.18 },
+  { radius: 93, alpha: 0.14 },
+  { radius: 130, alpha: 0.12 },
+  { radius: 169, alpha: 0.1 },
+  { radius: 206, alpha: 0.08 },
 ] as const;
 
 interface SignalPoint {
@@ -63,10 +63,10 @@ function drawField(
   const wash = ctx.createRadialGradient(
     CENTRE,
     CENTRE,
-    18,
+    35,
     CENTRE,
     CENTRE,
-    118
+    229
   );
   wash.addColorStop(0, `rgba(83, 235, 127, ${0.015 + washPulse * 0.02})`);
   wash.addColorStop(0.58, `rgba(83, 235, 127, ${0.035 + washPulse * 0.035})`);
@@ -76,7 +76,7 @@ function drawField(
   ctx.fillStyle = wash;
   ctx.fillRect(0, 0, size, size);
 
-  ctx.lineWidth = 0.7;
+  ctx.lineWidth = 1.1;
   ctx.strokeStyle = "#62e895";
 
   for (const ring of RINGS) {
@@ -95,7 +95,7 @@ function drawField(
     // occasional twinkle read clearly at native size without a glow filter.
     const twinkle = Math.pow(pulse, 5);
     ctx.globalAlpha = 0.16 + twinkle * point.peak * 0.84;
-    const radius = point.radius + twinkle * 0.46;
+    const radius = point.radius * 2 + twinkle * 0.7;
     const x = CENTRE + Math.cos(point.angle) * ring.radius;
     const y = CENTRE + Math.sin(point.angle) * ring.radius;
     ctx.beginPath();

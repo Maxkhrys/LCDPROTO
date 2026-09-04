@@ -54,7 +54,7 @@ export function getStateMeta(id: DeviceState): DeviceStateMeta {
 
 /** Props every state component receives. Keep this stable — states are isolated. */
 export interface StateViewProps {
-  /** Native screen size in pixels (240). */
+  /** Native screen size in pixels (466). */
   size: number;
   /** False when the dev controls are paused; states should freeze. */
   playing: boolean;
@@ -75,8 +75,8 @@ export interface StateViewProps {
   /** Reports the running behaviour back to the dev readout. */
   onBehaviourStatus?: (s: HomeActivityStatus) => void;
   /**
-   * Pixels rasterised per 240-space pixel. Layout and animation always work in
-   * 240-space; this only controls sampling fidelity so artwork stays sharp when
+   * Pixels rasterised per 466-space pixel. Layout and animation always work in
+   * 466-space; this only controls sampling fidelity so artwork stays sharp when
    * the panel is magnified on a desktop display. 1 = true hardware pixels.
    */
   renderScale: number;

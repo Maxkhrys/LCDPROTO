@@ -29,12 +29,12 @@ const STATE_VIEWS: Record<DeviceState, StateView> = {
 
 interface DeviceScreenProps extends Omit<StateViewProps, "size"> {
   state: DeviceState;
-  /** Rendered diameter in CSS pixels; the internal buffer stays 240x240. */
+  /** Rendered diameter in CSS pixels; the internal buffer stays 466x466. */
   screenSize: number;
 }
 
 /**
- * The panel itself. Everything inside is authored at the native 240x240
+ * The panel itself. Everything inside is authored at the native 466x466
  * resolution and then scaled as a whole, so the prototype can never
  * accidentally rely on more pixels than the hardware has.
  */

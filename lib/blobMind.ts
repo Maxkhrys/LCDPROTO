@@ -121,12 +121,12 @@ const DESTINATION_POSES: Record<
   { x: number; y: number; depth: number; yaw: number; pitch: number }
 > = {
   CENTER: { x: 0, y: 0, depth: 0, yaw: 0, pitch: 0 },
-  UP_LEFT: { x: -26, y: -19, depth: 0.08, yaw: -16, pitch: -4 },
-  UP_RIGHT: { x: 26, y: -19, depth: 0.08, yaw: 16, pitch: -4 },
-  LEFT: { x: -31, y: 0, depth: 0.14, yaw: -18, pitch: 0 },
-  RIGHT: { x: 31, y: 0, depth: 0.14, yaw: 18, pitch: 0 },
-  DOWN_LEFT: { x: -23, y: 20, depth: -0.14, yaw: -13, pitch: 4 },
-  DOWN_RIGHT: { x: 23, y: 20, depth: -0.14, yaw: 13, pitch: 4 },
+  UP_LEFT: { x: -50, y: -37, depth: 0.08, yaw: -16, pitch: -4 },
+  UP_RIGHT: { x: 50, y: -37, depth: 0.08, yaw: 16, pitch: -4 },
+  LEFT: { x: -60, y: 0, depth: 0.14, yaw: -18, pitch: 0 },
+  RIGHT: { x: 60, y: 0, depth: 0.14, yaw: 18, pitch: 0 },
+  DOWN_LEFT: { x: -45, y: 39, depth: -0.14, yaw: -13, pitch: 4 },
+  DOWN_RIGHT: { x: 45, y: 39, depth: -0.14, yaw: 13, pitch: 4 },
 };
 
 const story = (

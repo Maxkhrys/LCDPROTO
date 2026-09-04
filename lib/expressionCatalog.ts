@@ -96,6 +96,9 @@ export const HOME_EXPRESSION_GROUPS: readonly ExpressionGroup[] = [
         hint: "small glance",
       },
       { id: "IDLE_SETTLE", label: "Idle settle", hint: "weight drops" },
+      { id: "CASUAL_SQUINT", label: "Casual squint", hint: "laid-back pause" },
+      { id: "LAZY_LOOK", label: "Lazy look", hint: "slow glance" },
+      { id: "SOFT_SIGH", label: "Soft sigh", hint: "settle + release" },
     ],
   },
   {
@@ -124,6 +127,10 @@ export const HOME_EXPRESSION_GROUPS: readonly ExpressionGroup[] = [
       { id: "SPIN_360", label: "360 spin", hint: "full turn" },
       { id: "WALL_IMPACT_LEFT", label: "Wall hit left", hint: "hard squash" },
       { id: "WALL_IMPACT_RIGHT", label: "Wall hit right", hint: "hard squash" },
+      { id: "CREEP_IN_LEFT", label: "Creep in left", hint: "peek from edge" },
+      { id: "CREEP_IN_RIGHT", label: "Creep in right", hint: "peek from edge" },
+      { id: "POP_OUT_IN", label: "Pop in", hint: "drop from above" },
+      { id: "VANISH_REAPPEAR", label: "Vanish + reappear", hint: "emote return" },
     ],
   },
   {

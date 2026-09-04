@@ -8,7 +8,7 @@ export default function Page() {
           LCDPROTO
         </h1>
         <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.22em] text-white/25">
-          1.28&quot; round display simulator
+          1.43&quot; AMOLED round display simulator
         </p>
       </header>
 

@@ -11,7 +11,7 @@ interface DeviceBezelProps {
 
 /**
  * Premium black bezel ring around the round panel. Purely cosmetic — it
- * sits outside the 240x240 render surface and never clips it.
+ * sits outside the 466x466 render surface and never clips it.
  */
 export default function DeviceBezel({ screenSize, children }: DeviceBezelProps) {
   const bezel = Math.round(screenSize * DEVICE_CONFIG.bezelRatio);

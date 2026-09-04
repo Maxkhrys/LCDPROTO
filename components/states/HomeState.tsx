@@ -234,14 +234,14 @@ export default function HomeState({
             depth: physical.depth,
             yaw: physical.yaw,
             pitch: physical.pitch,
-            scale: 1 + amb.breath,
+            scale: (1 + amb.breath) * (1 + d.blobScale),
             // Squash lives on the shared body surface. BlobCharacter applies
             // that same transform to every face anchor, so features stay
             // attached instead of preserving a separate screen-space grid.
             scaleX: 1,
             scaleY: 1,
             rotation: latestRotation + d.blobSpin,
-            opacity: 1,
+            opacity: d.blobOpacity,
           },
           // The body is the actual deforming surface. Facial anchors inherit
           // this full transform in BlobCharacter; the face artwork itself is

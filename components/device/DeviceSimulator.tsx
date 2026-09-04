@@ -84,7 +84,7 @@ export default function DeviceSimulator() {
   const [expressionFilter, setExpressionFilter] =
     useState<ExpressionFilter>("ALL");
   const [expressionQuery, setExpressionQuery] = useState("");
-  /** When true the panel rasterises at exactly 240x240 — real hardware pixels. */
+  /** When true the panel rasterises at exactly 466x466 — real hardware pixels. */
   const [nativePixels, setNativePixels] = useState(false);
   const [dpr, setDpr] = useState(1);
 
@@ -107,7 +107,7 @@ export default function DeviceSimulator() {
   }, []);
 
   // The outer size is decided by CSS so there is no layout shift; JS only
-  // measures it to work out the 240 -> CSS pixel scale factor.
+  // measures it to work out the 466 -> CSS pixel scale factor.
   const frameRef = useRef<HTMLDivElement>(null);
   const [outerSize, setOuterSize] = useState(MAX_OUTER);
 
@@ -152,7 +152,7 @@ export default function DeviceSimulator() {
   const meta = getStateMeta(state);
 
   // Rasterise at the resolution the panel is actually displayed at, so the
-  // 240-space design is sampled finely enough to survive magnification.
+  // 466-space design is sampled finely enough to survive magnification.
   const renderScale = nativePixels
     ? 1
     : Math.min(
@@ -466,7 +466,9 @@ export default function DeviceSimulator() {
 
       {/* Dev readout — outside the device, never inside the panel */}
       <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 font-mono text-[10px] uppercase tracking-[0.18em] text-white/25">
-        <span>240&times;240</span>
+        <span>
+          {DEVICE_CONFIG.resolution}&times;{DEVICE_CONFIG.resolution}
+        </span>
         <span aria-hidden className="text-white/10">
           /
         </span>
@@ -687,7 +689,7 @@ function DevButton({
 /**
  * Temporary idle-motion controls.
  *
- * Defaults are tuned for native 240x240 readability while remaining restrained.
+ * Defaults are tuned for native 466x466 readability while remaining restrained.
  */
 function IdlePanel({
   value,
@@ -799,7 +801,7 @@ function IdlePanel({
 /**
  * Temporary calibration for the layered face.
  *
- * Offsets are in 240-space pixels, so 1 unit is one real pixel on the target
+ * Offsets are in 466-space pixels, so 1 unit is one real pixel on the target
  * panel. Everything starts at 0 / 0 / 1.000x because the measured anchors in
  * lib/blobRig.ts already reproduce the master's face placement. Once these are
  * dialled in, SAVE CALIBRATION prints the numbers to hardcode.

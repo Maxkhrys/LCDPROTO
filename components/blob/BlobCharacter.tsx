@@ -15,9 +15,9 @@ import {
 import { drawDownscaled } from "./downscale";
 
 interface BlobCharacterProps {
-  /** Native screen size in pixels (240). */
+  /** Native screen size in pixels (466). */
   size: number;
-  /** Pixels rasterised per 240-space pixel. */
+  /** Pixels rasterised per 466-space pixel. */
   renderScale: number;
   /** Per-element transforms. Defaults to the neutral HOME pose. */
   rig?: BlobRig;
@@ -42,7 +42,7 @@ type Images = Record<LayerId, HTMLImageElement>;
  * their attachment points still move like skin.
  */
 const FACE_ART_SURFACE_INHERIT = 0.56;
-const SKIN_INTEGRATION_ALPHA = 0.12;
+const SKIN_INTEGRATION_ALPHA = 0.055;
 
 const clamp = (value: number, min: number, max: number) =>
   value < min ? min : value > max ? max : value;
@@ -195,8 +195,8 @@ function drawProceduralEye(
   // but the movement now has a safe internal margin.
   const eyeWidth = width * 0.86;
   const eyeHeight = height * 0.96;
-  const eyeX = clamp(gazeX * 0.3, -width * 0.08, width * 0.08);
-  const eyeY = clamp(gazeY * 0.28, -height * 0.08, height * 0.08);
+  const eyeX = clamp(gazeX * 0.72, -width * 0.14, width * 0.14);
+  const eyeY = clamp(gazeY * 0.58, -height * 0.14, height * 0.14);
   eyeSocketPath(ctx, eyeX, eyeY, eyeWidth, eyeHeight);
   ctx.fillStyle = "#010204";
   ctx.fill();
@@ -420,7 +420,10 @@ export default function BlobCharacter({
     // but foreshortening the width and softly hiding the face at profile gives
     // the eye a convincing near/far turn with only scalar canvas transforms.
     const yawWidth = 0.34 + Math.abs(Math.cos(yawRadians)) * 0.66;
-    const faceVisibility = 1 - Math.abs(Math.sin(yawRadians)) * 0.78;
+    // Small destination turns must keep face fully readable. Fade only once
+    // Blob is genuinely near profile during a 3D turn.
+    const profileAmount = Math.max(0, Math.abs(Math.sin(yawRadians)) - 0.42);
+    const faceVisibility = clamp(1 - profileAmount * 1.55, 0.18, 1);
     ctx.translate(
       center + blob.x,
       center + blob.y + settingsDrop - blob.pitch * 0.18

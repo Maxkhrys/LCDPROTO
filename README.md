@@ -1,9 +1,16 @@
 # LCDPROTO
 
-Browser prototype for a 1.28" round **240×240** ESP32 LCD device used in cars.
+Browser prototype for a 1.43" round **466×466** ESP32-S3 AMOLED device used in cars.
 
 This is **not** the hardware app. It exists only to design and test the on-screen
 UI and animations before the physical panel arrives.
+
+## Locked hardware target
+
+Waveshare ESP32 S3 1.43-inch AMOLED Round Display: 466×466 circular AMOLED,
+capacitive touch, ESP32-S3R8, 8 MB PSRAM, 16 MB flash, QSPI, WiFi and BLE 5.
+The UI canvas is native 466×466 with centre **233,233** and radius **233**.
+The animation target is 60 FPS where practical, with stable 30 FPS as the floor.
 
 ## Run locally
 
@@ -36,17 +43,15 @@ lib/blobPhysics.ts       lightweight soft-body spring follow-through
 
 ## Design space vs rasterisation
 
-Everything inside the panel is **laid out and animated in 240×240 space**, so
+Everything inside the panel is **laid out and animated in 466×466 space**, so
 the prototype can never rely on more pixels than the hardware has.
 
-Rasterisation is a separate concern. Drawing into a literal 240×240 buffer and
-magnifying it to ~500pt on a desktop display throws away ~87% of the artwork's
-linear detail and looks mushy — softness the real 32mm panel will not have. So
-the canvas backing store is sized to the resolution the panel is actually
-displayed at (`renderScale`, capped at 4×), while every coordinate stays in
-240-space. Design fidelity is unchanged; only sampling improves.
+Rasterisation is a separate concern. The canvas backing store is sized to the
+466×466 panel resolution and can be previewed larger on desktop
+(`renderScale`, capped at 4×). Coordinates, touch hit testing, and asset sizing
+all stay in 466-space, so the AMOLED preview matches the real pixel budget.
 
-The **1:1** dev button forces a true 240×240 buffer with nearest-neighbour
+The **1:1** dev button forces a true 466×466 buffer with nearest-neighbour
 scaling, to check exactly what the hardware will show.
 
 Large source art is downscaled by repeated halving (`components/blob/downscale.ts`)
@@ -104,7 +109,7 @@ and no pixel off by more than 25, i.e. within the source's own noise.
 `FACE_PLACEMENT` in `lib/blobRig.ts` positions each facial layer as a fraction
 of the body's solid width, with a scale relative to the body's own — the parts
 are drawn far larger than life on the sheet. Values were chosen by rendering
-candidate grids and comparing at 240x240, not derived from the old artwork.
+candidate grids and comparing at native 466x466, not derived from the old 240x240 target.
 
 Nothing in the render pipeline adds glow, stroke, shadow, blur or colour
 correction; the layers are drawn exactly as supplied.
@@ -208,7 +213,7 @@ are shared rather than reimplemented as a separate animation language.
 Behind Blob is a quiet proximity field: five thin green orbital rings and 18
 sparse signal points. Each point has its own deterministic phase and period,
 so only a few points twinkle at once; the field never becomes a dense radar or
-a full-screen effect. The field is drawn at native 240-space and pauses with
+a full-screen effect. The field is drawn at native 466-space and pauses with
 the simulator.
 
 Expressions → SENSED includes inherited HOME cues plus two coordinated

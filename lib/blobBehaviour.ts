@@ -65,7 +65,14 @@ export type BehaviourId =
   | "SAD_SMALL"
   | "IDLE_SOFT_BREATH"
   | "IDLE_LOOK_AROUND"
-  | "IDLE_SETTLE";
+  | "IDLE_SETTLE"
+  | "CREEP_IN_LEFT"
+  | "CREEP_IN_RIGHT"
+  | "POP_OUT_IN"
+  | "VANISH_REAPPEAR"
+  | "CASUAL_SQUINT"
+  | "LAZY_LOOK"
+  | "SOFT_SIGH";
 
 export type HomeMood =
   | "CONTENT"
@@ -103,6 +110,12 @@ type BodyBehaviour = Exclude<
   | MouthBehaviour
 >;
 
+type SpecialBehaviour =
+  | "CREEP_IN_LEFT"
+  | "CREEP_IN_RIGHT"
+  | "POP_OUT_IN"
+  | "VANISH_REAPPEAR";
+
 export interface BehaviourConfig {
   gazePx: number;
   squash: number;
@@ -114,6 +127,9 @@ export interface BehaviourConfig {
 export interface PoseDelta {
   blobX: number;
   blobY: number;
+  /** Temporary whole-Blob scale and opacity for entrance/exit beats. */
+  blobScale: number;
+  blobOpacity: number;
   /** Normalised distance from the panel: positive is closer to the viewer. */
   blobDepth: number;
   /** Yaw and pitch are presentation-space degrees for the simple 3D turn. */
@@ -163,6 +179,8 @@ export interface PoseDelta {
 export const NEUTRAL_DELTA: PoseDelta = {
   blobX: 0,
   blobY: 0,
+  blobScale: 0,
+  blobOpacity: 1,
   blobDepth: 0,
   blobYaw: 0,
   blobPitch: 0,
@@ -213,6 +231,8 @@ const smoothstep = (v: number) => {
   const t = clamp01(v);
   return t * t * (3 - 2 * t);
 };
+const mix = (from: number, to: number, amount: number) =>
+  from + (to - from) * clamp01(amount);
 const preserveAreaX = (scaleYDelta: number) => 1 / (1 + scaleYDelta) - 1;
 
 function mulberry32(seed: number): () => number {
@@ -412,6 +432,11 @@ export class BehaviourController {
   private spinRotation = 0;
   private impactAt = 0;
   private impactDirection = 0;
+  private specialAction: SpecialBehaviour | null = null;
+  private specialStartedAt = -1;
+  private specialEmoteStarted = false;
+  private specialScale = 0;
+  private specialOpacity = 1;
 
   private gazeAction = "RESTING";
   private lidAction = "OPEN";
@@ -547,6 +572,11 @@ export class BehaviourController {
     this.spinRotation = 0;
     this.impactAt = 0;
     this.impactDirection = 0;
+    this.specialAction = null;
+    this.specialStartedAt = -1;
+    this.specialEmoteStarted = false;
+    this.specialScale = 0;
+    this.specialOpacity = 1;
     this.activityId = "REST";
     this.activityStartedAt = 0;
     this.activityUntil = 0;
@@ -655,6 +685,15 @@ export class BehaviourController {
     this.travelDepthTarget = 0;
     this.travelYawTarget = 0;
     this.travelPitchTarget = 0;
+    this.spinStartedAt = -1;
+    this.spinRotation = 0;
+    this.impactAt = 0;
+    this.impactDirection = 0;
+    this.specialAction = null;
+    this.specialStartedAt = -1;
+    this.specialEmoteStarted = false;
+    this.specialScale = 0;
+    this.specialOpacity = 1;
     this.applyMoodTargets();
     this.activityId = "REST";
     this.activityUntil = this.clock;
@@ -674,6 +713,15 @@ export class BehaviourController {
     this.manualBeat = true;
     if (id === "SPIN_360") {
       this.startSpin();
+      return;
+    }
+    if (
+      id === "CREEP_IN_LEFT" ||
+      id === "CREEP_IN_RIGHT" ||
+      id === "POP_OUT_IN" ||
+      id === "VANISH_REAPPEAR"
+    ) {
+      this.startSpecial(id, cfg);
       return;
     }
     if (id === "WALL_IMPACT_LEFT" || id === "WALL_IMPACT_RIGHT") {
@@ -735,7 +783,10 @@ export class BehaviourController {
       id === "LAUGH_SQUISH" ||
       id === "PLAYFUL_WINK" ||
       id === "PANIC_SHAKE" ||
-      id === "PROUD_STRETCH"
+      id === "PROUD_STRETCH" ||
+      id === "CASUAL_SQUINT" ||
+      id === "LAZY_LOOK" ||
+      id === "SOFT_SIGH"
     ) {
       this.startLibraryBeat(id, cfg);
       return;
@@ -752,6 +803,7 @@ export class BehaviourController {
     this.ensureSchedule(cfg);
     this.clock += Math.max(0, dtMs);
 
+    this.updateSpecial();
     this.updateStoryTravel();
     this.updateSpin();
     if (this.impactAt > 0 && this.clock >= this.impactAt) {
@@ -823,7 +875,11 @@ export class BehaviourController {
 
       if (this.clock >= this.nextMoodAt) this.pickMood(cfg);
       if (this.clock >= this.nextMicroAt) this.pickMicro(cfg);
-      if (this.clock >= this.nextBeatAt && this.beatUntil === 0)
+      if (
+        this.clock >= this.nextBeatAt &&
+        this.beatUntil === 0 &&
+        this.specialAction === null
+      )
         this.pickMindStory(cfg);
       if (this.clock >= this.nextBlinkAt && this.blinkStartedAt < 0)
         this.startBlink(this.rand() < 0.14, cfg);
@@ -1000,7 +1056,7 @@ export class BehaviourController {
   }
 
   private startGaze(id: BehaviourId, cfg: BehaviourConfig) {
-    const amount = clamp(cfg.gazePx, 0, 4.5);
+    const amount = clamp(cfg.gazePx, 0, 8.5);
     let x = 0;
     let y = 0;
     let bodyDir = 0;
@@ -1040,7 +1096,7 @@ export class BehaviourController {
     this.gazeReleaseAt = this.clock + duration;
     this.retargetEyes();
     this.followAt = this.clock + 85 + this.rand() * 35;
-    this.followXTarget = bodyDir * 1.5;
+    this.followXTarget = bodyDir * 3;
     this.followRotationTarget = bodyDir * 1.25;
     this.followScaleYTarget = y < -1 ? 0.025 : y > 1 ? -0.022 : -0.012;
     this.mark(id, duration + 650);
@@ -1058,6 +1114,15 @@ export class BehaviourController {
   private startExpression(id: BehaviourId) {
     const mood = MOODS[this.mood];
     let duration = 850;
+    // Every expression establishes complete eye targets. Without this reset,
+    // a prior one-eye squint or curious tilt leaves stale scale and rotation
+    // behind, making later buttons look broken.
+    this.leftRotation.target = 0;
+    this.rightRotation.target = 0;
+    this.leftScaleX.target = mood.eyeScaleX;
+    this.rightScaleX.target = mood.eyeScaleX;
+    this.leftScaleY.target = mood.eyeScaleY;
+    this.rightScaleY.target = mood.eyeScaleY;
     this.leftBrowRotation.target = 0;
     this.rightBrowRotation.target = 0;
     if (id === "SOFT_SQUINT") {
@@ -1067,12 +1132,16 @@ export class BehaviourController {
       this.rightTension.target = 0.29;
       this.leftScaleX.target = mood.eyeScaleX + 0.055;
       this.rightScaleX.target = mood.eyeScaleX + 0.045;
+      this.leftScaleY.target = mood.eyeScaleY - 0.025;
+      this.rightScaleY.target = mood.eyeScaleY - 0.02;
       duration = 850 + this.rand() * 650;
     } else if (id === "ANGRY_BROWS") {
       this.leftTension.target = 0.32;
       this.rightTension.target = 0.35;
       this.leftScaleX.target = mood.eyeScaleX + 0.035;
       this.rightScaleX.target = mood.eyeScaleX + 0.03;
+      this.leftScaleY.target = mood.eyeScaleY - 0.015;
+      this.rightScaleY.target = mood.eyeScaleY - 0.012;
       // Inner brow corners drop toward Blob's nose. Left brow rotates clockwise,
       // right brow counterclockwise. Brows no longer borrow eye rotation.
       this.leftBrowRotation.target = 5.4;
@@ -1083,12 +1152,14 @@ export class BehaviourController {
       this.rightTension.target = mood.rightTension * 0.98;
       this.leftRotation.target = -2.2;
       this.leftBrowRotation.target = -1.6;
+      this.leftScaleY.target = mood.eyeScaleY - 0.015;
       duration = 680 + this.rand() * 500;
     } else if (id === "ONE_EYE_SQUINT_RIGHT") {
       this.rightTension.target = 0.58;
       this.leftTension.target = mood.leftTension * 0.98;
       this.rightRotation.target = 2.2;
       this.rightBrowRotation.target = 1.6;
+      this.rightScaleY.target = mood.eyeScaleY - 0.015;
       duration = 680 + this.rand() * 500;
     } else {
       this.leftTension.target = 1.1;
@@ -1199,7 +1270,10 @@ export class BehaviourController {
       | "LAUGH_SQUISH"
       | "PLAYFUL_WINK"
       | "PANIC_SHAKE"
-      | "PROUD_STRETCH",
+      | "PROUD_STRETCH"
+      | "CASUAL_SQUINT"
+      | "LAZY_LOOK"
+      | "SOFT_SIGH",
     cfg: BehaviourConfig
   ) {
     this.clearBeatCues();
@@ -1318,6 +1392,26 @@ export class BehaviourController {
         body = "TALL_STRETCH";
         duration = 1800;
         break;
+      case "CASUAL_SQUINT":
+        expression = "SOFT_SQUINT";
+        mouth = "MOUTH_RELAX";
+        body = "BODY_SETTLE";
+        duration = 1650;
+        break;
+      case "LAZY_LOOK":
+        gaze = "LOOK_DOWN";
+        expression = "ONE_EYE_SQUINT_RIGHT";
+        mouth = "MOUTH_TWITCH";
+        body = "SOFT_SWAY_LEFT";
+        duration = 1800;
+        break;
+      case "SOFT_SIGH":
+        gaze = "LOOK_DOWN";
+        expression = "SOFT_SQUINT";
+        mouth = "MOUTH_RELAX";
+        body = "BREATH_STRETCH";
+        duration = 2100;
+        break;
     }
 
     if (gaze) this.startGaze(gaze, cfg);
@@ -1352,15 +1446,15 @@ export class BehaviourController {
     this.clearBodyTargets();
     if (id === "BODY_SETTLE") {
       sy = -0.064 * strength;
-      if (!storyOwnsTravel) this.travelYTarget = 3.2;
-      this.massYTarget = 1.6;
+      if (!storyOwnsTravel) this.travelYTarget = 6.2;
+      this.massYTarget = 3.1;
       this.massScaleYTarget = -0.025 * strength;
       this.massOriginYTarget = 0.96;
       duration = 520;
     } else if (id === "TINY_SQUISH") {
       sy = -0.052 * strength;
-      if (!storyOwnsTravel) this.travelYTarget = 1.8;
-      this.massYTarget = 0.8;
+      if (!storyOwnsTravel) this.travelYTarget = 3.5;
+      this.massYTarget = 1.6;
       this.massScaleYTarget = -0.02 * strength;
       this.massOriginYTarget = 0.94;
       duration = 420;
@@ -1368,10 +1462,10 @@ export class BehaviourController {
       dir = id === "SOFT_SWAY_LEFT" ? -1 : 1;
       sy = -0.025 * strength;
       if (!storyOwnsTravel) {
-        this.travelXTarget = dir * 3;
+        this.travelXTarget = dir * 5.8;
         this.travelRotationTarget = dir * 1.75;
       }
-      this.massXTarget = dir * 2;
+      this.massXTarget = dir * 3.9;
       this.massRotationTarget = dir * 1.45;
       this.massSkewYTarget = dir * 1.8;
       this.massOriginXTarget = -dir * 0.9;
@@ -1381,10 +1475,10 @@ export class BehaviourController {
       const sx = -0.066 * strength;
       sy = 1 / (1 + sx) - 1;
       if (!storyOwnsTravel) {
-        this.travelXTarget = dir * 3.4;
+        this.travelXTarget = dir * 6.6;
         this.travelRotationTarget = dir * 1.05;
       }
-      this.massXTarget = dir * 2.5;
+      this.massXTarget = dir * 4.8;
       this.massRotationTarget = dir * 1.7;
       this.massSkewYTarget = dir * 2.6;
       this.massOriginXTarget = -dir;
@@ -1394,9 +1488,9 @@ export class BehaviourController {
     } else if (id === "TALL_STRETCH" || id === "BREATH_STRETCH") {
       sy = (id === "TALL_STRETCH" ? 0.082 : 0.058) * strength;
       if (!storyOwnsTravel) {
-        this.travelYTarget = id === "TALL_STRETCH" ? -2.6 : -1.5;
+        this.travelYTarget = id === "TALL_STRETCH" ? -5 : -2.9;
       }
-      this.massYTarget = -1.1;
+      this.massYTarget = -2.1;
       this.massScaleYTarget = sy * 0.38;
       this.massOriginYTarget = 0.98;
       duration = id === "TALL_STRETCH" ? 690 : 920;
@@ -1404,10 +1498,10 @@ export class BehaviourController {
       dir = id === "JELLY_TWIST_LEFT" ? -1 : 1;
       sy = 0.034 * strength;
       if (!storyOwnsTravel) {
-        this.travelXTarget = dir * 2.4;
+        this.travelXTarget = dir * 4.7;
         this.travelRotationTarget = dir * 1.55;
       }
-      this.massXTarget = dir * 1.8;
+      this.massXTarget = dir * 3.5;
       this.massRotationTarget = dir * 3.2;
       this.massSkewXTarget = -dir * 1.8;
       this.massSkewYTarget = dir * 2.8;
@@ -1420,6 +1514,115 @@ export class BehaviourController {
     this.bodyAction = id;
     this.bodyReleaseAt = this.clock + duration;
     this.mark(id, duration + 750);
+  }
+
+  /**
+   * Storybook-style entrances and exits. Targets change in phases so the same
+   * spring system can sell weight, peek, and recovery without sprite sequences.
+   */
+  private startSpecial(id: SpecialBehaviour, cfg: BehaviourConfig) {
+    this.clearBeatCues();
+    this.clearBodyTargets();
+    this.spinStartedAt = -1;
+    this.spinRotation = 0;
+    this.impactAt = 0;
+    this.specialAction = id;
+    this.specialStartedAt = this.clock;
+    this.specialEmoteStarted = false;
+    this.specialScale = 0;
+    this.specialOpacity = 1;
+    this.travelXTarget = 0;
+    this.travelYTarget = 0;
+    this.travelRotationTarget = 0;
+    this.travelDepthTarget = 0;
+    this.travelYawTarget = 0;
+    this.travelPitchTarget = 0;
+    this.travelScaleYTarget = 0;
+    this.manualBeat = true;
+
+    const duration = id === "VANISH_REAPPEAR" ? 1900 : id === "POP_OUT_IN" ? 2050 : 2250;
+    this.bodyAction = id;
+    this.bodyReleaseAt = this.clock + duration;
+    this.activityId = id;
+    this.activityStartedAt = this.clock;
+    this.activityUntil = this.clock + duration;
+    this.nextBeatAt = Math.max(this.nextBeatAt, this.clock + duration + 600 * cfg.paceScale);
+  }
+
+  private updateSpecial() {
+    const id = this.specialAction;
+    if (!id || this.specialStartedAt < 0) return;
+    const duration = id === "VANISH_REAPPEAR" ? 1900 : id === "POP_OUT_IN" ? 2050 : 2250;
+    const t = clamp01((this.clock - this.specialStartedAt) / duration);
+    const direction = id === "CREEP_IN_LEFT" ? -1 : 1;
+
+    this.specialScale = 0;
+    this.specialOpacity = 1;
+    if (id === "CREEP_IN_LEFT" || id === "CREEP_IN_RIGHT") {
+      if (t < 0.2) {
+        const p = smoothstep(t / 0.2);
+        this.travelXTarget = mix(0, direction * 370, p);
+        this.travelYawTarget = mix(0, direction * 28, p);
+      } else if (t < 0.5) {
+        const p = smoothstep((t - 0.2) / 0.3);
+        this.travelXTarget = mix(direction * 370, direction * 235, p);
+        this.travelYawTarget = mix(direction * 28, direction * 16, p);
+        this.travelScaleYTarget = 0.05 * (1 - p);
+      } else if (t < 0.76) {
+        const p = smoothstep((t - 0.5) / 0.26);
+        this.travelXTarget = mix(direction * 235, direction * 150, p);
+        this.travelYawTarget = mix(direction * 16, direction * 9, p);
+        this.travelScaleYTarget = 0.028 * (1 - p);
+      } else {
+        const p = smoothstep((t - 0.76) / 0.24);
+        this.travelXTarget = mix(direction * 150, 0, p);
+        this.travelYawTarget = mix(direction * 9, 0, p);
+      }
+    } else if (id === "POP_OUT_IN") {
+      if (t < 0.22) {
+        const p = smoothstep(t / 0.22);
+        this.travelYTarget = mix(0, -370, p);
+        this.travelPitchTarget = mix(0, -14, p);
+      } else if (t < 0.5) {
+        const p = smoothstep((t - 0.22) / 0.28);
+        this.travelYTarget = mix(-370, -235, p);
+        this.travelPitchTarget = mix(-14, -6, p);
+        this.travelScaleYTarget = 0.06 * (1 - p);
+      } else {
+        const p = smoothstep((t - 0.5) / 0.5);
+        this.travelYTarget = mix(-235, 0, p);
+        this.travelPitchTarget = mix(-6, 0, p);
+        this.travelScaleYTarget = 0.03 * (1 - p);
+      }
+    } else {
+      const out = smoothstep(clamp01(t / 0.25));
+      const back = smoothstep(clamp01((t - 0.42) / 0.3));
+      this.specialScale = mix(0, -0.88, out);
+      this.specialOpacity = mix(1, 0, out);
+      if (t > 0.42) {
+        this.specialScale = mix(-0.88, 0, back);
+        this.specialOpacity = mix(0, 1, back);
+      }
+      if (t > 0.68 && !this.specialEmoteStarted) {
+        this.specialEmoteStarted = true;
+        this.startExpression("CURIOUS_WIDE");
+        this.startMouth("MOUTH_O");
+        this.activityId = id;
+        this.activityStartedAt = this.specialStartedAt;
+        this.activityUntil = this.specialStartedAt + duration;
+      }
+    }
+
+    if (t >= 1) {
+      this.specialAction = null;
+      this.specialStartedAt = -1;
+      this.specialScale = 0;
+      this.specialOpacity = 1;
+      this.manualBeat = false;
+      this.bodyAction = "SETTLING";
+      this.clearBodyTargets();
+      this.bodyReleaseAt = this.clock + 850;
+    }
   }
 
   private clearBodyTargets() {
@@ -1443,9 +1646,9 @@ export class BehaviourController {
     this.spinStartedAt = this.clock;
     this.spinRotation = 0;
     this.bodyAction = "SPIN_360";
-    this.bodyReleaseAt = this.clock + 1750;
-    this.mark("SPIN_360", 1750);
-    this.nextBeatAt = Math.max(this.nextBeatAt, this.clock + 2050);
+    this.bodyReleaseAt = this.clock + 2350;
+    this.mark("SPIN_360", 2350);
+    this.nextBeatAt = Math.max(this.nextBeatAt, this.clock + 2700);
   }
 
   private startWallImpact(
@@ -1458,9 +1661,9 @@ export class BehaviourController {
     const strength = clamp(cfg.squash / 0.032, 0.8, 1.5);
     this.impactDirection = direction;
     this.impactAt = this.clock + 320;
-    this.travelXTarget = direction * 16;
+    this.travelXTarget = direction * 31;
     this.travelRotationTarget = direction * 2.8;
-    this.massXTarget = direction * 7.5;
+    this.massXTarget = direction * 14.5;
     this.massRotationTarget = direction * 3.8;
     this.massSkewYTarget = direction * 3.2;
     this.massOriginXTarget = -direction;
@@ -1474,27 +1677,30 @@ export class BehaviourController {
   private updateSpin() {
     if (this.spinStartedAt < 0) return;
     const elapsed = this.clock - this.spinStartedAt;
-    const duration = 1320;
+    const duration = 1900;
     const t = clamp01(elapsed / duration);
     // One unwrapped turn. At 360 degrees the orientation is identical to
     // neutral, so clearing to zero after completion does not snap visually.
     this.spinRotation = 360 * smoothstep(t);
     const wobbleEnvelope = Math.sin(Math.PI * t);
-    const wobble = Math.sin(t * Math.PI * 5.2) * wobbleEnvelope;
-    const bob = Math.sin(t * Math.PI * 2.1) * wobbleEnvelope;
-    this.travelXTarget = wobble * 3.6;
-    this.travelYTarget = bob * 1.8;
-    this.travelRotationTarget = wobble * 4.2;
-    this.travelScaleYTarget = (-0.04 + bob * 0.022) * wobbleEnvelope;
-    this.massXTarget = wobble * 2.8;
-    this.massYTarget = bob * 1.4;
-    this.massRotationTarget = wobble * 5.1;
-    this.massScaleYTarget = -0.028 * wobbleEnvelope;
-    this.massSkewXTarget = -wobble * 4.2;
-    this.massSkewYTarget = wobble * 3.8;
+    const wobble = Math.sin(t * Math.PI * 4.2) * wobbleEnvelope;
+    const bob = Math.sin(t * Math.PI * 1.8) * wobbleEnvelope;
+      this.travelXTarget = wobble * 6;
+    this.travelYTarget = bob * 3;
+    this.travelRotationTarget = wobble * 3.4;
+    this.travelScaleYTarget = (-0.035 + bob * 0.018) * wobbleEnvelope;
+    this.massXTarget = wobble * 6.6;
+    this.massYTarget = bob * 3.5;
+    this.massRotationTarget = wobble * 5.8;
+    this.massScaleYTarget = -0.036 * wobbleEnvelope;
+    this.massSkewXTarget = -wobble * 4.8;
+    this.massSkewYTarget = wobble * 4.4;
     if (t >= 1) {
       this.spinStartedAt = -1;
-      this.spinRotation = 0;
+      // Keep 360° as the spring's equivalent endpoint. Angle wrapping in
+      // BlobJellyPhysics then returns to zero's visual orientation without
+      // forcing a second backwards turn.
+      this.spinRotation = 360;
       this.bodyAction = "SETTLING";
       this.clearBodyTargets();
       this.bodyReleaseAt = this.clock + 850;
@@ -1641,15 +1847,17 @@ export class BehaviourController {
       this.travelXTarget + (followActive ? this.followXTarget : 0);
     this.delta.blobY = this.travelYTarget;
     this.delta.blobDepth = this.travelDepthTarget;
-    // The manual 360 cue is a full unwrapped turn around the vertical axis;
-    // keeping it unwrapped means the renderer can show the profile and return
-    // to front without an end-of-turn snap.
+    // The manual 360 cue is a full unwrapped yaw around the vertical axis.
+    // It must not also become a 2D canvas roll; that was why Blob lay sideways
+    // in the old recording.
     this.delta.blobYaw = this.travelYawTarget + this.spinRotation;
     this.delta.blobPitch = this.travelPitchTarget;
     this.delta.blobRotation =
       this.travelRotationTarget +
       (followActive ? this.followRotationTarget : 0);
-    this.delta.blobSpin = this.spinRotation;
+    this.delta.blobSpin = 0;
+    this.delta.blobScale = this.specialScale;
+    this.delta.blobOpacity = this.specialOpacity;
     this.delta.blobScaleY = scaleY;
     this.delta.blobScaleX = preserveAreaX(scaleY);
     this.delta.bodyX = this.massXTarget;
