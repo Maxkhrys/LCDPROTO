@@ -13,6 +13,7 @@ import { BlobJellyPhysics, type JellyTarget } from "@/lib/blobPhysics";
 import { BlobDragController } from "@/lib/blobDrag";
 import EnvironmentLayer from "./EnvironmentLayer";
 import {
+  eyeLids,
   BODY_FRACTION,
   NEUTRAL_BLOB,
   NEUTRAL_ELEMENT,
@@ -331,7 +332,14 @@ export default function HomeState({
             y: d.eyeY + d.leftEyeY,
             // Gaze moves texture; socketX/socketY stay at the body-space
             // anchor. eyeOpen drives an anchored top-down lid closure.
-            eyeOpen: d.eyeLid * d.leftEyeTension,
+            // eyeOpen is the blink only; the squint lives in the lids.
+            eyeOpen: d.eyeLid,
+            lidUpper: eyeLids(d.leftEyeTension, d.leftLidUpper, d.leftLidLower)
+              .upper,
+            lidLower: eyeLids(d.leftEyeTension, d.leftLidUpper, d.leftLidLower)
+              .lower,
+            lidTilt: d.leftLidTilt,
+            lidCurve: d.lidCurve,
             eyeSocketScaleX: 1 + d.leftEyeScaleX,
             eyeSocketScaleY: 1 + d.leftEyeScaleY,
             browLift: d.leftEyeTension - 1,
@@ -344,7 +352,19 @@ export default function HomeState({
             ...NEUTRAL_ELEMENT,
             x: d.eyeX + d.rightEyeX,
             y: d.eyeY + d.rightEyeY,
-            eyeOpen: d.eyeLid * d.rightEyeTension,
+            eyeOpen: d.eyeLid,
+            lidUpper: eyeLids(
+              d.rightEyeTension,
+              d.rightLidUpper,
+              d.rightLidLower
+            ).upper,
+            lidLower: eyeLids(
+              d.rightEyeTension,
+              d.rightLidUpper,
+              d.rightLidLower
+            ).lower,
+            lidTilt: -d.rightLidTilt,
+            lidCurve: d.lidCurve,
             eyeSocketScaleX: 1 + d.rightEyeScaleX,
             eyeSocketScaleY: 1 + d.rightEyeScaleY,
             browLift: d.rightEyeTension - 1,
@@ -363,6 +383,9 @@ export default function HomeState({
             opacity: d.mouthOpacity,
             mouthCurve: d.mouthCurve,
             mouthO: d.mouthO,
+            mouthCornerLeft: d.mouthCornerLeft,
+            mouthCornerRight: d.mouthCornerRight,
+            mouthWidth: d.mouthWidth,
           },
         },
         cal

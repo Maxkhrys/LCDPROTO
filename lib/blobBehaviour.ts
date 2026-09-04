@@ -175,6 +175,20 @@ export interface PoseDelta {
   rightBrowRotation: number;
   eyeLid: number;
   leftEyeTension: number;
+  /** Independent lids, 0 open and 1 closed from that side. */
+  leftLidUpper: number;
+  leftLidLower: number;
+  rightLidUpper: number;
+  rightLidLower: number;
+  /** Lid slant in degrees; positive drops the inner corner. */
+  leftLidTilt: number;
+  rightLidTilt: number;
+  /** Shared lid curvature; positive arcs the lids into a crescent. */
+  lidCurve: number;
+  /** Per-corner mouth lift and overall mouth width. */
+  mouthCornerLeft: number;
+  mouthCornerRight: number;
+  mouthWidth: number;
   rightEyeTension: number;
   mouthX: number;
   mouthY: number;
@@ -223,6 +237,16 @@ export const NEUTRAL_DELTA: PoseDelta = {
   rightBrowRotation: 0,
   eyeLid: 1,
   leftEyeTension: 1,
+  leftLidUpper: 0,
+  leftLidLower: 0,
+  rightLidUpper: 0,
+  rightLidLower: 0,
+  leftLidTilt: 0,
+  rightLidTilt: 0,
+  lidCurve: 0,
+  mouthCornerLeft: 0,
+  mouthCornerRight: 0,
+  mouthWidth: 1,
   rightEyeTension: 1,
   mouthX: 0,
   mouthY: 0,
@@ -491,6 +515,19 @@ export class BehaviourController {
   private readonly rightBrowRotation = new SpringAxis();
   private readonly leftTension = new SpringAxis(1);
   private readonly rightTension = new SpringAxis(1);
+  // Independent lids. These carry the expression that a single symmetric
+  // aperture could not: a raised lower lid for a genuine smile, a heavy upper
+  // lid for boredom, and a slant that separates sad from angry.
+  private readonly leftLidUpper = new SpringAxis();
+  private readonly leftLidLower = new SpringAxis();
+  private readonly rightLidUpper = new SpringAxis();
+  private readonly rightLidLower = new SpringAxis();
+  private readonly leftLidTilt = new SpringAxis();
+  private readonly rightLidTilt = new SpringAxis();
+  private readonly lidCurve = new SpringAxis();
+  private readonly mouthCornerLeft = new SpringAxis();
+  private readonly mouthCornerRight = new SpringAxis();
+  private readonly mouthWidth = new SpringAxis(1);
   private readonly mouthX = new SpringAxis();
   private readonly mouthY = new SpringAxis();
   private readonly mouthScaleX = new SpringAxis();
@@ -1162,6 +1199,16 @@ export class BehaviourController {
     this.rightScaleY.target = mood.eyeScaleY;
     this.leftBrowRotation.target = 0;
     this.rightBrowRotation.target = 0;
+    this.leftLidUpper.target = 0;
+    this.leftLidLower.target = 0;
+    this.rightLidUpper.target = 0;
+    this.rightLidLower.target = 0;
+    this.leftLidTilt.target = 0;
+    this.rightLidTilt.target = 0;
+    this.lidCurve.target = 0;
+    this.mouthCornerLeft.target = 0;
+    this.mouthCornerRight.target = 0;
+    this.mouthWidth.target = 1;
     if (id === "SOFT_SQUINT") {
       // Squint is a real two-lid closure, not a mild scale change. Both
       // apertures narrow toward a readable centre slit.
@@ -1171,6 +1218,15 @@ export class BehaviourController {
       this.rightScaleX.target = mood.eyeScaleX + 0.045;
       this.leftScaleY.target = mood.eyeScaleY - 0.025;
       this.rightScaleY.target = mood.eyeScaleY - 0.02;
+      // A pleased squint comes up from below and curves — the lower lid does
+      // the work, which is what separates it from simply half-closing.
+      this.leftLidLower.target = 0.34;
+      this.rightLidLower.target = 0.3;
+      this.leftLidUpper.target = 0.12;
+      this.rightLidUpper.target = 0.1;
+      this.lidCurve.target = 0.5;
+      this.mouthCornerLeft.target = 0.34;
+      this.mouthCornerRight.target = 0.3;
       duration = 850 + this.rand() * 650;
     } else if (id === "ANGRY_BROWS") {
       this.leftTension.target = 0.32;
@@ -1183,6 +1239,16 @@ export class BehaviourController {
       // right brow counterclockwise. Brows no longer borrow eye rotation.
       this.leftBrowRotation.target = 5.4;
       this.rightBrowRotation.target = -5.4;
+      // Angry drops the OUTER corner of each upper lid. Sad drops the inner
+      // one; the slant is the whole difference between the two readings.
+      this.leftLidUpper.target = 0.3;
+      this.rightLidUpper.target = 0.3;
+      this.leftLidTilt.target = -13;
+      this.rightLidTilt.target = 13;
+      this.lidCurve.target = -0.3;
+      this.mouthCornerLeft.target = -0.2;
+      this.mouthCornerRight.target = -0.2;
+      this.mouthWidth.target = 0.92;
       duration = 900 + this.rand() * 520;
     } else if (id === "ONE_EYE_SQUINT_LEFT") {
       this.leftTension.target = 0.58;
@@ -1190,6 +1256,11 @@ export class BehaviourController {
       this.leftRotation.target = -2.2;
       this.leftBrowRotation.target = -1.6;
       this.leftScaleY.target = mood.eyeScaleY - 0.015;
+      this.leftLidUpper.target = 0.3;
+      this.leftLidLower.target = 0.32;
+      this.lidCurve.target = 0.3;
+      // One raised corner turns a wink into a smirk rather than a twitch.
+      this.mouthCornerLeft.target = 0.42;
       duration = 680 + this.rand() * 500;
     } else if (id === "ONE_EYE_SQUINT_RIGHT") {
       this.rightTension.target = 0.58;
@@ -1197,6 +1268,10 @@ export class BehaviourController {
       this.rightRotation.target = 2.2;
       this.rightBrowRotation.target = 1.6;
       this.rightScaleY.target = mood.eyeScaleY - 0.015;
+      this.rightLidUpper.target = 0.3;
+      this.rightLidLower.target = 0.32;
+      this.lidCurve.target = 0.3;
+      this.mouthCornerRight.target = 0.42;
       duration = 680 + this.rand() * 500;
     } else {
       this.leftTension.target = 1.1;
@@ -1207,6 +1282,11 @@ export class BehaviourController {
       this.rightScaleY.target = mood.eyeScaleY + 0.12;
       this.leftBrowRotation.target = 0;
       this.rightBrowRotation.target = 0;
+      // Wide open: lids clear of the eye entirely, and a slightly narrower
+      // mouth so the eyes carry the moment.
+      this.leftLidUpper.target = -0.04;
+      this.rightLidUpper.target = -0.04;
+      this.mouthWidth.target = 0.94;
       duration = 760 + this.rand() * 520;
     }
     this.lidAction = id;
@@ -1861,6 +1941,16 @@ export class BehaviourController {
       this.mouthRotation.step(dt, 5.5, 0.72);
       this.mouthCurve.step(dt, 5.8, 0.72);
       this.mouthO.step(dt, 6.2, 0.7);
+      this.leftLidUpper.step(dt, 8.2, 0.76);
+      this.leftLidLower.step(dt, 7.6, 0.78);
+      this.rightLidUpper.step(dt, 7.9, 0.76);
+      this.rightLidLower.step(dt, 7.3, 0.78);
+      this.leftLidTilt.step(dt, 6.2, 0.75);
+      this.rightLidTilt.step(dt, 6.0, 0.75);
+      this.lidCurve.step(dt, 6.6, 0.74);
+      this.mouthCornerLeft.step(dt, 6.6, 0.7);
+      this.mouthCornerRight.step(dt, 6.4, 0.7);
+      this.mouthWidth.step(dt, 6.0, 0.72);
     }
   }
 
@@ -1922,6 +2012,16 @@ export class BehaviourController {
     this.delta.rightBrowRotation = this.rightBrowRotation.value;
     this.delta.eyeLid = this.blinkLid;
     this.delta.leftEyeTension = this.leftTension.value;
+    this.delta.leftLidUpper = this.leftLidUpper.value;
+    this.delta.leftLidLower = this.leftLidLower.value;
+    this.delta.rightLidUpper = this.rightLidUpper.value;
+    this.delta.rightLidLower = this.rightLidLower.value;
+    this.delta.leftLidTilt = this.leftLidTilt.value;
+    this.delta.rightLidTilt = this.rightLidTilt.value;
+    this.delta.lidCurve = this.lidCurve.value;
+    this.delta.mouthCornerLeft = this.mouthCornerLeft.value;
+    this.delta.mouthCornerRight = this.mouthCornerRight.value;
+    this.delta.mouthWidth = this.mouthWidth.value;
     this.delta.rightEyeTension = this.rightTension.value;
     this.delta.mouthX = this.mouthX.value;
     this.delta.mouthY = this.mouthY.value;

@@ -79,6 +79,12 @@ interface EyeGeometry {
   centerY: number;
   /** Aperture opening, 0 fully closed, 1 fully open. */
   open: number;
+  /** Independent lid closure from each side, 0..1. */
+  lidUpper: number;
+  lidLower: number;
+  /** Lid slant in degrees and lid curvature. */
+  tilt: number;
+  curve: number;
 }
 
 /** Gaze travel budget, as a share of the eye oval. Roughly 8.6 x 6.5 px. */
@@ -115,6 +121,10 @@ function eyeGeometry(
       height * GAZE_TRAVEL_Y
     ),
     open: clamp(t.eyeOpen, 0, 1),
+    lidUpper: clamp(t.lidUpper, 0, 1),
+    lidLower: clamp(t.lidLower, 0, 1),
+    tilt: clamp(t.lidTilt, -22, 22),
+    curve: clamp(t.lidCurve, -1, 1),
   };
 }
 
@@ -147,6 +157,8 @@ function drawMouthShape(
   height: number,
   curve: number,
   oAmount: number,
+  cornerLeft: number,
+  cornerRight: number,
   colour: BlobColour
 ) {
   const o = clamp(oAmount, 0, 1);
@@ -155,8 +167,15 @@ function drawMouthShape(
   const loopDepth = height * 0.42 * o;
   const bend = curve * height * 0.5 * (1 - o);
   const endY = -curve * height * 0.08 * (1 - o);
-  const topEnd = endY - thickness;
-  const bottomEnd = endY + thickness;
+  // Independent corners. A single symmetric curve can only ever be a smile or
+  // a frown; lifting one corner on its own is what reads as a smirk, and
+  // lifting them unequally is what makes an uncertain mouth look uncertain.
+  const liftLeft = -cornerLeft * height * 0.42 * (1 - o);
+  const liftRight = -cornerRight * height * 0.42 * (1 - o);
+  const topLeft = endY - thickness + liftLeft;
+  const bottomLeft = endY + thickness + liftLeft;
+  const topRight = endY - thickness + liftRight;
+  const bottomRight = endY + thickness + liftRight;
   const topCenter = endY + bend - thickness - loopDepth;
   const bottomCenter = endY + bend + thickness + loopDepth;
   const capReach = Math.max(1.2, thickness * 1.35);
@@ -165,24 +184,24 @@ function drawMouthShape(
   // As O rises, that same contour opens vertically and closes into one oval.
   // There are no end dots, added blobs, asset swaps, or rotation tricks.
   ctx.beginPath();
-  ctx.moveTo(-halfWidth, topEnd);
-  ctx.quadraticCurveTo(0, topCenter, halfWidth, topEnd);
+  ctx.moveTo(-halfWidth, topLeft);
+  ctx.quadraticCurveTo(0, topCenter, halfWidth, topRight);
   ctx.bezierCurveTo(
     halfWidth + capReach,
-    topEnd,
+    topRight,
     halfWidth + capReach,
-    bottomEnd,
+    bottomRight,
     halfWidth,
-    bottomEnd
+    bottomRight
   );
-  ctx.quadraticCurveTo(0, bottomCenter, -halfWidth, bottomEnd);
+  ctx.quadraticCurveTo(0, bottomCenter, -halfWidth, bottomLeft);
   ctx.bezierCurveTo(
     -halfWidth - capReach,
-    bottomEnd,
+    bottomLeft,
     -halfWidth - capReach,
-    topEnd,
+    topLeft,
     -halfWidth,
-    topEnd
+    topLeft
   );
   ctx.closePath();
   const palette = eyePalette(colour);
@@ -257,20 +276,41 @@ function drawProceduralEye(
   eye: EyeGeometry,
   showPupil: boolean
 ) {
-  if (eye.open <= 0.004) return;
-  const gap = eye.height * eye.open;
+  // Blink multiplies both lids, so a blink still closes a squinting eye.
+  const blink = 1 - eye.open;
+  const upper = clamp(eye.lidUpper + blink * (1 - eye.lidUpper), 0, 1);
+  const lower = clamp(eye.lidLower + blink * (1 - eye.lidLower), 0, 1);
+  if (upper + lower >= 0.996) return;
+
+  const halfHeight = eye.height * 0.5;
+  const halfWidth = eye.width * 0.5;
+  // Each lid edge, measured from the eye's own centre.
+  const upperEdge = eye.centerY - halfHeight + eye.height * upper;
+  const lowerEdge = eye.centerY + halfHeight - eye.height * lower;
+  if (lowerEdge - upperEdge < 0.35) return;
+
+  const slant = Math.tan((eye.tilt * Math.PI) / 180) * halfWidth;
+  // Curvature is what turns a narrowed eye into a crescent rather than a slot.
+  const bow = eye.curve * eye.height * 0.34;
+  const reach = halfWidth * 1.4;
+
   ctx.save();
-  // Only this band of the eye survives. At full open the band covers the whole
-  // oval, so a normal eye is drawn exactly as before.
+  // The visible eye is whatever survives between the two lid lines. Clipping
+  // with curves rather than a rectangle is what lets the lids carry shape.
   ctx.beginPath();
-  ctx.rect(-eye.width, eye.centerY - gap / 2, eye.width * 2, gap);
+  ctx.moveTo(-reach, upperEdge - slant);
+  ctx.quadraticCurveTo(0, upperEdge - bow, reach, upperEdge + slant);
+  ctx.lineTo(reach, lowerEdge + slant);
+  ctx.quadraticCurveTo(0, lowerEdge - bow * 0.45, -reach, lowerEdge - slant);
+  ctx.closePath();
   ctx.clip();
+
   ctx.beginPath();
   ctx.ellipse(
     eye.centerX,
     eye.centerY,
-    eye.width * 0.5,
-    eye.height * 0.5,
+    halfWidth,
+    halfHeight,
     0,
     0,
     Math.PI * 2
@@ -732,10 +772,12 @@ export default function BlobCharacter({
       ctx.scale(faceCompensationX, faceCompensationY);
       drawMouthShape(
         ctx,
-        a.width * 0.95 * clamp(t.scaleX, 0.62, 1.18),
+        a.width * 0.95 * clamp(t.scaleX, 0.62, 1.18) * clamp(t.mouthWidth, 0.7, 1.35),
         a.height * 1.08 * clamp(t.scaleY, 0.7, 1.24),
         clamp(t.mouthCurve, -1, 1),
         clamp(t.mouthO, 0, 1),
+        clamp(t.mouthCornerLeft, -1, 1),
+        clamp(t.mouthCornerRight, -1, 1),
         colour
       );
       ctx.restore();

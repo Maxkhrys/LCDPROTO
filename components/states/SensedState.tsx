@@ -10,7 +10,12 @@ import {
 } from "@/lib/blobBehaviour";
 import { AmbientDrift, type IdleConfig } from "@/lib/blobIdle";
 import { BlobJellyPhysics, type JellyTarget } from "@/lib/blobPhysics";
-import { NEUTRAL_BLOB, NEUTRAL_ELEMENT, type BlobRig } from "@/lib/blobRig";
+import {
+  eyeLids,
+  NEUTRAL_BLOB,
+  NEUTRAL_ELEMENT,
+  type BlobRig,
+} from "@/lib/blobRig";
 import type { StateViewProps } from "@/lib/deviceStates";
 import SensedField from "./SensedField";
 
@@ -289,7 +294,14 @@ export default function SensedState({
             ...NEUTRAL_ELEMENT,
             x: SENSED_FACE.leftEyeX + d.eyeX + d.leftEyeX,
             y: SENSED_FACE.eyeY + d.eyeY + d.leftEyeY,
-            eyeOpen: d.eyeLid * d.leftEyeTension,
+            // eyeOpen is the blink only; the squint lives in the lids.
+            eyeOpen: d.eyeLid,
+            lidUpper: eyeLids(d.leftEyeTension, d.leftLidUpper, d.leftLidLower)
+              .upper,
+            lidLower: eyeLids(d.leftEyeTension, d.leftLidUpper, d.leftLidLower)
+              .lower,
+            lidTilt: d.leftLidTilt,
+            lidCurve: d.lidCurve,
             eyeSocketScaleX: SENSED_FACE.eyeSocketScaleX + d.leftEyeScaleX,
             eyeSocketScaleY: SENSED_FACE.eyeSocketScaleY + d.leftEyeScaleY,
             browLift: SENSED_FACE.leftBrow + d.leftEyeTension - 1,
@@ -302,7 +314,19 @@ export default function SensedState({
             ...NEUTRAL_ELEMENT,
             x: SENSED_FACE.rightEyeX + d.eyeX + d.rightEyeX,
             y: SENSED_FACE.eyeY + d.eyeY + d.rightEyeY,
-            eyeOpen: d.eyeLid * d.rightEyeTension,
+            eyeOpen: d.eyeLid,
+            lidUpper: eyeLids(
+              d.rightEyeTension,
+              d.rightLidUpper,
+              d.rightLidLower
+            ).upper,
+            lidLower: eyeLids(
+              d.rightEyeTension,
+              d.rightLidUpper,
+              d.rightLidLower
+            ).lower,
+            lidTilt: -d.rightLidTilt,
+            lidCurve: d.lidCurve,
             eyeSocketScaleX: SENSED_FACE.eyeSocketScaleX + d.rightEyeScaleX,
             eyeSocketScaleY: SENSED_FACE.eyeSocketScaleY + d.rightEyeScaleY,
             browLift: SENSED_FACE.rightBrow + d.rightEyeTension - 1,

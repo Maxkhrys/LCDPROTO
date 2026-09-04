@@ -237,6 +237,25 @@ export function bodyScale(screen: number, colour: BlobColour = "purple"): number
   return (screen * BODY_FRACTION) / RIG_ASSETS[colour].body.solidWidth;
 }
 
+/**
+ * Splits an eye's total closure across the two lids.
+ *
+ * The behaviour system expresses "how squinted" as a single tension value, and
+ * the expressions express "which way" as a per-lid bias. Adding those together
+ * would close the eye twice over — a 0.32 tension squint plus a 0.3 upper lid
+ * shuts it completely. So tension still decides how much the eye closes, and
+ * the bias only decides where that closure comes from: from below for a
+ * pleased crescent, from above for a heavy or angry lid.
+ */
+export function eyeLids(tension: number, upperBias: number, lowerBias: number) {
+  const total = Math.max(0, Math.min(1, 1 - tension));
+  const bias = Math.max(-1, Math.min(1, lowerBias - upperBias));
+  return {
+    upper: Math.max(0, Math.min(1, total * (0.5 - bias * 0.35))),
+    lower: Math.max(0, Math.min(1, total * (0.5 + bias * 0.35))),
+  };
+}
+
 /** Neutral geometry of a facial layer in 466-space pixels. */
 export function faceAnchor(
   id: FaceLayerId,
@@ -278,6 +297,23 @@ export interface ElementTransform {
   socketY: number;
   /** Normalised opening and aperture size, used only by eye layers. */
   eyeOpen: number;
+  /**
+   * Independent lids, 0 fully open and 1 fully closed from that side.
+   *
+   * A single symmetric aperture can only ever narrow evenly, which is why
+   * every squint looked alike. Real expression lives in the asymmetry: a smile
+   * pushes the lower lid up, boredom drops the upper lid, and the two are not
+   * the same shape.
+   */
+  lidUpper: number;
+  lidLower: number;
+  /**
+   * Lid slant in degrees, positive dropping the inner corner. This is the
+   * difference between sad (inner corner down) and angry (outer corner down).
+   */
+  lidTilt: number;
+  /** Lid curvature. Positive arcs the lid like a happy crescent. */
+  lidCurve: number;
   eyeSocketScaleX: number;
   eyeSocketScaleY: number;
   /** Expression-only eyebrow lift; deliberately independent from blink. */
@@ -287,6 +323,15 @@ export interface ElementTransform {
   /** Procedural mouth shape controls. */
   mouthCurve: number;
   mouthO: number;
+  /**
+   * Per-corner lift, in fractions of the mouth height. Independent corners
+   * give smirks, uncertain wobbles and lopsided grins, none of which a single
+   * symmetric curve can express.
+   */
+  mouthCornerLeft: number;
+  mouthCornerRight: number;
+  /** Horizontal stretch of the mouth, independent of how open it is. */
+  mouthWidth: number;
   /**
    * Contact normal and pressure for the soft-body silhouette warp.
    *
@@ -343,12 +388,19 @@ export const NEUTRAL_ELEMENT: ElementTransform = {
   socketX: 0,
   socketY: 0,
   eyeOpen: 1,
+  lidUpper: 0,
+  lidLower: 0,
+  lidTilt: 0,
+  lidCurve: 0,
   eyeSocketScaleX: 1,
   eyeSocketScaleY: 1,
   browLift: 0,
   browRotation: 0,
   mouthCurve: 0,
   mouthO: 0,
+  mouthCornerLeft: 0,
+  mouthCornerRight: 0,
+  mouthWidth: 1,
   contactX: 0,
   contactY: 0,
   contactPressure: 0,
