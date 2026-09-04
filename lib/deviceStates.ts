@@ -96,6 +96,8 @@ export interface StateViewProps {
   showPupils: boolean;
   /** Dev-only rig colour preview; every colour uses identical transforms. */
   blobColour: BlobColour;
+  /** Dev-only whole Blob scale, centred inside the circular display. */
+  characterScale: number;
   /** Optional director override for the current Blob intention. */
   mindIntention: BlobIntention | null;
   /** Optional director override for the current travel destination. */

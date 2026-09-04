@@ -55,6 +55,7 @@ export default function DeviceSimulator() {
   const [displayMode, setDisplayMode] = useState<DisplayMode>("dark");
   const [screenColour, setScreenColour] = useState(DISPLAY_BACKGROUNDS.dark);
   const [blobColour, setBlobColour] = useState<BlobColour>("teal");
+  const [characterScale, setCharacterScale] = useState(1);
   const [showPupils, setShowPupils] = useState(false);
   const [blobToolsOpen, setBlobToolsOpen] = useState(false);
   const [activeBlobTool, setActiveBlobTool] = useState<"colour" | "face" | "pupils" | null>(null);
@@ -131,6 +132,7 @@ export default function DeviceSimulator() {
     setDisplayMode("dark");
     setScreenColour(DISPLAY_BACKGROUNDS.dark);
     setBlobColour("teal");
+    setCharacterScale(1);
     setShowPupils(false);
     setBlobToolsOpen(false);
     setActiveBlobTool(null);
@@ -163,7 +165,7 @@ export default function DeviceSimulator() {
       );
 
   return (
-    <div className="sim-ui relative flex w-full flex-col items-center gap-5 sm:gap-7">
+    <div className="sim-ui relative flex w-full flex-col items-center gap-4 sm:gap-5">
       <div className="w-full max-w-[1180px]">
         <div className="mb-3 flex items-end justify-between px-1">
           <div>
@@ -203,11 +205,14 @@ export default function DeviceSimulator() {
             </div>
           </TopMenu>
 
-          <TopMenu label="Blob" summary={blobColour} open={openMenu === "blob"} onToggle={() => setOpenMenu((v) => v === "blob" ? null : "blob")}>
+          <TopMenu label="Blob" summary={`${blobColour} · ${characterScale.toFixed(2)}x`} open={openMenu === "blob"} onToggle={() => setOpenMenu((v) => v === "blob" ? null : "blob")}>
             <p className="menu-kicker">Blob character</p>
             <p className="menu-help">Colour, idle life, mood and automatic behaviour.</p>
             <ChoiceGroup label="Colour">
               {BLOB_COLOURS.map((colour) => <DevButton key={colour.id} active={blobColour === colour.id} onClick={() => setBlobColour(colour.id)}>{colour.label}</DevButton>)}
+            </ChoiceGroup>
+            <ChoiceGroup label="Size">
+              {[{ label: "Small", value: 0.88 }, { label: "Standard", value: 1 }, { label: "Large", value: 1.12 }].map((option) => <DevButton key={option.label} active={characterScale === option.value} onClick={() => setCharacterScale(option.value)}>{option.label}</DevButton>)}
             </ChoiceGroup>
             <div className="mt-3 flex flex-wrap gap-1.5">
               <DevButton active={idle.enabled} onClick={() => setIdle((v) => ({ ...v, enabled: !v.enabled }))}>Idle {idle.enabled ? "on" : "off"}</DevButton>
@@ -277,7 +282,7 @@ export default function DeviceSimulator() {
       </div>
 
       <div className="flex w-full justify-center">
-        <div ref={frameRef} className="flex aspect-square w-full max-w-full items-center justify-center" style={{ width: `min(100%, ${MAX_OUTER}px, 72vh)` }}>
+        <div ref={frameRef} className="flex aspect-square w-full max-w-full items-center justify-center" style={{ width: `min(100%, ${MAX_OUTER}px, max(280px, calc(100dvh - 330px)))` }}>
           <DeviceBezel screenSize={screenSize}>
             <div className="relative">
               <DeviceScreen
@@ -301,6 +306,7 @@ export default function DeviceSimulator() {
                 mood={mood}
                 showPupils={showPupils}
                 blobColour={blobColour}
+                characterScale={characterScale}
                 mindIntention={mindIntention}
                 mindDestination={mindDestination}
                 mindDepth={mindDepth}

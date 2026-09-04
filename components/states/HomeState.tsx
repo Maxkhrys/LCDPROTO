@@ -73,6 +73,7 @@ export default function HomeState({
   mood,
   showPupils,
   blobColour,
+  characterScale,
   mindIntention,
   mindDestination,
   mindDepth,
@@ -110,6 +111,7 @@ export default function HomeState({
     mindIntention,
     mindDestination,
     mindDepth,
+    characterScale,
   });
   cfg.current = {
     size,
@@ -120,6 +122,7 @@ export default function HomeState({
     mindIntention,
     mindDestination,
     mindDepth,
+    characterScale,
   };
 
   const reset = useCallback(() => {
@@ -271,7 +274,7 @@ export default function HomeState({
             depth: physical.depth,
             yaw: physical.yaw,
             pitch: physical.pitch,
-            scale: (1 + amb.breath) * (1 + d.blobScale),
+            scale: cfg.current.characterScale * (1 + amb.breath) * (1 + d.blobScale),
             // Squash lives on the shared body surface. BlobCharacter applies
             // that same transform to every face anchor, so features stay
             // attached instead of preserving a separate screen-space grid.
