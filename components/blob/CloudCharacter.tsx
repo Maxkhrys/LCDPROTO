@@ -240,14 +240,23 @@ export default function CloudCharacter({
     );
 
     if (trails.enabled) {
-      if (Math.hypot(vx, vy) > 50) {
+      const speed = Math.hypot(vx, vy);
+      if (speed > 50) {
+        // Spawn from the trailing perimeter edge (opposite to velocity vector)
+        const charX = centre + offsetX;
+        const charY = centre + offsetY;
+        const vAngle = Math.atan2(vy, vx);
+        const spawnDistance = 68 * Math.min(1.2, scaleX);
+        const spawnX = charX - Math.cos(vAngle) * spawnDistance + (Math.random() - 0.5) * 20;
+        const spawnY = charY - Math.sin(vAngle) * (spawnDistance * 0.75) + (Math.random() - 0.5) * 16;
+
         spawnWisp(
           wisps.current,
-          centre,
-          centre,
-          vx,
-          vy,
-          26 * trails.trailStrength,
+          spawnX,
+          spawnY,
+          vx * 0.4,
+          vy * 0.4,
+          24 * trails.trailStrength,
           palette.edge,
           trails.lifetime
         );
@@ -289,6 +298,10 @@ export default function CloudCharacter({
       gazeX: params.gazeX,
       gazeY: params.gazeY,
       faceEmbedDepth: params.faceEmbedDepth,
+      fluffiness: params.fluffiness,
+      lightAngle: params.lightAngle,
+      cheekBlush: params.cheekBlush,
+      sandBounce: params.sandBounce,
       clear: false,
       skipTransform: true,
     });

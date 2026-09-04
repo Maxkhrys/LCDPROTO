@@ -392,6 +392,7 @@ export default function CloudBlobBody({
             lightAngle: params.lightAngle,
             cheekBlush: params.cheekBlush,
             cloudBrows: params.cloudBrows,
+            sandBounce: params.sandBounce,
           });
         }
       }

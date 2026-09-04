@@ -367,9 +367,9 @@ function drawEyebrow(
   clearance: number
 ) {
   const halfWidth = eye.width * 0.46;
-  const thickness = clamp(eye.width * 0.13, 1.6, 2.8);
+  const thickness = clamp(eye.width * 0.165, 2.2, 3.4);
   const halfThickness = thickness / 2;
-  const arch = clamp((browLift + 0.05) * eye.height * 0.22, -1.2, 1.4);
+  const arch = clamp((browLift + 0.06) * eye.height * 0.26, -1.4, 1.8);
 
   // Gaze leans the brow with the eye: right gaze tilts right, left tilts left,
   // and the pair shifts slightly in the direction Blob is looking.

@@ -709,6 +709,23 @@ export default function CloudBlobControls({
               />
               <span className="font-mono text-[9px] text-white/30">0 = on surface, 0.12 = naturally submerged, 0.30 = deep mist</span>
             </div>
+
+            <div className="flex flex-col gap-2">
+              <div className="flex justify-between font-mono text-xs">
+                <span className="text-white/70">Sand Floor Bounce</span>
+                <span className="text-amber-300 font-semibold">{((params.sandBounce ?? 0.65) * 100).toFixed(0)}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={1.0}
+                step={0.05}
+                value={params.sandBounce ?? 0.65}
+                onChange={(e) => onChangeParam("sandBounce", parseFloat(e.target.value))}
+                className="accent-amber-400"
+              />
+              <span className="font-mono text-[9px] text-white/30">Warm environmental ground reflection</span>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 border-t border-white/10 pt-4">

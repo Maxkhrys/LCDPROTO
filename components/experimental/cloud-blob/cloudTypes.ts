@@ -17,6 +17,7 @@ export type LobeId =
   | "baseLeft"
   | "baseRight"
   | "bottomBelly"
+  | "trailingTuft"
   | "frontVeil";
 
 export interface LobeDefinition {
@@ -70,6 +71,8 @@ export interface CloudDeformationParams {
   lightAngle: number; // Key light angle in degrees, default -45 (top-left sunlight)
   cheekBlush: number; // 0 to 1 warm bioluminescent blush intensity
   cloudBrows: boolean; // Render floating wispy cloud brows
+  sandBounce?: number; // 0 to 1 warm environmental floor bounce reflection
+  billowContrast?: number; // 0.5 to 1.5 volumetric shading contrast
   gazeX: number; // -1 to 1 iris glance
   gazeY: number; // -1 to 1 iris glance
 }
