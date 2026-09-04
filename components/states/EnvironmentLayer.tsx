@@ -79,8 +79,6 @@ function scenePalette(mode: EnvironmentLayerProps["displayMode"]) {
       sandMid: "#b99b7a",
       sandDark: "#80684f",
       ripple: "#76593d",
-      stone: "#79634e",
-      stoneLight: "#c0a487",
       dust: "#ffe7bd",
       bounce: "#e2a34e",
     };
@@ -91,8 +89,6 @@ function scenePalette(mode: EnvironmentLayerProps["displayMode"]) {
       sandMid: "#92765b",
       sandDark: "#5d4735",
       ripple: "#4f392a",
-      stone: "#544336",
-      stoneLight: "#9f8263",
       dust: "#f3c98b",
       bounce: "#c3833d",
     };
@@ -102,39 +98,9 @@ function scenePalette(mode: EnvironmentLayerProps["displayMode"]) {
     sandMid: "#090705",
     sandDark: "#000000",
     ripple: "#6b4524",
-    stone: "#21150d",
-    stoneLight: "#624326",
     dust: "#f1be72",
     bounce: "#a86122",
   };
-}
-
-function drawStone(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  light: string,
-  dark: string,
-  alpha: number
-) {
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  const gradient = ctx.createLinearGradient(x, y - height / 2, x, y + height / 2);
-  gradient.addColorStop(0, light);
-  gradient.addColorStop(0.62, dark);
-  gradient.addColorStop(1, "#130d09");
-  ctx.fillStyle = gradient;
-  ctx.beginPath();
-  ctx.ellipse(x, y, width / 2, height / 2, -0.08, 0, TAU);
-  ctx.fill();
-  ctx.globalAlpha = alpha * 0.28;
-  ctx.fillStyle = light;
-  ctx.beginPath();
-  ctx.ellipse(x - width * 0.12, y - height * 0.16, width * 0.21, height * 0.1, -0.2, 0, TAU);
-  ctx.fill();
-  ctx.restore();
 }
 
 function drawStaticScene(
@@ -170,10 +136,6 @@ function drawStaticScene(
     ctx.stroke();
   }
   ctx.restore();
-
-  drawStone(ctx, 92, 360, 68, 44, palette.stoneLight, palette.stone, displayMode === "dark" ? 0.55 : 0.76);
-  drawStone(ctx, 375, 370, 52, 33, palette.stoneLight, palette.stone, displayMode === "dark" ? 0.45 : 0.7);
-  drawStone(ctx, 132, 392, 37, 23, palette.stoneLight, palette.stone, displayMode === "dark" ? 0.5 : 0.72);
 }
 
 function drawMote(
