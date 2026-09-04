@@ -36,6 +36,24 @@ export const BLOB_COLOURS: readonly { id: BlobColour; label: string }[] = [
   { id: "red", label: "Red" },
 ] as const;
 
+/** Small numeric face vocabulary shared by the controller and canvas. */
+export const FACE_STYLE = {
+  CONTENT: 0,
+  HAPPY: 1,
+  ANGRY: 2,
+  SURPRISED: 3,
+  SLEEPY: 4,
+  SAD: 5,
+  SHY: 6,
+  CONFUSED: 7,
+  EXCITED: 8,
+  LOVE: 9,
+  PANIC: 10,
+  DEADPAN: 11,
+} as const;
+
+export type FaceStyle = (typeof FACE_STYLE)[keyof typeof FACE_STYLE];
+
 /** The locked body. Carries real alpha; nothing is keyed at runtime. */
 export const BODY_LAYER = {
   src: "/blob/rig/body.png",
@@ -286,6 +304,15 @@ export interface ElementTransform {
   browLift: number;
   /** Expression-only brow tilt, independent from eye rotation. */
   browRotation: number;
+  /** Pupil travel is independent from the eye socket travel. */
+  pupilX: number;
+  pupilY: number;
+  /** Relative iris/pupil dilation. */
+  pupilScale: number;
+  /** Tilts the upper/lower lid aperture without moving the socket. */
+  lidBias: number;
+  /** -1 inherits the whole-face style; >= 0 allows one eye to differ. */
+  eyeStyle: number;
   /** Procedural mouth shape controls. */
   mouthCurve: number;
   mouthO: number;
@@ -311,6 +338,9 @@ export interface BlobTransform {
   scaleY: number;
   rotation: number;
   opacity: number;
+  /** Procedural face style and mark strength; the body asset stays unchanged. */
+  faceStyle: number;
+  faceAccent: number;
 }
 
 export interface BlobRig {
@@ -340,6 +370,11 @@ export const NEUTRAL_ELEMENT: ElementTransform = {
   eyeSocketScaleY: 1,
   browLift: 0,
   browRotation: 0,
+  pupilX: 0,
+  pupilY: 0,
+  pupilScale: 1,
+  lidBias: 0,
+  eyeStyle: -1,
   mouthCurve: 0,
   mouthO: 0,
   rippleTop: 0,
@@ -359,6 +394,8 @@ export const NEUTRAL_BLOB: BlobTransform = {
   scaleY: 1,
   rotation: 0,
   opacity: 1,
+  faceStyle: FACE_STYLE.CONTENT,
+  faceAccent: 0,
 };
 
 /** All-neutral rig — the calibrated HOME pose. */

@@ -4,6 +4,7 @@ import {
   type BlobIntention,
   type MindStory,
 } from "./blobMind";
+import { FACE_STYLE } from "./blobRig";
 
 /**
  * Concurrent HOME animation director.
@@ -50,6 +51,16 @@ export type BehaviourId =
   | "ONE_EYE_SQUINT_LEFT"
   | "ONE_EYE_SQUINT_RIGHT"
   | "CURIOUS_WIDE"
+  | "HAPPY_EYES"
+  | "EXCITED_EYES"
+  | "ANGRY_EYES"
+  | "SHY_EYES"
+  | "SLEEPY_EYES"
+  | "SAD_EYES"
+  | "CONFUSED_EYES"
+  | "LOVE_EYES"
+  | "PANIC_EYES"
+  | "DEADPAN_EYES"
   | "BREATH_STRETCH"
   | "MOUTH_RELAX"
   | "MOUTH_TWITCH"
@@ -72,7 +83,19 @@ export type BehaviourId =
   | "VANISH_REAPPEAR"
   | "CASUAL_SQUINT"
   | "LAZY_LOOK"
-  | "SOFT_SIGH";
+  | "SOFT_SIGH"
+  | "JOY_HOP"
+  | "EXCITED_WIGGLE"
+  | "CURIOUS_DOUBLE_TAKE"
+  | "SHY_PEEK"
+  | "EMBARRASSED_BLUSH"
+  | "SLEEPY_YAWN"
+  | "DEADPAN_SIDE_EYE"
+  | "ANGRY_FLARE"
+  | "DIZZY_WOBBLE"
+  | "LOVE_SPARKLE"
+  | "SURPRISE_POP"
+  | "TEARY_POUT";
 
 export type HomeMood =
   | "CONTENT"
@@ -104,7 +127,17 @@ type ExpressionBehaviour =
   | "ONE_EYE_SQUINT_LEFT"
   | "ONE_EYE_SQUINT_RIGHT"
   | "CURIOUS_WIDE"
-  | "ANGRY_BROWS";
+  | "ANGRY_BROWS"
+  | "HAPPY_EYES"
+  | "EXCITED_EYES"
+  | "ANGRY_EYES"
+  | "SHY_EYES"
+  | "SLEEPY_EYES"
+  | "SAD_EYES"
+  | "CONFUSED_EYES"
+  | "LOVE_EYES"
+  | "PANIC_EYES"
+  | "DEADPAN_EYES";
 type MouthBehaviour =
   | "MOUTH_RELAX"
   | "MOUTH_TWITCH"
@@ -140,6 +173,9 @@ export interface PoseDelta {
   /** Temporary whole-Blob scale and opacity for entrance/exit beats. */
   blobScale: number;
   blobOpacity: number;
+  /** Procedural face style and anime mark strength. */
+  faceStyle: number;
+  faceAccent: number;
   /** Normalised distance from the panel: positive is closer to the viewer. */
   blobDepth: number;
   /** Yaw and pitch are presentation-space degrees for the simple 3D turn. */
@@ -171,6 +207,15 @@ export interface PoseDelta {
   rightEyeScaleX: number;
   rightEyeScaleY: number;
   rightEyeRotation: number;
+  leftPupilX: number;
+  leftPupilY: number;
+  rightPupilX: number;
+  rightPupilY: number;
+  pupilScale: number;
+  leftLidBias: number;
+  rightLidBias: number;
+  leftEyeStyle: number;
+  rightEyeStyle: number;
   leftBrowRotation: number;
   rightBrowRotation: number;
   eyeLid: number;
@@ -191,6 +236,8 @@ export const NEUTRAL_DELTA: PoseDelta = {
   blobY: 0,
   blobScale: 0,
   blobOpacity: 1,
+  faceStyle: FACE_STYLE.CONTENT,
+  faceAccent: 0,
   blobDepth: 0,
   blobYaw: 0,
   blobPitch: 0,
@@ -219,6 +266,15 @@ export const NEUTRAL_DELTA: PoseDelta = {
   rightEyeScaleX: 0,
   rightEyeScaleY: 0,
   rightEyeRotation: 0,
+  leftPupilX: 0,
+  leftPupilY: 0,
+  rightPupilX: 0,
+  rightPupilY: 0,
+  pupilScale: 1,
+  leftLidBias: 0,
+  rightLidBias: 0,
+  leftEyeStyle: -1,
+  rightEyeStyle: -1,
   leftBrowRotation: 0,
   rightBrowRotation: 0,
   eyeLid: 1,
@@ -244,6 +300,9 @@ const smoothstep = (v: number) => {
 const mix = (from: number, to: number, amount: number) =>
   from + (to - from) * clamp01(amount);
 const preserveAreaX = (scaleYDelta: number) => 1 / (1 + scaleYDelta) - 1;
+// Intentional exit point: once the Blob has faded, move its tiny remnant
+// beyond the 233px circular glass so the vanish is spatial, not just opacity.
+const VANISH_EDGE = 248;
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -379,6 +438,18 @@ const MOOD_ORDER: readonly HomeMood[] = [
   "THOUGHTFUL",
 ];
 
+const MOOD_FACE: Record<
+  HomeMood,
+  { style: number; accent: number; pupilScale: number }
+> = {
+  CONTENT: { style: FACE_STYLE.CONTENT, accent: 0.08, pupilScale: 0.96 },
+  CURIOUS: { style: FACE_STYLE.SURPRISED, accent: 0.22, pupilScale: 1.08 },
+  SLEEPY: { style: FACE_STYLE.SLEEPY, accent: 0.12, pupilScale: 0.78 },
+  AMUSED: { style: FACE_STYLE.HAPPY, accent: 0.42, pupilScale: 1.12 },
+  DISTRACTED: { style: FACE_STYLE.CONFUSED, accent: 0.28, pupilScale: 0.9 },
+  THOUGHTFUL: { style: FACE_STYLE.DEADPAN, accent: 0.16, pupilScale: 0.84 },
+};
+
 export interface BehaviourStatus {
   id: BehaviourId;
   phase: number;
@@ -410,6 +481,8 @@ export interface HomeActivityStatus extends BehaviourStatus {
   idleY: number;
   bodyRotation: number;
   bodySpeed: number;
+  faceStyle: number;
+  faceAccent: number;
 }
 
 /** Independent-channel director with current-presentation retargeting. */
@@ -448,6 +521,7 @@ export class BehaviourController {
   private specialEmoteStarted = false;
   private specialScale = 0;
   private specialOpacity = 1;
+  private specialDirection = 1;
 
   private gazeAction = "RESTING";
   private lidAction = "OPEN";
@@ -503,6 +577,19 @@ export class BehaviourController {
   private mouthTurnTarget = 0;
   private mouthTurnSnapped = false;
 
+  /** Independent eye life: pupils dart quickly while the sockets lag behind. */
+  private readonly leftPupilX = new SpringAxis();
+  private readonly leftPupilY = new SpringAxis();
+  private readonly rightPupilX = new SpringAxis();
+  private readonly rightPupilY = new SpringAxis();
+  private readonly pupilScale = new SpringAxis(1);
+  private readonly leftLidBias = new SpringAxis();
+  private readonly rightLidBias = new SpringAxis();
+  private faceStyle: number = FACE_STYLE.CONTENT;
+  private leftEyeStyle: number = -1;
+  private rightEyeStyle: number = -1;
+  private readonly faceAccent = new SpringAxis();
+
   private massXTarget = 0;
   private massYTarget = 0;
   private massRotationTarget = 0;
@@ -511,6 +598,11 @@ export class BehaviourController {
   private massSkewYTarget = 0;
   private massOriginXTarget = 0;
   private massOriginYTarget = 0.82;
+  private bodyStartedAt = 0;
+  private bodyBaseTravelX = 0;
+  private bodyBaseTravelY = 0;
+  private bodyBaseRotation = 0;
+  private bodyBaseScaleY = 0;
 
   private readonly delta: PoseDelta = { ...NEUTRAL_DELTA };
   private readonly mind = new BlobMind();
@@ -589,6 +681,7 @@ export class BehaviourController {
     this.specialEmoteStarted = false;
     this.specialScale = 0;
     this.specialOpacity = 1;
+    this.specialDirection = 1;
     this.activityId = "REST";
     this.activityStartedAt = 0;
     this.activityUntil = 0;
@@ -625,6 +718,22 @@ export class BehaviourController {
     this.mouthTurnStartedAt = -1;
     this.mouthTurnTarget = 0;
     this.mouthTurnSnapped = false;
+    this.leftPupilX.reset();
+    this.leftPupilY.reset();
+    this.rightPupilX.reset();
+    this.rightPupilY.reset();
+    this.pupilScale.reset(1);
+    this.leftLidBias.reset();
+    this.rightLidBias.reset();
+    this.faceStyle = FACE_STYLE.CONTENT;
+    this.leftEyeStyle = -1;
+    this.rightEyeStyle = -1;
+    this.faceAccent.reset();
+    this.bodyStartedAt = 0;
+    this.bodyBaseTravelX = 0;
+    this.bodyBaseTravelY = 0;
+    this.bodyBaseRotation = 0;
+    this.bodyBaseScaleY = 0;
     this.clearBodyTargets();
     this.applyMoodTargets();
     Object.assign(this.delta, NEUTRAL_DELTA);
@@ -638,7 +747,10 @@ export class BehaviourController {
     this.mood = mood;
     this.lastMood = mood;
     this.nextMoodAt = this.clock + 1000000000;
-    if (this.expressionReleaseAt === 0) this.applyMoodEyeTargets();
+    if (this.expressionReleaseAt === 0) {
+      this.applyMoodEyeTargets();
+      this.applyMoodFace();
+    }
     if (this.mouthReleaseAt === 0) this.applyMoodMouthTargets();
   }
 
@@ -760,7 +872,17 @@ export class BehaviourController {
       id === "ONE_EYE_SQUINT_LEFT" ||
       id === "ONE_EYE_SQUINT_RIGHT" ||
       id === "CURIOUS_WIDE" ||
-      id === "ANGRY_BROWS"
+      id === "ANGRY_BROWS" ||
+      id === "HAPPY_EYES" ||
+      id === "EXCITED_EYES" ||
+      id === "ANGRY_EYES" ||
+      id === "SHY_EYES" ||
+      id === "SLEEPY_EYES" ||
+      id === "SAD_EYES" ||
+      id === "CONFUSED_EYES" ||
+      id === "LOVE_EYES" ||
+      id === "PANIC_EYES" ||
+      id === "DEADPAN_EYES"
     ) {
       this.startExpression(id);
       return;
@@ -798,7 +920,19 @@ export class BehaviourController {
       id === "PROUD_STRETCH" ||
       id === "CASUAL_SQUINT" ||
       id === "LAZY_LOOK" ||
-      id === "SOFT_SIGH"
+      id === "SOFT_SIGH" ||
+      id === "JOY_HOP" ||
+      id === "EXCITED_WIGGLE" ||
+      id === "CURIOUS_DOUBLE_TAKE" ||
+      id === "SHY_PEEK" ||
+      id === "EMBARRASSED_BLUSH" ||
+      id === "SLEEPY_YAWN" ||
+      id === "DEADPAN_SIDE_EYE" ||
+      id === "ANGRY_FLARE" ||
+      id === "DIZZY_WOBBLE" ||
+      id === "LOVE_SPARKLE" ||
+      id === "SURPRISE_POP" ||
+      id === "TEARY_POUT"
     ) {
       this.startLibraryBeat(id, cfg);
       return;
@@ -818,6 +952,7 @@ export class BehaviourController {
     this.updateSpecial();
     this.updateStoryTravel();
     this.updateSpin();
+    this.updateBodyBeat();
     if (this.impactAt > 0 && this.clock >= this.impactAt) {
       this.impactAt = 0;
       // Impact arrives after the travel. Compress hard, then let the body
@@ -849,6 +984,7 @@ export class BehaviourController {
       this.expressionReleaseAt = 0;
       this.lidAction = "MOOD";
       this.applyMoodEyeTargets();
+      this.applyMoodFace();
     }
     if (this.mouthReleaseAt > 0 && this.clock >= this.mouthReleaseAt) {
       this.mouthReleaseAt = 0;
@@ -856,6 +992,11 @@ export class BehaviourController {
       this.applyMoodMouthTargets();
     }
     if (this.bodyReleaseAt > 0 && this.clock >= this.bodyReleaseAt) {
+      if (this.bodyAction === "CURIOUS_DOUBLE_TAKE") {
+        this.baseGazeX = 0;
+        this.baseGazeY = 0;
+        this.retargetEyes();
+      }
       this.bodyReleaseAt = 0;
       this.bodyAction = "SETTLING";
       this.clearBodyTargets();
@@ -1064,7 +1205,10 @@ export class BehaviourController {
     this.mood = next;
     this.lastMood = next;
     this.nextMoodAt = this.clock + this.interval(6000, 11000, cfg);
-    if (this.expressionReleaseAt === 0) this.applyMoodEyeTargets();
+    if (this.expressionReleaseAt === 0) {
+      this.applyMoodEyeTargets();
+      this.applyMoodFace();
+    }
     if (this.mouthReleaseAt === 0) this.applyMoodMouthTargets();
   }
 
@@ -1136,6 +1280,13 @@ export class BehaviourController {
     this.followXTarget = bodyDir * 3;
     this.followRotationTarget = bodyDir * 1.25;
     this.followScaleYTarget = y < -1 ? 0.025 : y > 1 ? -0.022 : -0.012;
+    // A gaze shift gets a small confirming blink after the eyes land. The
+    // seeded interval still controls ordinary blinks; this only moves the next
+    // one earlier when a look has just happened.
+    this.nextBlinkAt = Math.min(
+      this.nextBlinkAt,
+      this.gazeReleaseAt + 70 + this.rand() * 90
+    );
     this.mark(id, duration + 650);
   }
 
@@ -1146,11 +1297,22 @@ export class BehaviourController {
     this.leftY.target = y;
     this.rightX.target = x * 0.965;
     this.rightY.target = y * 0.98;
+    this.leftPupilX.target = clamp(x * 0.62, -5.4, 5.4);
+    this.leftPupilY.target = clamp(y * 0.5, -4.2, 4.2);
+    this.rightPupilX.target = clamp(x * 0.59, -5.2, 5.2);
+    this.rightPupilY.target = clamp(y * 0.48, -4, 4);
   }
 
-  private startExpression(id: BehaviourId) {
+  private startExpression(id: ExpressionBehaviour) {
     const mood = MOODS[this.mood];
+    const moodFace = MOOD_FACE[this.mood];
     let duration = 850;
+    let style = moodFace.style;
+    let accent = moodFace.accent;
+    let pupilScale = moodFace.pupilScale;
+    let leftLidBias = 0;
+    let rightLidBias = 0;
+
     // Every expression establishes complete eye targets. Without this reset,
     // a prior one-eye squint or curious tilt leaves stale scale and rotation
     // behind, making later buttons look broken.
@@ -1162,6 +1324,9 @@ export class BehaviourController {
     this.rightScaleY.target = mood.eyeScaleY;
     this.leftBrowRotation.target = 0;
     this.rightBrowRotation.target = 0;
+    this.leftTension.target = mood.leftTension;
+    this.rightTension.target = mood.rightTension;
+
     if (id === "SOFT_SQUINT") {
       // Squint is a real two-lid closure, not a mild scale change. Both
       // apertures narrow toward a readable centre slit.
@@ -1171,20 +1336,29 @@ export class BehaviourController {
       this.rightScaleX.target = mood.eyeScaleX + 0.045;
       this.leftScaleY.target = mood.eyeScaleY - 0.025;
       this.rightScaleY.target = mood.eyeScaleY - 0.02;
+      leftLidBias = -0.08;
+      rightLidBias = 0.08;
       duration = 850 + this.rand() * 650;
-    } else if (id === "ANGRY_BROWS") {
-      this.leftTension.target = 0.32;
-      this.rightTension.target = 0.35;
+    } else if (id === "ANGRY_BROWS" || id === "ANGRY_EYES") {
+      style = FACE_STYLE.ANGRY;
+      accent = 0.95;
+      pupilScale = 0.68;
+      this.leftTension.target = id === "ANGRY_EYES" ? 0.22 : 0.32;
+      this.rightTension.target = id === "ANGRY_EYES" ? 0.25 : 0.35;
       this.leftScaleX.target = mood.eyeScaleX + 0.035;
       this.rightScaleX.target = mood.eyeScaleX + 0.03;
       this.leftScaleY.target = mood.eyeScaleY - 0.015;
       this.rightScaleY.target = mood.eyeScaleY - 0.012;
-      // Inner brow corners drop toward Blob's nose. Left brow rotates clockwise,
-      // right brow counterclockwise. Brows no longer borrow eye rotation.
+      // Inner brow corners drop toward Blob's nose. The matching lid bias
+      // makes the upper lids join the brow instead of leaving round eyes below.
       this.leftBrowRotation.target = 5.4;
       this.rightBrowRotation.target = -5.4;
-      duration = 900 + this.rand() * 520;
+      leftLidBias = -0.52;
+      rightLidBias = 0.52;
+      duration = id === "ANGRY_EYES" ? 1080 : 900 + this.rand() * 520;
     } else if (id === "ONE_EYE_SQUINT_LEFT") {
+      style = FACE_STYLE.HAPPY;
+      accent = 0.28;
       this.leftTension.target = 0.58;
       this.rightTension.target = mood.rightTension * 0.98;
       this.leftRotation.target = -2.2;
@@ -1192,23 +1366,139 @@ export class BehaviourController {
       this.leftScaleY.target = mood.eyeScaleY - 0.015;
       duration = 680 + this.rand() * 500;
     } else if (id === "ONE_EYE_SQUINT_RIGHT") {
+      style = FACE_STYLE.HAPPY;
+      accent = 0.28;
       this.rightTension.target = 0.58;
       this.leftTension.target = mood.leftTension * 0.98;
       this.rightRotation.target = 2.2;
       this.rightBrowRotation.target = 1.6;
       this.rightScaleY.target = mood.eyeScaleY - 0.015;
       duration = 680 + this.rand() * 500;
-    } else {
+    } else if (id === "CURIOUS_WIDE") {
+      style = FACE_STYLE.SURPRISED;
+      accent = 0.26;
+      pupilScale = 1.12;
       this.leftTension.target = 1.1;
       this.rightTension.target = 1.12;
       this.leftScaleX.target = mood.eyeScaleX + 0.045;
       this.rightScaleX.target = mood.eyeScaleX + 0.045;
       this.leftScaleY.target = mood.eyeScaleY + 0.12;
       this.rightScaleY.target = mood.eyeScaleY + 0.12;
-      this.leftBrowRotation.target = 0;
-      this.rightBrowRotation.target = 0;
       duration = 760 + this.rand() * 520;
+    } else if (id === "HAPPY_EYES") {
+      style = FACE_STYLE.HAPPY;
+      accent = 0.56;
+      pupilScale = 1.18;
+      this.leftTension.target = 1.06;
+      this.rightTension.target = 1.08;
+      this.leftScaleX.target = mood.eyeScaleX + 0.035;
+      this.rightScaleX.target = mood.eyeScaleX + 0.03;
+      this.leftScaleY.target = mood.eyeScaleY + 0.055;
+      this.rightScaleY.target = mood.eyeScaleY + 0.05;
+      duration = 980;
+    } else if (id === "EXCITED_EYES") {
+      style = FACE_STYLE.EXCITED;
+      accent = 0.9;
+      pupilScale = 1.32;
+      this.leftTension.target = 1.18;
+      this.rightTension.target = 1.2;
+      this.leftScaleX.target = mood.eyeScaleX + 0.07;
+      this.rightScaleX.target = mood.eyeScaleX + 0.065;
+      this.leftScaleY.target = mood.eyeScaleY + 0.14;
+      this.rightScaleY.target = mood.eyeScaleY + 0.135;
+      duration = 920;
+    } else if (id === "SHY_EYES") {
+      style = FACE_STYLE.SHY;
+      accent = 0.82;
+      pupilScale = 0.9;
+      this.leftTension.target = 0.72;
+      this.rightTension.target = 0.76;
+      this.leftScaleX.target = mood.eyeScaleX + 0.02;
+      this.rightScaleX.target = mood.eyeScaleX + 0.015;
+      this.leftScaleY.target = mood.eyeScaleY - 0.02;
+      this.rightScaleY.target = mood.eyeScaleY - 0.016;
+      leftLidBias = 0.22;
+      rightLidBias = -0.18;
+      duration = 1200;
+    } else if (id === "SLEEPY_EYES") {
+      style = FACE_STYLE.SLEEPY;
+      accent = 0.22;
+      pupilScale = 0.74;
+      this.leftTension.target = 0.23;
+      this.rightTension.target = 0.27;
+      this.leftScaleX.target = mood.eyeScaleX + 0.04;
+      this.rightScaleX.target = mood.eyeScaleX + 0.035;
+      this.leftScaleY.target = mood.eyeScaleY - 0.055;
+      this.rightScaleY.target = mood.eyeScaleY - 0.05;
+      leftLidBias = 0.18;
+      rightLidBias = 0.14;
+      duration = 1350;
+    } else if (id === "SAD_EYES") {
+      style = FACE_STYLE.SAD;
+      accent = 0.76;
+      pupilScale = 0.76;
+      this.leftTension.target = 0.66;
+      this.rightTension.target = 0.7;
+      this.leftScaleX.target = mood.eyeScaleX + 0.015;
+      this.rightScaleX.target = mood.eyeScaleX + 0.012;
+      this.leftScaleY.target = mood.eyeScaleY - 0.03;
+      this.rightScaleY.target = mood.eyeScaleY - 0.028;
+      this.leftBrowRotation.target = -3.4;
+      this.rightBrowRotation.target = 3.4;
+      leftLidBias = 0.12;
+      rightLidBias = -0.12;
+      duration = 1280;
+    } else if (id === "CONFUSED_EYES") {
+      style = FACE_STYLE.CONFUSED;
+      accent = 0.58;
+      pupilScale = 0.9;
+      this.leftTension.target = 0.88;
+      this.rightTension.target = 0.76;
+      this.leftRotation.target = -3.2;
+      this.rightRotation.target = 2.2;
+      this.leftBrowRotation.target = -2.2;
+      this.rightBrowRotation.target = 2.6;
+      leftLidBias = -0.16;
+      rightLidBias = 0.2;
+      duration = 1180;
+    } else if (id === "LOVE_EYES") {
+      style = FACE_STYLE.LOVE;
+      accent = 0.95;
+      pupilScale = 1.05;
+      this.leftTension.target = 1.02;
+      this.rightTension.target = 1.04;
+      this.leftScaleY.target = mood.eyeScaleY + 0.08;
+      this.rightScaleY.target = mood.eyeScaleY + 0.075;
+      duration = 1300;
+    } else if (id === "PANIC_EYES") {
+      style = FACE_STYLE.PANIC;
+      accent = 0.92;
+      pupilScale = 0.62;
+      this.leftTension.target = 1.16;
+      this.rightTension.target = 1.18;
+      this.leftScaleX.target = mood.eyeScaleX + 0.06;
+      this.rightScaleX.target = mood.eyeScaleX + 0.055;
+      this.leftScaleY.target = mood.eyeScaleY + 0.16;
+      this.rightScaleY.target = mood.eyeScaleY + 0.15;
+      duration = 860;
+    } else if (id === "DEADPAN_EYES") {
+      style = FACE_STYLE.DEADPAN;
+      accent = 0.24;
+      pupilScale = 0.82;
+      this.leftTension.target = 0.58;
+      this.rightTension.target = 0.62;
+      this.leftScaleY.target = mood.eyeScaleY - 0.025;
+      this.rightScaleY.target = mood.eyeScaleY - 0.022;
+      duration = 1500;
     }
+
+    this.faceStyle = style;
+    this.faceAccent.target = accent;
+    this.pupilScale.target = pupilScale;
+    this.leftLidBias.target = leftLidBias;
+    this.rightLidBias.target = rightLidBias;
+    this.leftEyeStyle = style;
+    this.rightEyeStyle = style;
     this.lidAction = id;
     this.expressionReleaseAt = this.clock + duration;
     this.mark(id, duration + 300);
@@ -1310,7 +1600,19 @@ export class BehaviourController {
       | "PROUD_STRETCH"
       | "CASUAL_SQUINT"
       | "LAZY_LOOK"
-      | "SOFT_SIGH",
+      | "SOFT_SIGH"
+      | "JOY_HOP"
+      | "EXCITED_WIGGLE"
+      | "CURIOUS_DOUBLE_TAKE"
+      | "SHY_PEEK"
+      | "EMBARRASSED_BLUSH"
+      | "SLEEPY_YAWN"
+      | "DEADPAN_SIDE_EYE"
+      | "ANGRY_FLARE"
+      | "DIZZY_WOBBLE"
+      | "LOVE_SPARKLE"
+      | "SURPRISE_POP"
+      | "TEARY_POUT",
     cfg: BehaviourConfig
   ) {
     this.clearBeatCues();
@@ -1322,41 +1624,41 @@ export class BehaviourController {
 
     switch (id) {
       case "ANGRY_STARE":
-        expression = "ANGRY_BROWS";
+        expression = "ANGRY_EYES";
         mouth = "MOUTH_FLIP";
         body = "JELLY_TWIST_RIGHT";
         duration = 1650;
         break;
       case "ANGRY_SQUINT":
-        expression = "ANGRY_BROWS";
+        expression = "ANGRY_EYES";
         mouth = "MOUTH_FLIP";
         body = "SIDE_SQUISH_RIGHT";
         duration = 1450;
         break;
       case "ANGRY_TILT":
         gaze = "CURIOUS_TILT_RIGHT";
-        expression = "ANGRY_BROWS";
+        expression = "ANGRY_EYES";
         mouth = "MOUTH_FLIP";
         body = "JELLY_TWIST_RIGHT";
         duration = 1750;
         break;
       case "SAD_DOWNCAST":
         gaze = "LOOK_DOWN";
-        expression = "SOFT_SQUINT";
+        expression = "SAD_EYES";
         mouth = "MOUTH_FLIP";
         body = "BODY_SETTLE";
         duration = 1900;
         break;
       case "SAD_WOBBLE":
         gaze = "LOOK_DOWN";
-        expression = "ONE_EYE_SQUINT_LEFT";
+        expression = "SAD_EYES";
         mouth = "MOUTH_FLIP";
         body = "SOFT_SWAY_LEFT";
         duration = 1850;
         break;
       case "SAD_SMALL":
         gaze = "LOOK_DOWN";
-        expression = "SOFT_SQUINT";
+        expression = "SAD_EYES";
         mouth = "MOUTH_RELAX";
         body = "BREATH_STRETCH";
         duration = 1700;
@@ -1378,9 +1680,9 @@ export class BehaviourController {
         duration = 1600;
         break;
       case "HAPPY_BOUNCE":
-        expression = "CURIOUS_WIDE";
-        mouth = "MOUTH_O";
-        body = "TINY_SQUISH";
+        expression = "HAPPY_EYES";
+        mouth = "MOUTH_RELAX";
+        body = "JOY_HOP";
         duration = 1550;
         break;
       case "SHOCKED_RECOIL":
@@ -1392,20 +1694,20 @@ export class BehaviourController {
         break;
       case "CONFUSED_TILT":
         gaze = "CURIOUS_TILT_LEFT";
-        expression = "ONE_EYE_SQUINT_RIGHT";
+        expression = "CONFUSED_EYES";
         mouth = "MOUTH_TWITCH";
         body = "JELLY_TWIST_LEFT";
         duration = 1700;
         break;
       case "SLEEPY_MELT":
         gaze = "LOOK_DOWN";
-        expression = "SOFT_SQUINT";
+        expression = "SLEEPY_EYES";
         mouth = "MOUTH_RELAX";
-        body = "BODY_SETTLE";
+        body = "SLEEPY_MELT";
         duration = 2100;
         break;
       case "LAUGH_SQUISH":
-        expression = "SOFT_SQUINT";
+        expression = "HAPPY_EYES";
         mouth = "MOUTH_TWITCH";
         body = "SIDE_SQUISH_LEFT";
         duration = 1450;
@@ -1418,13 +1720,13 @@ export class BehaviourController {
         duration = 1500;
         break;
       case "PANIC_SHAKE":
-        expression = "CURIOUS_WIDE";
+        expression = "PANIC_EYES";
         mouth = "MOUTH_O";
-        body = "JELLY_TWIST_RIGHT";
+        body = "EXCITED_WIGGLE";
         duration = 1300;
         break;
       case "PROUD_STRETCH":
-        expression = "CURIOUS_WIDE";
+        expression = "HAPPY_EYES";
         mouth = "MOUTH_RELAX";
         body = "TALL_STRETCH";
         duration = 1800;
@@ -1448,6 +1750,82 @@ export class BehaviourController {
         mouth = "MOUTH_RELAX";
         body = "BREATH_STRETCH";
         duration = 2100;
+        break;
+      case "JOY_HOP":
+        expression = "HAPPY_EYES";
+        mouth = "MOUTH_RELAX";
+        body = "JOY_HOP";
+        duration = 1700;
+        break;
+      case "EXCITED_WIGGLE":
+        expression = "EXCITED_EYES";
+        mouth = "MOUTH_O";
+        body = "EXCITED_WIGGLE";
+        duration = 1550;
+        break;
+      case "CURIOUS_DOUBLE_TAKE":
+        expression = "CURIOUS_WIDE";
+        mouth = "MOUTH_O";
+        body = "CURIOUS_DOUBLE_TAKE";
+        duration = 2050;
+        break;
+      case "SHY_PEEK":
+        expression = "SHY_EYES";
+        mouth = "MOUTH_TWITCH";
+        body = "SHY_PEEK";
+        duration = 1850;
+        break;
+      case "EMBARRASSED_BLUSH":
+        expression = "SHY_EYES";
+        mouth = "MOUTH_FLIP";
+        body = "SHY_PEEK";
+        duration = 1700;
+        break;
+      case "SLEEPY_YAWN":
+        gaze = "LOOK_DOWN";
+        expression = "SLEEPY_EYES";
+        mouth = "MOUTH_O";
+        body = "SLEEPY_YAWN";
+        duration = 2450;
+        break;
+      case "DEADPAN_SIDE_EYE":
+        gaze = "GLANCE_RIGHT";
+        expression = "DEADPAN_EYES";
+        mouth = "MOUTH_TWITCH";
+        body = "SOFT_SWAY_RIGHT";
+        duration = 1750;
+        break;
+      case "ANGRY_FLARE":
+        expression = "ANGRY_EYES";
+        mouth = "MOUTH_FLIP";
+        body = "ANGRY_FLARE";
+        duration = 1550;
+        break;
+      case "DIZZY_WOBBLE":
+        expression = "CONFUSED_EYES";
+        mouth = "MOUTH_O";
+        body = "DIZZY_WOBBLE";
+        duration = 1900;
+        break;
+      case "LOVE_SPARKLE":
+        expression = "LOVE_EYES";
+        mouth = "MOUTH_RELAX";
+        body = "SOFT_SWAY_RIGHT";
+        duration = 2150;
+        break;
+      case "SURPRISE_POP":
+        gaze = "LOOK_UP";
+        expression = "EXCITED_EYES";
+        mouth = "MOUTH_O";
+        body = "SURPRISE_POP";
+        duration = 1850;
+        break;
+      case "TEARY_POUT":
+        gaze = "LOOK_DOWN";
+        expression = "SAD_EYES";
+        mouth = "MOUTH_FLIP";
+        body = "TEARY_POUT";
+        duration = 2050;
         break;
     }
 
@@ -1480,8 +1858,40 @@ export class BehaviourController {
     let sy = 0;
     let duration = 620;
     let dir = 0;
+    const dynamic =
+      id === "JOY_HOP" ||
+      id === "EXCITED_WIGGLE" ||
+      id === "CURIOUS_DOUBLE_TAKE" ||
+      id === "SHY_PEEK" ||
+      id === "SLEEPY_MELT" ||
+      id === "SLEEPY_YAWN" ||
+      id === "ANGRY_FLARE" ||
+      id === "DIZZY_WOBBLE" ||
+      id === "SURPRISE_POP" ||
+      id === "TEARY_POUT";
     this.clearBodyTargets();
-    if (id === "BODY_SETTLE") {
+    if (dynamic) {
+      duration =
+        id === "JOY_HOP"
+          ? 1320
+          : id === "EXCITED_WIGGLE"
+            ? 1220
+            : id === "CURIOUS_DOUBLE_TAKE"
+              ? 1480
+              : id === "SHY_PEEK"
+                ? 1320
+                : id === "SLEEPY_MELT"
+                  ? 1780
+                  : id === "SLEEPY_YAWN"
+                    ? 1980
+                    : id === "ANGRY_FLARE"
+                      ? 1180
+                      : id === "DIZZY_WOBBLE"
+                        ? 1540
+                        : id === "SURPRISE_POP"
+                          ? 1260
+                          : 1420;
+    } else if (id === "BODY_SETTLE") {
       sy = -0.064 * strength;
       if (!storyOwnsTravel) this.travelYTarget = 6.2;
       this.massYTarget = 3.1;
@@ -1545,12 +1955,238 @@ export class BehaviourController {
       this.massOriginXTarget = -dir * 0.95;
       duration = 670;
     }
-    if (id !== "SIDE_SQUISH_LEFT" && id !== "SIDE_SQUISH_RIGHT") {
+    if (!dynamic && id !== "SIDE_SQUISH_LEFT" && id !== "SIDE_SQUISH_RIGHT") {
       if (!storyOwnsTravel) this.travelScaleYTarget = sy;
     }
     this.bodyAction = id;
+    this.bodyStartedAt = this.clock;
+    this.bodyBaseTravelX = this.travelXTarget;
+    this.bodyBaseTravelY = this.travelYTarget;
+    this.bodyBaseRotation = this.travelRotationTarget;
+    this.bodyBaseScaleY = this.travelScaleYTarget;
     this.bodyReleaseAt = this.clock + duration;
     this.mark(id, duration + 750);
+  }
+
+  /** Short authored body phrases. Each uses the same scalar springs as drag. */
+  private updateBodyBeat() {
+    const id = this.bodyAction;
+    if (this.bodyReleaseAt <= this.clock || this.bodyStartedAt <= 0) return;
+    if (
+      id !== "JOY_HOP" &&
+      id !== "EXCITED_WIGGLE" &&
+      id !== "CURIOUS_DOUBLE_TAKE" &&
+      id !== "SHY_PEEK" &&
+      id !== "SLEEPY_MELT" &&
+      id !== "SLEEPY_YAWN" &&
+      id !== "ANGRY_FLARE" &&
+      id !== "DIZZY_WOBBLE" &&
+      id !== "SURPRISE_POP" &&
+      id !== "TEARY_POUT"
+    ) {
+      return;
+    }
+
+    const duration =
+      id === "JOY_HOP"
+        ? 1320
+        : id === "EXCITED_WIGGLE"
+          ? 1220
+          : id === "CURIOUS_DOUBLE_TAKE"
+            ? 1480
+            : id === "SHY_PEEK"
+              ? 1320
+              : id === "SLEEPY_MELT"
+                ? 1780
+                : id === "SLEEPY_YAWN"
+                  ? 1980
+                  : id === "ANGRY_FLARE"
+                    ? 1180
+                    : id === "DIZZY_WOBBLE"
+                      ? 1540
+                      : id === "SURPRISE_POP"
+                        ? 1260
+                        : 1420;
+    const t = clamp01((this.clock - this.bodyStartedAt) / duration);
+    const eased = smoothstep(t);
+    let offsetX = 0;
+    let offsetY = 0;
+    let offsetRotation = 0;
+    let offsetScaleY = 0;
+    let massX = 0;
+    let massY = 0;
+    let massRotation = 0;
+    let massScaleY = 0;
+    let skewX = 0;
+    let skewY = 0;
+
+    if (id === "JOY_HOP") {
+      if (t < 0.16) {
+        const p = smoothstep(t / 0.16);
+        offsetY = 6 * p;
+        offsetScaleY = -0.08 * p;
+      } else if (t < 0.43) {
+        const p = smoothstep((t - 0.16) / 0.27);
+        offsetY = mix(6, -17, p);
+        offsetScaleY = mix(-0.08, 0.065, p);
+      } else if (t < 0.62) {
+        const p = smoothstep((t - 0.43) / 0.19);
+        offsetY = mix(-17, -13, p);
+        offsetScaleY = mix(0.065, 0.035, p);
+      } else if (t < 0.78) {
+        const p = smoothstep((t - 0.62) / 0.16);
+        offsetY = mix(-13, 7, p);
+        offsetScaleY = mix(0.035, -0.115, p);
+      } else {
+        const p = smoothstep((t - 0.78) / 0.22);
+        offsetY = mix(7, 0, p);
+        offsetScaleY = mix(-0.115, 0, p);
+      }
+      massY = offsetY * 0.36;
+      massScaleY = offsetScaleY * 0.35;
+    } else if (id === "EXCITED_WIGGLE") {
+      const envelope = Math.sin(Math.PI * eased);
+      const wave = Math.sin(eased * Math.PI * 3.6);
+      offsetX = wave * 8.5 * envelope;
+      offsetY = -Math.abs(wave) * 3.5 * envelope;
+      offsetRotation = wave * 4.4 * envelope;
+      offsetScaleY = (Math.abs(wave) * 0.04 - 0.022) * envelope;
+      massX = offsetX * 0.7;
+      massY = offsetY * 0.7;
+      massRotation = offsetRotation * 0.82;
+      massScaleY = offsetScaleY * 0.4;
+      skewX = -wave * 3.2 * envelope;
+    } else if (id === "CURIOUS_DOUBLE_TAKE") {
+      if (t < 0.18) {
+        const p = smoothstep(t / 0.18);
+        offsetX = 3.8 * p;
+      } else if (t < 0.38) {
+        const p = smoothstep((t - 0.18) / 0.2);
+        offsetX = mix(3.8, -5.4, p);
+      } else if (t < 0.58) {
+        const p = smoothstep((t - 0.38) / 0.2);
+        offsetX = mix(-5.4, 4.2, p);
+      } else {
+        offsetX = mix(4.2, 0, smoothstep((t - 0.58) / 0.42));
+      }
+      offsetRotation = offsetX * 0.33;
+      massX = offsetX * 0.72;
+      massRotation = offsetRotation * 0.9;
+      skewY = offsetX * 0.42;
+      const gazeX =
+        t < 0.18
+          ? 0
+          : t < 0.38
+            ? 6.2
+            : t < 0.58
+              ? -6.4
+              : mix(-6.4, 0, smoothstep((t - 0.58) / 0.42));
+      const gazeY = t < 0.38 ? -0.8 : t < 0.58 ? -0.1 : 0;
+      this.baseGazeX = gazeX;
+      this.baseGazeY = gazeY;
+      this.retargetEyes();
+    } else if (id === "SHY_PEEK") {
+      const retreat = Math.sin(Math.PI * eased);
+      offsetX = -5.6 * retreat;
+      offsetY = 2.7 * retreat;
+      offsetRotation = -2.3 * retreat;
+      offsetScaleY = -0.038 * retreat;
+      massX = offsetX * 0.74;
+      massY = offsetY * 0.74;
+      massRotation = offsetRotation * 0.8;
+      massScaleY = offsetScaleY * 0.4;
+    } else if (id === "SLEEPY_MELT") {
+      const settle = t < 0.58 ? smoothstep(t / 0.58) : smoothstep((1 - t) / 0.42);
+      offsetY = t < 0.58 ? 8 * settle : 8 * settle;
+      offsetScaleY = -0.085 * settle;
+      offsetRotation = 1.3 * settle;
+      massY = offsetY * 0.48;
+      massScaleY = offsetScaleY * 0.4;
+      massRotation = offsetRotation * 0.7;
+    } else if (id === "SLEEPY_YAWN") {
+      if (t < 0.2) {
+        const p = smoothstep(t / 0.2);
+        offsetY = 4 * p;
+        offsetScaleY = -0.05 * p;
+      } else if (t < 0.48) {
+        const p = smoothstep((t - 0.2) / 0.28);
+        offsetY = mix(4, -8, p);
+        offsetScaleY = mix(-0.05, 0.06, p);
+      } else if (t < 0.7) {
+        const p = smoothstep((t - 0.48) / 0.22);
+        offsetY = mix(-8, 4, p);
+        offsetScaleY = mix(0.06, -0.075, p);
+      } else {
+        const p = smoothstep((t - 0.7) / 0.3);
+        offsetY = mix(4, 0, p);
+        offsetScaleY = mix(-0.075, 0, p);
+      }
+      massY = offsetY * 0.4;
+      massScaleY = offsetScaleY * 0.34;
+    } else if (id === "ANGRY_FLARE") {
+      const pulse = Math.sin(Math.PI * eased);
+      const shake = Math.sin(eased * Math.PI * 7.2) * pulse;
+      offsetX = shake * 3.2;
+      offsetY = 2.6 * pulse;
+      offsetRotation = shake * 2.8;
+      offsetScaleY = -0.075 * pulse;
+      massX = offsetX * 0.8;
+      massY = offsetY * 0.72;
+      massRotation = offsetRotation * 0.82;
+      massScaleY = offsetScaleY * 0.38;
+      skewY = shake * 2.4;
+    } else if (id === "DIZZY_WOBBLE") {
+      const envelope = Math.sin(Math.PI * eased);
+      const wave = Math.sin(eased * Math.PI * 2.5);
+      offsetX = wave * 7.2 * envelope;
+      offsetY = Math.abs(wave) * 2.2 * envelope;
+      offsetRotation = wave * 6.5 * envelope;
+      offsetScaleY = -0.035 * envelope;
+      massX = offsetX * 0.7;
+      massY = offsetY * 0.78;
+      massRotation = offsetRotation * 0.9;
+      massScaleY = offsetScaleY * 0.4;
+      skewX = -wave * 3.8 * envelope;
+    } else if (id === "SURPRISE_POP") {
+      if (t < 0.17) {
+        const p = smoothstep(t / 0.17);
+        offsetY = 5 * p;
+        offsetScaleY = -0.07 * p;
+      } else if (t < 0.42) {
+        const p = smoothstep((t - 0.17) / 0.25);
+        offsetY = mix(5, -19, p);
+        offsetScaleY = mix(-0.07, 0.09, p);
+      } else if (t < 0.62) {
+        const p = smoothstep((t - 0.42) / 0.2);
+        offsetY = mix(-19, -13, p);
+        offsetScaleY = mix(0.09, 0.03, p);
+      } else {
+        const p = smoothstep((t - 0.62) / 0.38);
+        offsetY = mix(-13, 0, p);
+        offsetScaleY = mix(0.03, 0, p);
+      }
+      massY = offsetY * 0.34;
+      massScaleY = offsetScaleY * 0.3;
+    } else if (id === "TEARY_POUT") {
+      const settle = Math.sin(Math.PI * eased);
+      offsetY = 3.8 * settle;
+      offsetScaleY = -0.048 * settle;
+      offsetRotation = -1.2 * settle;
+      massY = offsetY * 0.52;
+      massScaleY = offsetScaleY * 0.4;
+      massRotation = offsetRotation * 0.72;
+    }
+
+    this.travelXTarget = this.bodyBaseTravelX + offsetX;
+    this.travelYTarget = this.bodyBaseTravelY + offsetY;
+    this.travelRotationTarget = this.bodyBaseRotation + offsetRotation;
+    this.travelScaleYTarget = this.bodyBaseScaleY + offsetScaleY;
+    this.massXTarget = massX;
+    this.massYTarget = massY;
+    this.massRotationTarget = massRotation;
+    this.massScaleYTarget = massScaleY;
+    this.massSkewXTarget = skewX;
+    this.massSkewYTarget = skewY;
   }
 
   /**
@@ -1564,6 +2200,7 @@ export class BehaviourController {
     this.spinRotation = 0;
     this.impactAt = 0;
     this.specialAction = id;
+    this.specialDirection = id === "VANISH_REAPPEAR" && this.rand() < 0.5 ? -1 : 1;
     this.specialStartedAt = this.clock;
     this.specialEmoteStarted = false;
     this.specialScale = 0;
@@ -1591,7 +2228,12 @@ export class BehaviourController {
     if (!id || this.specialStartedAt < 0) return;
     const duration = id === "VANISH_REAPPEAR" ? 1900 : id === "POP_OUT_IN" ? 2050 : 2250;
     const t = clamp01((this.clock - this.specialStartedAt) / duration);
-    const direction = id === "CREEP_IN_LEFT" ? -1 : 1;
+    const direction =
+      id === "CREEP_IN_LEFT"
+        ? -1
+        : id === "CREEP_IN_RIGHT"
+          ? 1
+          : this.specialDirection;
 
     this.specialScale = 0;
     this.specialOpacity = 1;
@@ -1634,11 +2276,52 @@ export class BehaviourController {
     } else {
       const out = smoothstep(clamp01(t / 0.25));
       const back = smoothstep(clamp01((t - 0.42) / 0.3));
-      this.specialScale = mix(0, -0.88, out);
-      this.specialOpacity = mix(1, 0, out);
-      if (t > 0.42) {
-        this.specialScale = mix(-0.88, 0, back);
-        this.specialOpacity = mix(0, 1, back);
+      if (id === "VANISH_REAPPEAR") {
+        // Leave through a bounded edge pocket, hold invisibly for one beat,
+        // then return from that same side. The old version only changed scale
+        // and could leave an off-screen target behind after interruption.
+        if (t < 0.16) {
+          const p = smoothstep(t / 0.16);
+          this.travelXTarget = mix(0, direction * 38, p);
+          this.travelYTarget = mix(0, -5, p);
+          this.travelRotationTarget = mix(0, direction * 2.5, p);
+          this.specialScale = mix(0, -0.1, p);
+          this.specialOpacity = 1;
+        } else if (t < 0.43) {
+          const p = smoothstep((t - 0.16) / 0.27);
+          this.travelXTarget = mix(direction * 38, direction * VANISH_EDGE, p);
+          this.travelYTarget = mix(-5, -15, p);
+          this.travelRotationTarget = mix(direction * 2.5, direction * 8, p);
+          this.specialScale = mix(-0.1, -0.94, p);
+          this.specialOpacity = mix(1, 0, p);
+        } else if (t < 0.59) {
+          this.travelXTarget = direction * VANISH_EDGE;
+          this.travelYTarget = -15;
+          this.travelRotationTarget = direction * 8;
+          this.specialScale = -0.94;
+          this.specialOpacity = 0;
+        } else if (t < 0.87) {
+          const p = smoothstep((t - 0.59) / 0.28);
+          this.travelXTarget = mix(direction * VANISH_EDGE, 0, p);
+          this.travelYTarget = mix(-15, 0, p);
+          this.travelRotationTarget = mix(direction * 8, 0, p);
+          this.specialScale = mix(-0.94, -0.02, p);
+          this.specialOpacity = mix(0, 1, p);
+        } else {
+          const p = smoothstep((t - 0.87) / 0.13);
+          this.travelXTarget = 0;
+          this.travelYTarget = mix(0, 0.5, p);
+          this.travelRotationTarget = 0;
+          this.specialScale = mix(-0.02, 0, p);
+          this.specialOpacity = 1;
+        }
+      } else {
+        this.specialScale = mix(0, -0.88, out);
+        this.specialOpacity = mix(1, 0, out);
+        if (t > 0.42) {
+          this.specialScale = mix(-0.88, 0, back);
+          this.specialOpacity = mix(0, 1, back);
+        }
       }
       if (t > 0.68 && !this.specialEmoteStarted) {
         this.specialEmoteStarted = true;
@@ -1655,6 +2338,12 @@ export class BehaviourController {
       this.specialStartedAt = -1;
       this.specialScale = 0;
       this.specialOpacity = 1;
+      this.travelXTarget = 0;
+      this.travelYTarget = 0;
+      this.travelRotationTarget = 0;
+      this.travelDepthTarget = 0;
+      this.travelYawTarget = 0;
+      this.travelPitchTarget = 0;
       this.manualBeat = false;
       this.bodyAction = "SETTLING";
       this.clearBodyTargets();
@@ -1748,7 +2437,7 @@ export class BehaviourController {
     this.blinkStartedAt = this.clock;
     this.blinkDouble = double;
     this.lidAction = double ? "DOUBLE_BLINK" : "NORMAL_BLINK";
-    this.mark(double ? "DOUBLE_BLINK" : "NORMAL_BLINK", double ? 515 : 205);
+    this.mark(double ? "DOUBLE_BLINK" : "NORMAL_BLINK", double ? 665 : 280);
     if (cfg) this.nextBlinkAt = this.clock + this.blinkGap(cfg);
   }
 
@@ -1759,7 +2448,8 @@ export class BehaviourController {
       return;
     }
     const elapsed = this.clock - this.blinkStartedAt;
-    const cycle = 205;
+    // A readable anime blink: 90ms close, 60ms hold, 130ms open.
+    const cycle = 280;
     const gap = 105;
     const local =
       this.blinkDouble && elapsed >= cycle + gap ? elapsed - cycle - gap : elapsed;
@@ -1777,14 +2467,20 @@ export class BehaviourController {
       this.blinkState = "open";
       return;
     }
-    const closeMs = 65;
-    const min = 0;
+    const closeMs = 90;
+    const holdMs = 60;
+    const min = 0.025;
     if (local < closeMs) {
       const t = smoothstep(local / closeMs);
       this.blinkLid = 1 - t * (1 - min);
       this.blinkState = t > 0.9 ? "closed" : "closing";
+    } else if (local < closeMs + holdMs) {
+      this.blinkLid = min;
+      this.blinkState = "closed";
     } else {
-      const t = smoothstep((local - closeMs) / (cycle - closeMs));
+      const t = smoothstep(
+        (local - closeMs - holdMs) / (cycle - closeMs - holdMs)
+      );
       this.blinkLid = min + t * (1 - min);
       this.blinkState = t < 0.08 ? "closed" : "opening";
     }
@@ -1793,6 +2489,7 @@ export class BehaviourController {
   private applyMoodTargets() {
     this.applyMoodEyeTargets();
     this.applyMoodMouthTargets();
+    this.applyMoodFace();
   }
 
   private applyMoodEyeTargets() {
@@ -1807,6 +2504,17 @@ export class BehaviourController {
     this.rightRotation.target = 0;
     this.leftBrowRotation.target = 0;
     this.rightBrowRotation.target = 0;
+    this.leftLidBias.target = 0;
+    this.rightLidBias.target = 0;
+    this.leftEyeStyle = -1;
+    this.rightEyeStyle = -1;
+  }
+
+  private applyMoodFace() {
+    const mood = MOOD_FACE[this.mood];
+    this.faceStyle = mood.style;
+    this.faceAccent.target = mood.accent;
+    this.pupilScale.target = mood.pupilScale;
   }
 
   private applyMoodMouthTargets() {
@@ -1854,6 +2562,14 @@ export class BehaviourController {
       this.rightBrowRotation.step(dt, 5.4, 0.74);
       this.leftTension.step(dt, 7.8, 0.76);
       this.rightTension.step(dt, 7.2, 0.77);
+      this.leftPupilX.step(dt, 13.5, 0.62);
+      this.leftPupilY.step(dt, 13.1, 0.64);
+      this.rightPupilX.step(dt, 12.9, 0.64);
+      this.rightPupilY.step(dt, 12.6, 0.66);
+      this.pupilScale.step(dt, 5.2, 0.78);
+      this.leftLidBias.step(dt, 6.4, 0.72);
+      this.rightLidBias.step(dt, 6.1, 0.74);
+      this.faceAccent.step(dt, 5.8, 0.78);
       this.mouthX.step(dt, 6.4, 0.7);
       this.mouthY.step(dt, 6.2, 0.7);
       this.mouthScaleX.step(dt, 6.8, 0.69);
@@ -1895,6 +2611,8 @@ export class BehaviourController {
     this.delta.blobSpin = 0;
     this.delta.blobScale = this.specialScale;
     this.delta.blobOpacity = this.specialOpacity;
+    this.delta.faceStyle = this.faceStyle;
+    this.delta.faceAccent = clamp(this.faceAccent.value, 0, 1);
     this.delta.blobScaleY = scaleY;
     this.delta.blobScaleX = preserveAreaX(scaleY);
     this.delta.bodyX = this.massXTarget;
@@ -1918,6 +2636,15 @@ export class BehaviourController {
     this.delta.rightEyeScaleX = this.rightScaleX.value - velocityNarrow * 0.9;
     this.delta.rightEyeScaleY = this.rightScaleY.value + velocityStretch * 0.92;
     this.delta.rightEyeRotation = this.rightRotation.value;
+    this.delta.leftPupilX = this.leftPupilX.value;
+    this.delta.leftPupilY = this.leftPupilY.value;
+    this.delta.rightPupilX = this.rightPupilX.value;
+    this.delta.rightPupilY = this.rightPupilY.value;
+    this.delta.pupilScale = clamp(this.pupilScale.value, 0.55, 1.45);
+    this.delta.leftLidBias = this.leftLidBias.value;
+    this.delta.rightLidBias = this.rightLidBias.value;
+    this.delta.leftEyeStyle = this.leftEyeStyle;
+    this.delta.rightEyeStyle = this.rightEyeStyle;
     this.delta.leftBrowRotation = this.leftBrowRotation.value;
     this.delta.rightBrowRotation = this.rightBrowRotation.value;
     this.delta.eyeLid = this.blinkLid;
@@ -1955,6 +2682,8 @@ export class BehaviourController {
       | "nextBlinkMs"
       | "nextMouthMs"
       | "nextBodyMs"
+      | "faceStyle"
+      | "faceAccent"
     > {
     const active = this.clock < this.activityUntil;
     const mindState = this.mind.state();
@@ -1993,6 +2722,8 @@ export class BehaviourController {
       nextBlinkMs: Math.max(0, this.nextBlinkAt - this.clock),
       nextMouthMs: Math.max(0, this.nextMouthAt - this.clock),
       nextBodyMs: Math.max(0, this.nextBodyAt - this.clock),
+      faceStyle: this.delta.faceStyle,
+      faceAccent: this.delta.faceAccent,
     };
   }
 }

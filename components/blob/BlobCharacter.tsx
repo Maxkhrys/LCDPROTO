@@ -15,6 +15,7 @@ import {
   BODY_FRACTION,
   bodyScale,
   faceAnchor,
+  FACE_STYLE,
   type BlobRig,
   type BlobColour,
   type ElementTransform,
@@ -207,6 +208,11 @@ function eyePalette(colour: BlobColour) {
         rim: "#147d83",
         wash: "rgba(26, 207, 205, 0.42)",
         washEdge: "rgba(26, 207, 205, 0)",
+        iris: "#67e7df",
+        irisDeep: "#0c5c68",
+        accent: "#ff709d",
+        sclera: "#fff8ef",
+        lash: "#102b32",
       };
     case "yellow":
       return {
@@ -214,6 +220,11 @@ function eyePalette(colour: BlobColour) {
         rim: "#9b711b",
         wash: "rgba(242, 190, 55, 0.38)",
         washEdge: "rgba(242, 190, 55, 0)",
+        iris: "#8ba7ff",
+        irisDeep: "#39467e",
+        accent: "#ff647e",
+        sclera: "#fff9e8",
+        lash: "#35250d",
       };
     case "green":
       return {
@@ -221,6 +232,11 @@ function eyePalette(colour: BlobColour) {
         rim: "#348b32",
         wash: "rgba(108, 217, 75, 0.38)",
         washEdge: "rgba(108, 217, 75, 0)",
+        iris: "#a7ec73",
+        irisDeep: "#2d7436",
+        accent: "#ff7899",
+        sclera: "#f8fff0",
+        lash: "#142d1a",
       };
     case "blue":
       return {
@@ -228,6 +244,11 @@ function eyePalette(colour: BlobColour) {
         rim: "#1c75c7",
         wash: "rgba(64, 170, 255, 0.38)",
         washEdge: "rgba(64, 170, 255, 0)",
+        iris: "#8bc2ff",
+        irisDeep: "#20519b",
+        accent: "#ff80a8",
+        sclera: "#f3f8ff",
+        lash: "#0d2145",
       };
     case "red":
       return {
@@ -235,6 +256,11 @@ function eyePalette(colour: BlobColour) {
         rim: "#c92b3d",
         wash: "rgba(255, 80, 76, 0.38)",
         washEdge: "rgba(255, 80, 76, 0)",
+        iris: "#ffd878",
+        irisDeep: "#843126",
+        accent: "#ffd563",
+        sclera: "#fff6e7",
+        lash: "#35101b",
       };
     default:
       return {
@@ -242,8 +268,201 @@ function eyePalette(colour: BlobColour) {
         rim: "#6529c5",
         wash: "rgba(127, 67, 235, 0.42)",
         washEdge: "rgba(127, 67, 235, 0)",
+        iris: "#c09cff",
+        irisDeep: "#4b2f9d",
+        accent: "#ff78b5",
+        sclera: "#fff7ff",
+        lash: "#1c102d",
       };
   }
+}
+
+function drawHeart(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  colour: string
+) {
+  ctx.beginPath();
+  ctx.moveTo(x, y + size * 0.92);
+  ctx.bezierCurveTo(
+    x - size * 1.3,
+    y + size * 0.12,
+    x - size * 0.78,
+    y - size * 0.86,
+    x,
+    y - size * 0.24
+  );
+  ctx.bezierCurveTo(
+    x + size * 0.78,
+    y - size * 0.86,
+    x + size * 1.3,
+    y + size * 0.12,
+    x,
+    y + size * 0.92
+  );
+  ctx.closePath();
+  ctx.fillStyle = colour;
+  ctx.fill();
+}
+
+function drawSparkle(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  colour: string
+) {
+  ctx.beginPath();
+  ctx.moveTo(x, y - size);
+  ctx.lineTo(x + size * 0.24, y - size * 0.24);
+  ctx.lineTo(x + size, y);
+  ctx.lineTo(x + size * 0.24, y + size * 0.24);
+  ctx.lineTo(x, y + size);
+  ctx.lineTo(x - size * 0.24, y + size * 0.24);
+  ctx.lineTo(x - size, y);
+  ctx.lineTo(x - size * 0.24, y - size * 0.24);
+  ctx.closePath();
+  ctx.fillStyle = colour;
+  ctx.fill();
+}
+
+function drawDrop(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  colour: string
+) {
+  ctx.beginPath();
+  ctx.moveTo(x, y - size);
+  ctx.bezierCurveTo(
+    x + size * 0.78,
+    y - size * 0.08,
+    x + size * 0.7,
+    y + size * 0.72,
+    x,
+    y + size * 0.72
+  );
+  ctx.bezierCurveTo(
+    x - size * 0.7,
+    y + size * 0.72,
+    x - size * 0.78,
+    y - size * 0.08,
+    x,
+    y - size
+  );
+  ctx.closePath();
+  ctx.fillStyle = colour;
+  ctx.fill();
+}
+
+function drawAngerMark(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  colour: string
+) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(-0.18);
+  ctx.strokeStyle = colour;
+  ctx.lineWidth = Math.max(1.2, size * 0.16);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(-size, -size * 0.24);
+  ctx.lineTo(-size * 0.2, -size * 0.24);
+  ctx.moveTo(size * 0.2, -size * 0.24);
+  ctx.lineTo(size, -size * 0.24);
+  ctx.moveTo(-size * 0.24, -size);
+  ctx.lineTo(-size * 0.24, -size * 0.2);
+  ctx.moveTo(-size * 0.24, size * 0.2);
+  ctx.lineTo(-size * 0.24, size);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawFaceAccents(
+  ctx: CanvasRenderingContext2D,
+  center: number,
+  bodyWidth: number,
+  bodyHeight: number,
+  body: ElementTransform,
+  styleCode: number,
+  amount: number,
+  colour: BlobColour
+) {
+  const strength = clamp(amount, 0, 1);
+  if (strength < 0.02) return;
+  const palette = eyePalette(colour);
+  const cheekY = bodyHeight * 0.13;
+  const cheekX = bodyWidth * 0.27;
+  const accent = palette.accent;
+
+  ctx.save();
+  applyBodySurface(ctx, center, bodyWidth, bodyHeight, body);
+  ctx.globalAlpha *= strength * 0.88;
+  ctx.lineCap = "round";
+  if (styleCode === FACE_STYLE.HAPPY || styleCode === FACE_STYLE.SHY || styleCode === FACE_STYLE.LOVE) {
+    ctx.fillStyle = "rgba(255, 93, 143, 0.72)";
+    ctx.beginPath();
+    ctx.ellipse(-cheekX, cheekY, bodyWidth * 0.045, bodyHeight * 0.018, -0.14, 0, Math.PI * 2);
+    ctx.ellipse(cheekX, cheekY, bodyWidth * 0.045, bodyHeight * 0.018, 0.14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 174, 192, 0.9)";
+    ctx.lineWidth = Math.max(0.8, bodyWidth * 0.008);
+    ctx.beginPath();
+    ctx.moveTo(-cheekX - bodyWidth * 0.05, cheekY + bodyHeight * 0.026);
+    ctx.lineTo(-cheekX - bodyWidth * 0.015, cheekY - bodyHeight * 0.018);
+    ctx.moveTo(cheekX + bodyWidth * 0.015, cheekY - bodyHeight * 0.018);
+    ctx.lineTo(cheekX + bodyWidth * 0.05, cheekY + bodyHeight * 0.026);
+    ctx.stroke();
+  }
+  if (styleCode === FACE_STYLE.EXCITED || styleCode === FACE_STYLE.SURPRISED) {
+    drawSparkle(ctx, -bodyWidth * 0.34, -bodyHeight * 0.28, bodyWidth * 0.045, palette.sclera);
+    if (styleCode === FACE_STYLE.EXCITED) {
+      drawSparkle(ctx, bodyWidth * 0.34, -bodyHeight * 0.2, bodyWidth * 0.026, palette.accent);
+    }
+  } else if (styleCode === FACE_STYLE.ANGRY) {
+    drawAngerMark(ctx, bodyWidth * 0.31, -bodyHeight * 0.31, bodyWidth * 0.058, accent);
+  } else if (styleCode === FACE_STYLE.SAD) {
+    drawDrop(ctx, -bodyWidth * 0.158, -bodyHeight * 0.03, bodyWidth * 0.026, "#76cfff");
+    drawDrop(ctx, bodyWidth * 0.158, -bodyHeight * 0.03, bodyWidth * 0.026, "#76cfff");
+  } else if (styleCode === FACE_STYLE.CONFUSED || styleCode === FACE_STYLE.PANIC) {
+    drawDrop(ctx, bodyWidth * 0.34, -bodyHeight * 0.16, bodyWidth * 0.052, "#75d9ff");
+    ctx.strokeStyle = "rgba(117, 217, 255, 0.8)";
+    ctx.lineWidth = Math.max(0.9, bodyWidth * 0.009);
+    ctx.beginPath();
+    ctx.moveTo(bodyWidth * 0.39, -bodyHeight * 0.29);
+    ctx.lineTo(bodyWidth * 0.43, -bodyHeight * 0.33);
+    ctx.stroke();
+  } else if (styleCode === FACE_STYLE.SLEEPY) {
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
+    ctx.lineWidth = Math.max(1, bodyWidth * 0.011);
+    ctx.beginPath();
+    ctx.moveTo(bodyWidth * 0.3, -bodyHeight * 0.3);
+    ctx.lineTo(bodyWidth * 0.38, -bodyHeight * 0.3);
+    ctx.lineTo(bodyWidth * 0.3, -bodyHeight * 0.22);
+    ctx.lineTo(bodyWidth * 0.38, -bodyHeight * 0.22);
+    ctx.moveTo(bodyWidth * 0.4, -bodyHeight * 0.39);
+    ctx.lineTo(bodyWidth * 0.47, -bodyHeight * 0.39);
+    ctx.lineTo(bodyWidth * 0.4, -bodyHeight * 0.32);
+    ctx.lineTo(bodyWidth * 0.47, -bodyHeight * 0.32);
+    ctx.stroke();
+  } else if (styleCode === FACE_STYLE.DEADPAN) {
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.48)";
+    ctx.lineWidth = Math.max(0.9, bodyWidth * 0.009);
+    ctx.beginPath();
+    ctx.moveTo(bodyWidth * 0.31, -bodyHeight * 0.31);
+    ctx.lineTo(bodyWidth * 0.39, -bodyHeight * 0.31);
+    ctx.stroke();
+  }
+  if (styleCode === FACE_STYLE.LOVE) {
+    drawHeart(ctx, bodyWidth * 0.35, -bodyHeight * 0.34, bodyWidth * 0.04, accent);
+  }
+  ctx.restore();
 }
 
 /**
@@ -260,15 +479,43 @@ function eyePalette(colour: BlobColour) {
 function drawProceduralEye(
   ctx: CanvasRenderingContext2D,
   eye: EyeGeometry,
-  showPupil: boolean
+  showPupil: boolean,
+  styleCode: number,
+  pupilX: number,
+  pupilY: number,
+  pupilScale: number,
+  lidBias: number,
+  colour: BlobColour
 ) {
   if (eye.open <= 0.004) return;
+  const palette = eyePalette(colour);
   const gap = eye.height * eye.open;
+  const top = eye.centerY - gap / 2;
+  const bottom = eye.centerY + gap / 2;
+  // A small slope gives the upper and lower lids separate intent without
+  // adding a second eye asset. Negative values lower the inner edge of the
+  // left eye; positive values lower the inner edge of the right eye.
+  const lidTilt = clamp(lidBias, -1, 1) * eye.height * 0.16;
   ctx.save();
-  // Only this band of the eye survives. At full open the band covers the whole
-  // oval, so a normal eye is drawn exactly as before.
+  // Only this curved band of the eye survives. The body surface already painted
+  // underneath is the upper and lower lid, so no opaque lid rectangle can ever
+  // expose a seam over the character.
   ctx.beginPath();
-  ctx.rect(-eye.width, eye.centerY - gap / 2, eye.width * 2, gap);
+  ctx.moveTo(eye.centerX - eye.width, top + lidTilt);
+  ctx.quadraticCurveTo(
+    eye.centerX,
+    top - lidTilt * 0.22,
+    eye.centerX + eye.width,
+    top - lidTilt
+  );
+  ctx.lineTo(eye.centerX + eye.width, bottom - lidTilt);
+  ctx.quadraticCurveTo(
+    eye.centerX,
+    bottom + lidTilt * 0.18,
+    eye.centerX - eye.width,
+    bottom + lidTilt
+  );
+  ctx.closePath();
   ctx.clip();
   ctx.beginPath();
   ctx.ellipse(
@@ -280,21 +527,100 @@ function drawProceduralEye(
     0,
     Math.PI * 2
   );
-  ctx.fillStyle = "#010204";
+  ctx.fillStyle = palette.sclera;
   ctx.fill();
-  if (showPupil) {
+
+  const style = styleCode >= 0 ? styleCode : FACE_STYLE.CONTENT;
+  const surprised =
+    style === FACE_STYLE.SURPRISED || style === FACE_STYLE.EXCITED || style === FACE_STYLE.PANIC;
+  const angry = style === FACE_STYLE.ANGRY || style === FACE_STYLE.DEADPAN;
+  const irisRadius =
+    Math.min(eye.width, eye.height) * (surprised ? 0.27 : angry ? 0.205 : 0.235);
+  const irisX = eye.centerX + clamp(pupilX, -eye.width * 0.24, eye.width * 0.24);
+  const irisY = eye.centerY + clamp(pupilY, -eye.height * 0.17, eye.height * 0.17);
+  ctx.beginPath();
+  ctx.ellipse(
+    irisX,
+    irisY,
+    irisRadius * 0.86,
+    irisRadius,
+    0,
+    0,
+    Math.PI * 2
+  );
+  ctx.fillStyle = palette.iris;
+  ctx.fill();
+  ctx.strokeStyle = palette.irisDeep;
+  ctx.lineWidth = Math.max(0.8, irisRadius * 0.16);
+  ctx.stroke();
+
+  const pupilRadius =
+    irisRadius * 0.47 * clamp(pupilScale, 0.55, 1.45);
+  if (style === FACE_STYLE.LOVE) {
+    drawHeart(ctx, irisX, irisY + irisRadius * 0.02, pupilRadius * 1.18, palette.accent);
+  } else {
     ctx.beginPath();
     ctx.arc(
-      eye.centerX - eye.width * 0.18,
-      eye.centerY - eye.height * 0.22,
-      Math.max(0.75, Math.min(eye.width, eye.height) * 0.065),
+      irisX,
+      irisY + irisRadius * 0.06,
+      Math.max(1.1, pupilRadius),
       0,
       Math.PI * 2
     );
-    ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
+    ctx.fillStyle = palette.irisDeep;
     ctx.fill();
   }
+
+  // Catchlights stay on the same upper-left vector for every Blob colour and
+  // every expression. The little second glint is what keeps the eye alive at
+  // true 466px rendering instead of reading as a flat black sticker.
+  ctx.beginPath();
+  ctx.arc(
+    irisX - irisRadius * 0.31,
+    irisY - irisRadius * 0.34,
+    Math.max(1.1, irisRadius * 0.2),
+    0,
+    Math.PI * 2
+  );
+  ctx.fillStyle = "rgba(255, 255, 255, 0.96)";
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(
+    irisX + irisRadius * 0.17,
+    irisY - irisRadius * 0.07,
+    Math.max(0.55, irisRadius * 0.085),
+    0,
+    Math.PI * 2
+  );
+  ctx.fillStyle = "rgba(255, 255, 255, 0.84)";
+  ctx.fill();
+  if (showPupil) {
+    ctx.beginPath();
+    ctx.arc(irisX, irisY, Math.max(0.55, irisRadius * 0.09), 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.32)";
+    ctx.lineWidth = 0.7;
+    ctx.stroke();
+  }
   ctx.restore();
+
+  // A single crisp upper-lid accent makes angry/deadpan states read at a glance
+  // while still leaving the lower lid as the body surface underneath.
+  if (style === FACE_STYLE.ANGRY || style === FACE_STYLE.SLEEPY || style === FACE_STYLE.DEADPAN) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(eye.centerX - eye.width * 0.39, top + lidTilt * 0.72);
+    ctx.quadraticCurveTo(
+      eye.centerX,
+      top - eye.height * 0.06 - lidTilt * 0.1,
+      eye.centerX + eye.width * 0.39,
+      top - lidTilt * 0.72
+    );
+    ctx.strokeStyle = palette.lash;
+    ctx.lineWidth = Math.max(1, eye.width * 0.045);
+    ctx.lineCap = "round";
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 /**
@@ -559,7 +885,17 @@ export default function BlobCharacter({
       applyBodySurface(ctx, center, bw, bh, bt);
       ctx.translate(socketX, socketY);
       ctx.rotate((t.rotation * Math.PI) / 180);
-      drawProceduralEye(ctx, eye, showPupils);
+      drawProceduralEye(
+        ctx,
+        eye,
+        showPupils,
+        t.eyeStyle >= 0 ? t.eyeStyle : blob.faceStyle,
+        t.pupilX,
+        t.pupilY,
+        t.pupilScale,
+        t.lidBias,
+        colour
+      );
       ctx.restore();
     };
 
@@ -586,6 +922,16 @@ export default function BlobCharacter({
     drawEye("leftEye", rig.leftEye);
     drawEye("rightEye", rig.rightEye);
     drawMouth(rig.mouth);
+    drawFaceAccents(
+      ctx,
+      center,
+      bw,
+      bh,
+      bt,
+      blob.faceStyle,
+      blob.faceAccent,
+      colour
+    );
 
     ctx.restore();
   }, [layers, size, renderScale, rig, colour, showPupils, settingsOpen]);

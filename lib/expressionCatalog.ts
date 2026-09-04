@@ -11,6 +11,7 @@ export type ExpressionCategory =
   | "Sad"
   | "Action"
   | "Emotion"
+  | "Anime"
   | "Variants";
 export type ExpressionFilter = "ALL" | ExpressionCategory;
 
@@ -53,6 +54,22 @@ export const HOME_EXPRESSION_GROUPS: readonly ExpressionGroup[] = [
       { id: "ONE_EYE_SQUINT_LEFT", label: "Left squint", hint: "asymmetric" },
       { id: "ONE_EYE_SQUINT_RIGHT", label: "Right squint", hint: "asymmetric" },
       { id: "CURIOUS_WIDE", label: "Curious wide", hint: "open + alert" },
+    ],
+  },
+  {
+    id: "Anime",
+    label: "Anime face",
+    entries: [
+      { id: "HAPPY_EYES", label: "Happy eyes", hint: "soft catchlights" },
+      { id: "EXCITED_EYES", label: "Excited eyes", hint: "big sparkle" },
+      { id: "ANGRY_EYES", label: "Angry eyes", hint: "slanted lids" },
+      { id: "SHY_EYES", label: "Shy eyes", hint: "blush + glance" },
+      { id: "SLEEPY_EYES", label: "Sleepy eyes", hint: "heavy lids" },
+      { id: "SAD_EYES", label: "Sad eyes", hint: "tears + droop" },
+      { id: "CONFUSED_EYES", label: "Confused eyes", hint: "uneven tilt" },
+      { id: "LOVE_EYES", label: "Love eyes", hint: "heart pupils" },
+      { id: "PANIC_EYES", label: "Panic eyes", hint: "tiny pupils" },
+      { id: "DEADPAN_EYES", label: "Deadpan eyes", hint: "flat stare" },
     ],
   },
   {
@@ -131,6 +148,12 @@ export const HOME_EXPRESSION_GROUPS: readonly ExpressionGroup[] = [
       { id: "CREEP_IN_RIGHT", label: "Creep in right", hint: "peek from edge" },
       { id: "POP_OUT_IN", label: "Pop in", hint: "drop from above" },
       { id: "VANISH_REAPPEAR", label: "Vanish + reappear", hint: "emote return" },
+      { id: "JOY_HOP", label: "Joy hop", hint: "anticipate + land" },
+      { id: "EXCITED_WIGGLE", label: "Excited wiggle", hint: "short jelly burst" },
+      { id: "CURIOUS_DOUBLE_TAKE", label: "Double take", hint: "right → left → settle" },
+      { id: "SHY_PEEK", label: "Shy peek", hint: "retreat + blush" },
+      { id: "SLEEPY_YAWN", label: "Sleepy yawn", hint: "stretch + drop" },
+      { id: "SURPRISE_POP", label: "Surprise pop", hint: "crouch + spring" },
     ],
   },
   {
@@ -145,6 +168,12 @@ export const HOME_EXPRESSION_GROUPS: readonly ExpressionGroup[] = [
       { id: "PLAYFUL_WINK", label: "Playful wink", hint: "wink + sway" },
       { id: "PANIC_SHAKE", label: "Panic shake", hint: "quick wobble" },
       { id: "PROUD_STRETCH", label: "Proud stretch", hint: "lift + hold" },
+      { id: "ANGRY_FLARE", label: "Angry flare", hint: "anger mark + pulse" },
+      { id: "DIZZY_WOBBLE", label: "Dizzy wobble", hint: "off-balance loop" },
+      { id: "LOVE_SPARKLE", label: "Love sparkle", hint: "hearts + sway" },
+      { id: "EMBARRASSED_BLUSH", label: "Embarrassed", hint: "blush + pout" },
+      { id: "DEADPAN_SIDE_EYE", label: "Side-eye", hint: "slow judgement" },
+      { id: "TEARY_POUT", label: "Teary pout", hint: "small + sad" },
     ],
   },
 ] as const satisfies readonly ExpressionGroup[];
@@ -160,6 +189,7 @@ export const EXPRESSION_FILTERS: readonly ExpressionFilter[] = [
   "Sad",
   "Action",
   "Emotion",
+  "Anime",
   "Variants",
 ];
 

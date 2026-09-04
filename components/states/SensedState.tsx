@@ -259,6 +259,7 @@ export default function SensedState({
       return applyCalibration(
         {
           blob: {
+            ...NEUTRAL_BLOB,
             x: physical.x,
             y: physical.y,
             depth: physical.depth,
@@ -269,6 +270,8 @@ export default function SensedState({
             scaleY: 1,
             rotation: latestRotation + d.blobSpin,
             opacity: d.blobOpacity,
+            faceStyle: d.faceStyle,
+            faceAccent: d.faceAccent,
           },
           body: {
             ...NEUTRAL_ELEMENT,
@@ -296,6 +299,11 @@ export default function SensedState({
             eyeSocketScaleY: SENSED_FACE.eyeSocketScaleY + d.leftEyeScaleY,
             browLift: SENSED_FACE.leftBrow + d.leftEyeTension - 1,
             browRotation: d.leftBrowRotation,
+            pupilX: d.leftPupilX,
+            pupilY: d.leftPupilY,
+            pupilScale: d.pupilScale,
+            lidBias: d.leftLidBias,
+            eyeStyle: d.leftEyeStyle,
             scaleX: SENSED_FACE.eyeScaleX + d.leftEyeScaleX,
             scaleY: SENSED_FACE.eyeScaleY + d.leftEyeScaleY,
             rotation: d.leftEyeRotation,
@@ -309,6 +317,11 @@ export default function SensedState({
             eyeSocketScaleY: SENSED_FACE.eyeSocketScaleY + d.rightEyeScaleY,
             browLift: SENSED_FACE.rightBrow + d.rightEyeTension - 1,
             browRotation: d.rightBrowRotation,
+            pupilX: d.rightPupilX,
+            pupilY: d.rightPupilY,
+            pupilScale: d.pupilScale,
+            lidBias: d.rightLidBias,
+            eyeStyle: d.rightEyeStyle,
             scaleX: SENSED_FACE.eyeScaleX + d.rightEyeScaleX,
             scaleY: SENSED_FACE.eyeScaleY + d.rightEyeScaleY,
             rotation: d.rightEyeRotation,

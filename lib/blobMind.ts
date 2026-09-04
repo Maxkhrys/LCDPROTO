@@ -37,7 +37,16 @@ export type BlobStoryId =
   | "CHEEKY_GLANCE"
   | "THOUGHTFUL_LOOK"
   | "SLEEPY_DRIFT"
-  | "STARTLED_RECOVER";
+  | "STARTLED_RECOVER"
+  | "JOYFUL_HOP"
+  | "CURIOUS_DOUBLE_TAKE"
+  | "SHY_RETREAT"
+  | "SLEEPY_YAWN"
+  | "ANGRY_FLARE"
+  | "DIZZY_RECOVER"
+  | "LOVE_DAYDREAM"
+  | "TEARY_POUT"
+  | "EXCITED_WIGGLE";
 
 type StoryGaze =
   | "GLANCE_LEFT"
@@ -51,7 +60,17 @@ type StoryExpression =
   | "ONE_EYE_SQUINT_LEFT"
   | "ONE_EYE_SQUINT_RIGHT"
   | "CURIOUS_WIDE"
-  | "ANGRY_BROWS";
+  | "ANGRY_BROWS"
+  | "HAPPY_EYES"
+  | "EXCITED_EYES"
+  | "ANGRY_EYES"
+  | "SHY_EYES"
+  | "SLEEPY_EYES"
+  | "SAD_EYES"
+  | "CONFUSED_EYES"
+  | "LOVE_EYES"
+  | "PANIC_EYES"
+  | "DEADPAN_EYES";
 type StoryMouth =
   | "MOUTH_RELAX"
   | "MOUTH_TWITCH"
@@ -289,15 +308,150 @@ const STORIES: Record<BlobStoryId, MindStory> = {
     bodyDelayMs: 112,
     primary: "SHOCKED_RECOIL",
   }),
+  JOYFUL_HOP: story({
+    id: "JOYFUL_HOP",
+    intention: "PLAY",
+    destination: "CENTER",
+    gaze: null,
+    expression: "HAPPY_EYES",
+    mouth: "MOUTH_RELAX",
+    body: "JOY_HOP",
+    durationMs: 3000,
+    moveDelayMs: 170,
+    expressionDelayMs: 52,
+    mouthDelayMs: 94,
+    bodyDelayMs: 122,
+    primary: "JOY_HOP",
+  }),
+  CURIOUS_DOUBLE_TAKE: story({
+    id: "CURIOUS_DOUBLE_TAKE",
+    intention: "INSPECT",
+    destination: "CENTER",
+    gaze: null,
+    expression: "CURIOUS_WIDE",
+    mouth: "MOUTH_O",
+    body: "CURIOUS_DOUBLE_TAKE",
+    durationMs: 3300,
+    moveDelayMs: 180,
+    expressionDelayMs: 52,
+    mouthDelayMs: 96,
+    bodyDelayMs: 124,
+    primary: "CURIOUS_DOUBLE_TAKE",
+  }),
+  SHY_RETREAT: story({
+    id: "SHY_RETREAT",
+    intention: "WATCH",
+    destination: "DOWN_LEFT",
+    gaze: "LOOK_DOWN",
+    expression: "SHY_EYES",
+    mouth: "MOUTH_TWITCH",
+    body: "SHY_PEEK",
+    durationMs: 3400,
+    moveDelayMs: 220,
+    expressionDelayMs: 58,
+    mouthDelayMs: 100,
+    bodyDelayMs: 132,
+    primary: "SHY_PEEK",
+  }),
+  SLEEPY_YAWN: story({
+    id: "SLEEPY_YAWN",
+    intention: "REST",
+    destination: "DOWN_RIGHT",
+    gaze: "LOOK_DOWN",
+    expression: "SLEEPY_EYES",
+    mouth: "MOUTH_O",
+    body: "SLEEPY_YAWN",
+    durationMs: 3850,
+    moveDelayMs: 230,
+    expressionDelayMs: 64,
+    mouthDelayMs: 110,
+    bodyDelayMs: 140,
+    primary: "SLEEPY_YAWN",
+  }),
+  ANGRY_FLARE: story({
+    id: "ANGRY_FLARE",
+    intention: "PLAY",
+    destination: "RIGHT",
+    gaze: "GLANCE_RIGHT",
+    expression: "ANGRY_EYES",
+    mouth: "MOUTH_FLIP",
+    body: "ANGRY_FLARE",
+    durationMs: 3000,
+    moveDelayMs: 190,
+    expressionDelayMs: 54,
+    mouthDelayMs: 98,
+    bodyDelayMs: 126,
+    primary: "ANGRY_FLARE",
+  }),
+  DIZZY_RECOVER: story({
+    id: "DIZZY_RECOVER",
+    intention: "RECOVER",
+    destination: "CENTER",
+    gaze: null,
+    expression: "CONFUSED_EYES",
+    mouth: "MOUTH_O",
+    body: "DIZZY_WOBBLE",
+    durationMs: 3250,
+    moveDelayMs: 160,
+    expressionDelayMs: 50,
+    mouthDelayMs: 92,
+    bodyDelayMs: 120,
+    primary: "DIZZY_WOBBLE",
+  }),
+  LOVE_DAYDREAM: story({
+    id: "LOVE_DAYDREAM",
+    intention: "THINK",
+    destination: "UP_RIGHT",
+    gaze: "LOOK_UP",
+    expression: "LOVE_EYES",
+    mouth: "MOUTH_RELAX",
+    body: "SOFT_SWAY_RIGHT",
+    durationMs: 3600,
+    moveDelayMs: 210,
+    expressionDelayMs: 60,
+    mouthDelayMs: 106,
+    bodyDelayMs: 138,
+    primary: "LOVE_SPARKLE",
+  }),
+  TEARY_POUT: story({
+    id: "TEARY_POUT",
+    intention: "RECOVER",
+    destination: "DOWN_LEFT",
+    gaze: "LOOK_DOWN",
+    expression: "SAD_EYES",
+    mouth: "MOUTH_FLIP",
+    body: "TEARY_POUT",
+    durationMs: 3400,
+    moveDelayMs: 230,
+    expressionDelayMs: 60,
+    mouthDelayMs: 104,
+    bodyDelayMs: 132,
+    primary: "TEARY_POUT",
+  }),
+  EXCITED_WIGGLE: story({
+    id: "EXCITED_WIGGLE",
+    intention: "PLAY",
+    destination: "CENTER",
+    gaze: null,
+    expression: "EXCITED_EYES",
+    mouth: "MOUTH_O",
+    body: "EXCITED_WIGGLE",
+    durationMs: 3000,
+    moveDelayMs: 150,
+    expressionDelayMs: 48,
+    mouthDelayMs: 90,
+    bodyDelayMs: 116,
+    primary: "EXCITED_WIGGLE",
+  }),
 };
 
 const MOOD_STORIES: Record<HomeMood, readonly BlobStoryId[]> = {
-  CONTENT: ["SLOW_WANDER", "WATCHFUL_PAUSE", "CURIOUS_PEEK", "SETTLE_CENTER", "THOUGHTFUL_LOOK"],
-  CURIOUS: ["CURIOUS_PEEK", "CURIOUS_APPROACH", "THOUGHTFUL_LOOK", "SLOW_WANDER"],
-  SLEEPY: ["SLEEPY_DRIFT", "SETTLE_CENTER", "THOUGHTFUL_LOOK"],
-  AMUSED: ["PLAYFUL_ORBIT", "CHEEKY_GLANCE", "CURIOUS_PEEK", "SLOW_WANDER"],
-  DISTRACTED: ["SLOW_WANDER", "WATCHFUL_PAUSE", "THOUGHTFUL_LOOK", "CURIOUS_PEEK", "SETTLE_CENTER"],
-  THOUGHTFUL: ["THOUGHTFUL_LOOK", "CURIOUS_APPROACH", "SLEEPY_DRIFT", "SETTLE_CENTER"],
+  CONTENT: ["SLOW_WANDER", "WATCHFUL_PAUSE", "CURIOUS_PEEK", "SETTLE_CENTER", "THOUGHTFUL_LOOK", "SHY_RETREAT", "LOVE_DAYDREAM"],
+  CURIOUS: ["CURIOUS_PEEK", "CURIOUS_APPROACH", "CURIOUS_DOUBLE_TAKE", "THOUGHTFUL_LOOK", "SLOW_WANDER"],
+  SLEEPY: ["SLEEPY_DRIFT", "SLEEPY_YAWN", "SETTLE_CENTER", "THOUGHTFUL_LOOK"],
+  AMUSED: ["PLAYFUL_ORBIT", "CHEEKY_GLANCE", "JOYFUL_HOP", "EXCITED_WIGGLE", "CURIOUS_PEEK", "SLOW_WANDER"],
+  DISTRACTED: ["SLOW_WANDER", "WATCHFUL_PAUSE", "CURIOUS_DOUBLE_TAKE", "DIZZY_RECOVER", "THOUGHTFUL_LOOK", "SETTLE_CENTER"],
+  THOUGHTFUL: ["THOUGHTFUL_LOOK", "CURIOUS_APPROACH", "LOVE_DAYDREAM", "TEARY_POUT", "SLEEPY_DRIFT", "SETTLE_CENTER"],
 };
 
 const MOOD_BIAS: Record<HomeMood, { energy: number; curiosity: number }> = {
