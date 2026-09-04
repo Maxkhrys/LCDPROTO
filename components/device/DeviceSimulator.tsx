@@ -66,7 +66,7 @@ export default function DeviceSimulator() {
   const [environmentStatus, setEnvironmentStatus] = useState<EnvironmentStatus | null>(null);
   const [showPupils, setShowPupils] = useState(false);
   const [blobToolsOpen, setBlobToolsOpen] = useState(false);
-  const [activeBlobTool, setActiveBlobTool] = useState<BlobTool | null>(null);
+  const [activeBlobTool, setActiveBlobTool] = useState<"colour" | "face" | "pupils" | null>(null);
   const [mood, setMood] = useState<HomeMood | null>(null);
   const [mindIntention, setMindIntention] = useState<BlobIntention | null>(null);
   const [mindDestination, setMindDestination] = useState<BlobDestination | null>(null);
@@ -353,7 +353,7 @@ export default function DeviceSimulator() {
                 environment={environment}
                 onEnvironmentStatus={setEnvironmentStatus}
               />
-                <BlobToolOrbs open={blobToolsOpen} active={activeBlobTool} screenSize={screenSize} blobColour={blobColour} showPupils={showPupils} onSelect={(tool) => { setActiveBlobTool(tool); if (tool === "face") setShowExpressions(true); if (tool === "pupils") setShowPupils((value) => !value); if (tool === "settings") { setShowCalibration(true); setOpenMenu("tools"); } }} onColourChange={setBlobColour} />
+                <BlobToolOrbs open={blobToolsOpen} active={activeBlobTool} screenSize={screenSize} blobColour={blobColour} showPupils={showPupils} onSelect={(tool) => { setActiveBlobTool(tool); if (tool === "face") setShowExpressions(true); if (tool === "pupils") setShowPupils((value) => !value); }} onColourChange={setBlobColour} />
             </div>
           </DeviceBezel>
         </div>
@@ -521,7 +521,7 @@ function ControlRange({
   );
 }
 
-type BlobTool = "colour" | "face" | "pupils" | "settings";
+type BlobTool = "colour" | "face" | "pupils";
 
 function BlobToolOrbs({
   open,
@@ -553,33 +553,25 @@ function BlobToolOrbs({
     <div className="pointer-events-none absolute inset-0 z-30">
       <div
         className="blob-tool-orb blob-tool-orb-left pointer-events-auto absolute"
-        style={orbStyle("18%", 0.13)}
+        style={orbStyle("25%", 0.13)}
       >
         <OrbButton active={active === "colour"} label="Blob colour" onClick={() => onSelect("colour")}>
           <span className="h-4 w-4 rounded-full border border-white/70" style={{ background: blobColourSwatch(blobColour) }} />
         </OrbButton>
       </div>
-      <div className="blob-tool-orb blob-tool-orb-center pointer-events-auto absolute" style={orbStyle("39%", 0.055)}>
+      <div className="blob-tool-orb blob-tool-orb-center pointer-events-auto absolute" style={orbStyle("50%", 0.055)}>
         <OrbButton active={active === "face"} label="Eyes and mouth settings" onClick={() => onSelect("face")}>
           <span className="text-[17px] leading-none">☺</span>
         </OrbButton>
       </div>
       <div
         className="blob-tool-orb blob-tool-orb-right pointer-events-auto absolute"
-        style={orbStyle("82%", 0.13)}
+        style={orbStyle("75%", 0.13)}
       >
         <OrbButton active={active === "pupils"} label={showPupils ? "Hide pupils" : "Show pupils"} onClick={() => onSelect("pupils")}>
           <span className="relative block h-4 w-4 rounded-full border border-white/75">
             <span className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white" />
           </span>
-        </OrbButton>
-      </div>
-      <div
-        className="blob-tool-orb blob-tool-orb-settings pointer-events-auto absolute"
-        style={orbStyle("61%", 0.055)}
-      >
-        <OrbButton active={active === "settings"} label="Open Blob settings" onClick={() => onSelect("settings")}>
-          <span aria-hidden className="text-[18px] leading-none">⚙</span>
         </OrbButton>
       </div>
 

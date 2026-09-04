@@ -269,12 +269,6 @@ canvas {
   animation-name: blob-tool-emerge-right;
 }
 
-.blob-tool-orb-settings {
-  transform: translate(-50%, 210px) scale(0.72) rotate(8deg);
-  animation-delay: 165ms;
-  animation-name: blob-tool-emerge-settings;
-}
-
 .blob-tool-orb > button {
   animation: blob-tool-float 3.8s ease-in-out 520ms infinite;
 }
@@ -320,17 +314,6 @@ canvas {
   to {
     opacity: 1;
     transform: translate(-50%, 0) scale(1) rotate(12deg);
-  }
-}
-
-@keyframes blob-tool-emerge-settings {
-  from {
-    opacity: 0;
-    transform: translate(-50%, 210px) scale(0.72) rotate(8deg);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, 0) scale(1) rotate(8deg);
   }
 }
 
