@@ -11,8 +11,10 @@ import {
   type FaceCalibration,
 } from "@/lib/blobCalibration";
 import {
+  BLOB_SHAPES,
   BLOB_COLOURS,
   type BlobColour,
+  type BlobShape,
   type FaceLayerId,
 } from "@/lib/blobRig";
 import { DEFAULT_IDLE, IDLE_LIMITS, type IdleConfig } from "@/lib/blobIdle";
@@ -55,6 +57,7 @@ export default function DeviceSimulator() {
   const [displayMode, setDisplayMode] = useState<DisplayMode>("dark");
   const [screenColour, setScreenColour] = useState(DISPLAY_BACKGROUNDS.dark);
   const [blobColour, setBlobColour] = useState<BlobColour>("teal");
+  const [blobShape, setBlobShape] = useState<BlobShape>("jelly");
   const [showPupils, setShowPupils] = useState(false);
   const [blobToolsOpen, setBlobToolsOpen] = useState(false);
   const [activeBlobTool, setActiveBlobTool] = useState<"colour" | "face" | "pupils" | null>(null);
@@ -130,6 +133,7 @@ export default function DeviceSimulator() {
     setDisplayMode("dark");
     setScreenColour(DISPLAY_BACKGROUNDS.dark);
     setBlobColour("teal");
+    setBlobShape("jelly");
     setShowPupils(false);
     setBlobToolsOpen(false);
     setActiveBlobTool(null);
@@ -200,6 +204,7 @@ export default function DeviceSimulator() {
                   mood={mood}
                   showPupils={showPupils}
                   blobColour={blobColour}
+                  blobShape={blobShape}
                   mindIntention={mindIntention}
                   mindDestination={mindDestination}
                   mindDepth={mindDepth}
@@ -258,6 +263,18 @@ export default function DeviceSimulator() {
                   onClick={() => setBlobColour(colour.id)}
                 >
                   {colour.label}
+                </DevButton>
+              ))}
+            </DevGroup>
+
+            <DevGroup label="Shape">
+              {BLOB_SHAPES.map((option) => (
+                <DevButton
+                  key={option.id}
+                  active={blobShape === option.id}
+                  onClick={() => setBlobShape(option.id)}
+                >
+                  {option.label}
                 </DevButton>
               ))}
             </DevGroup>

@@ -9,6 +9,7 @@ import {
   faceAnchor,
   type BlobRig,
   type BlobColour,
+  type BlobShape,
   type ElementTransform,
   type FaceLayerId,
 } from "@/lib/blobRig";
@@ -23,6 +24,8 @@ interface BlobCharacterProps {
   rig?: BlobRig;
   /** Dev-only colour testing; geometry and motion are shared. */
   colour?: BlobColour;
+  /** Body geometry target. Face layers remain procedural and shared. */
+  shape?: BlobShape;
   /** Opens the floating Blob tool orbs after a deliberate double tap. */
   onOpenTools?: () => void;
   /** Closes floating tools after a single tap while they are open. */
@@ -46,6 +49,136 @@ const SKIN_INTEGRATION_ALPHA = 0.055;
 
 const clamp = (value: number, min: number, max: number) =>
   value < min ? min : value > max ? max : value;
+
+const SHAPE_POINT_COUNT = 24;
+const SHAPE_VALUES: Record<BlobShape, number> = {
+  jelly: 0,
+  "round-square": 1,
+  "round-triangle": 2,
+};
+
+function shapeRadius(shape: BlobShape, angle: number) {
+  const organic =
+    0.94 +
+    Math.sin(angle * 3 - 0.6) * 0.025 +
+    Math.sin(angle * 5 + 1.4) * 0.018;
+  if (shape === "jelly") return organic;
+  if (shape === "round-square") {
+    const squareRadius =
+      1 / Math.max(Math.abs(Math.cos(angle)), Math.abs(Math.sin(angle)));
+    return 0.88 + ((squareRadius - 1) / 0.4142) * 0.12;
+  }
+  const triangleWave = Math.max(0, Math.cos((angle + Math.PI / 2) * 3));
+  return 0.78 + Math.pow(triangleWave, 8) * 0.18;
+}
+
+const SHAPE_NAMES: readonly BlobShape[] = [
+  "jelly",
+  "round-square",
+  "round-triangle",
+];
+const SHAPE_GEOMETRIES = SHAPE_NAMES.map((shape) =>
+  Array.from({ length: SHAPE_POINT_COUNT }, (_, index) => {
+    const angle = -Math.PI / 2 + (index / SHAPE_POINT_COUNT) * Math.PI * 2;
+    const radius = shapeRadius(shape, angle);
+    return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
+  })
+);
+
+function drawShapePath(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  shapeValue: number
+) {
+  const value = clamp(shapeValue, 0, 2);
+  const from = Math.floor(value) as 0 | 1 | 2;
+  const to = Math.min(2, from + 1) as 0 | 1 | 2;
+  const blend = value - from;
+  const fromPoints = SHAPE_GEOMETRIES[from];
+  const toPoints = SHAPE_GEOMETRIES[to];
+  const pointX = (index: number) =>
+    (fromPoints[index].x * (1 - blend) + toPoints[index].x * blend) * (width / 2);
+  const pointY = (index: number) =>
+    (fromPoints[index].y * (1 - blend) + toPoints[index].y * blend) * (height / 2);
+  const previous = SHAPE_POINT_COUNT - 1;
+  const firstMidX = (pointX(previous) + pointX(0)) / 2;
+  const firstMidY = (pointY(previous) + pointY(0)) / 2;
+  ctx.beginPath();
+  ctx.moveTo(firstMidX, firstMidY);
+  for (let i = 0; i < SHAPE_POINT_COUNT; i += 1) {
+    const next = (i + 1) % SHAPE_POINT_COUNT;
+    ctx.quadraticCurveTo(
+      pointX(i),
+      pointY(i),
+      (pointX(i) + pointX(next)) / 2,
+      (pointY(i) + pointY(next)) / 2
+    );
+  }
+  ctx.closePath();
+}
+
+function shapePalette(colour: BlobColour) {
+  switch (colour) {
+    case "teal":
+      return { base: "#0a7375" };
+    case "yellow":
+      return { base: "#a47410" };
+    case "green":
+      return { base: "#287b36" };
+    case "blue":
+      return { base: "#145c9e" };
+    case "red":
+      return { base: "#982334" };
+    default:
+      return { base: "#52229a" };
+  }
+}
+
+function drawShapeBody(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLCanvasElement,
+  width: number,
+  height: number,
+  shapeValue: number,
+  colour: BlobColour
+) {
+  if (shapeValue < 0.04) {
+    ctx.drawImage(image, -width / 2, -height / 2, width, height);
+    return;
+  }
+  ctx.save();
+  drawShapePath(ctx, width, height, shapeValue);
+  ctx.clip();
+  const palette = shapePalette(colour);
+  ctx.fillStyle = palette.base;
+  ctx.fillRect(-width / 2, -height / 2, width, height);
+  // Overscan lets the original material texture cover newly formed corners.
+  // The clipped silhouette controls the shape; no opacity crossfade occurs.
+  ctx.globalAlpha *= 0.98;
+  ctx.drawImage(image, -width * 0.59, -height * 0.59, width * 1.18, height * 1.18);
+  ctx.restore();
+}
+
+function drawLidClosure(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  open: number,
+  colour: BlobColour
+) {
+  const gap = height * (0.045 + clamp(open, 0, 1) * 0.955);
+  if (gap >= height * 0.995) return;
+  const palette = shapePalette(colour);
+  ctx.save();
+  eyeSocketPath(ctx, 0, 0, width, height);
+  ctx.clip();
+  ctx.fillStyle = palette.base;
+  ctx.globalAlpha *= 0.96;
+  ctx.fillRect(-width / 2, -height / 2, width, -height / 2 + gap / 2);
+  ctx.fillRect(-width / 2, gap / 2, width, height / 2 - gap / 2);
+  ctx.restore();
+}
 
 function applyBodySurface(
   ctx: CanvasRenderingContext2D,
@@ -90,11 +223,11 @@ function drawMouthShape(
   colour: BlobColour
 ) {
   const o = clamp(oAmount, 0, 1);
-  const halfWidth = width * (0.5 - o * 0.1);
-  const thickness = Math.max(1.15, height * (0.16 + o * 0.025));
-  const loopDepth = height * 0.38 * o;
-  const bend = curve * height * 0.46 * (1 - o);
-  const endY = -curve * height * 0.1 * (1 - o);
+  const halfWidth = width * (0.5 - o * 0.08);
+  const thickness = Math.max(1.8, height * (0.2 + o * 0.045));
+  const loopDepth = height * 0.42 * o;
+  const bend = curve * height * 0.5 * (1 - o);
+  const endY = -curve * height * 0.08 * (1 - o);
   const topEnd = endY - thickness;
   const bottomEnd = endY + thickness;
   const topCenter = endY + bend - thickness - loopDepth;
@@ -221,11 +354,11 @@ function drawEyebrow(
   browLift: number,
   gazeY: number
 ) {
-  const browWidth = width * 0.72;
+  const browWidth = width * 0.78;
   const browY =
     -height * 0.64 - browLift * height * 0.28 - gazeY * 0.04;
   const arch = clamp((browLift + 0.04) * height * 0.3, -1.1, 1.1);
-  const thickness = clamp(width * 0.095, 1.25, 2.2);
+  const thickness = clamp(width * 0.11, 1.5, 2.6);
   const halfThickness = thickness / 2;
   const halfWidth = browWidth / 2;
   const controlY = browY - arch;
@@ -321,9 +454,11 @@ export default function BlobCharacter({
   onCloseTools,
   settingsOpen = false,
   showPupils = false,
+  shape = "jelly",
 }: BlobCharacterProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [images, setImages] = useState<Images | null>(null);
+  const shapeSpring = useRef({ value: 0, velocity: 0, last: 0 });
 
   useEffect(() => {
     let cancelled = false;
@@ -403,6 +538,18 @@ export default function BlobCharacter({
 
     const center = size / 2;
     const { blob } = rig;
+    const shapeState = shapeSpring.current;
+    const now = performance.now();
+    const dt = shapeState.last > 0 ? Math.min(0.05, (now - shapeState.last) / 1000) : 1 / 60;
+    shapeState.last = now;
+    const shapeTarget = SHAPE_VALUES[shape];
+    const omega = Math.PI * 2 * 3.4;
+    shapeState.velocity +=
+      ((shapeTarget - shapeState.value) * omega * omega -
+        shapeState.velocity * 2 * 0.68 * omega) *
+      dt;
+    shapeState.value = clamp(shapeState.value + shapeState.velocity * dt, 0, 2);
+    const shapeValue = shapeState.value;
     const bodyAsset = RIG_ASSETS[colour].body;
     const bs = bodyScale(size, colour);
     const bw = bodyAsset.width * bs;
@@ -439,7 +586,7 @@ export default function BlobCharacter({
     ctx.save();
     ctx.globalAlpha = bt.opacity;
     applyBodySurface(ctx, center, bw, bh, bt);
-    ctx.drawImage(layers.body, -bw / 2, -bh / 2, bw, bh);
+    drawShapeBody(ctx, layers.body, bw, bh, shapeValue, colour);
     drawRippleBody(ctx, layers.body, bw, bh, bt);
     ctx.restore();
 
@@ -469,12 +616,6 @@ export default function BlobCharacter({
       const apertureWidth = socketWidth * 1.1;
       const apertureHeight = socketHeight * 1.04;
       const open = clamp(t.eyeOpen, 0, 1);
-      // Blink closes from the top while the lower lid stays planted. This
-      // keeps a half-blink from looking like the bottom half was erased.
-      const openingHeight = apertureHeight * open;
-      // Both lids travel toward a narrow centre slit. This prevents the old
-      // “top half disappears, bottom half stays open” blink failure.
-      const openingY = apertureHeight * 0.12 * (1 - open);
       const gazeX = clamp(t.x, -socketWidth * 0.2, socketWidth * 0.2);
       const gazeY = clamp(
         t.y - (settingsOpen ? socketHeight * 0.2 : 0),
@@ -493,21 +634,24 @@ export default function BlobCharacter({
       drawEyebrow(ctx, socketWidth, socketHeight, t.browLift, gazeY);
       ctx.restore();
 
+      ctx.save();
+      ctx.globalAlpha = t.opacity * faceVisibility;
+      applyBodySurface(ctx, center, bw, bh, bt);
+
+      // Keep aperture fixed in the face. Draw eye mass first, then paint both
+      // lids over it. This gives a real coloured upper and lower closure
+      // instead of cutting away only the top half of the eye.
+      ctx.translate(socketX, socketY);
       if (open > 0.001) {
         ctx.save();
-        ctx.globalAlpha = t.opacity * faceVisibility;
-        applyBodySurface(ctx, center, bw, bh, bt);
-
-        // Clip is created before texture translation, so the socket does not
-        // travel with a glance. The aperture itself closes from both lids.
-        ctx.translate(socketX, socketY);
-        eyeSocketPath(ctx, 0, openingY, apertureWidth, openingHeight);
+        eyeSocketPath(ctx, 0, 0, apertureWidth, apertureHeight);
         ctx.clip();
-
         ctx.rotate((t.rotation * Math.PI) / 180);
         drawProceduralEye(ctx, socketWidth, socketHeight, gazeX, gazeY, showPupils);
         ctx.restore();
       }
+      drawLidClosure(ctx, apertureWidth, apertureHeight, open, colour);
+      ctx.restore();
     };
 
     const drawMouth = (t: ElementTransform) => {
@@ -546,7 +690,7 @@ export default function BlobCharacter({
     ctx.restore();
 
     ctx.restore();
-  }, [layers, size, renderScale, rig, colour, showPupils, settingsOpen]);
+  }, [layers, size, renderScale, rig, colour, showPupils, settingsOpen, shape]);
 
   const isBlobHit = (event: MouseEvent<HTMLCanvasElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();

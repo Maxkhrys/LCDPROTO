@@ -99,6 +99,7 @@ export default function SensedState({
   mood,
   showPupils,
   blobColour,
+  blobShape,
   mindIntention,
   mindDestination,
   mindDepth,
@@ -384,6 +385,7 @@ export default function SensedState({
           renderScale={renderScale}
           rig={rig}
           colour={blobColour}
+          shape={blobShape}
           onOpenTools={onOpenBlobTools}
           onCloseTools={onCloseBlobTools}
           settingsOpen={blobToolsOpen}

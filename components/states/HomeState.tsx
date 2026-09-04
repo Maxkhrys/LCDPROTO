@@ -67,6 +67,7 @@ export default function HomeState({
   mood,
   showPupils,
   blobColour,
+  blobShape,
   mindIntention,
   mindDestination,
   mindDepth,
@@ -360,6 +361,7 @@ export default function HomeState({
         renderScale={renderScale}
         rig={rig}
         colour={blobColour}
+        shape={blobShape}
         onOpenTools={onOpenBlobTools}
         onCloseTools={onCloseBlobTools}
         settingsOpen={blobToolsOpen}

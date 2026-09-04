@@ -2,7 +2,7 @@ import type { FaceCalibration } from "./blobCalibration";
 import type { IdleConfig } from "./blobIdle";
 import type { BehaviourId, HomeActivityStatus } from "./blobBehaviour";
 import type { HomeMood } from "./blobBehaviour";
-import type { BlobColour } from "./blobRig";
+import type { BlobColour, BlobShape } from "./blobRig";
 import type { BlobDestination, BlobIntention } from "./blobMind";
 
 export type DisplayMode = "dark" | "warm" | "brown";
@@ -96,6 +96,8 @@ export interface StateViewProps {
   showPupils: boolean;
   /** Dev-only rig colour preview; every colour uses identical transforms. */
   blobColour: BlobColour;
+  /** Dev-only body geometry target; face and material stay shared. */
+  blobShape: BlobShape;
   /** Optional director override for the current Blob intention. */
   mindIntention: BlobIntention | null;
   /** Optional director override for the current travel destination. */
