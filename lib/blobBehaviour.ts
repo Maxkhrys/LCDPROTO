@@ -1,3 +1,10 @@
+import {
+  BlobMind,
+  type BlobDestination,
+  type BlobIntention,
+  type MindStory,
+} from "./blobMind";
+
 /**
  * Concurrent HOME animation director.
  *
@@ -107,6 +114,11 @@ export interface BehaviourConfig {
 export interface PoseDelta {
   blobX: number;
   blobY: number;
+  /** Normalised distance from the panel: positive is closer to the viewer. */
+  blobDepth: number;
+  /** Yaw and pitch are presentation-space degrees for the simple 3D turn. */
+  blobYaw: number;
+  blobPitch: number;
   blobRotation: number;
   blobSpin: number;
   blobScaleX: number;
@@ -151,6 +163,9 @@ export interface PoseDelta {
 export const NEUTRAL_DELTA: PoseDelta = {
   blobX: 0,
   blobY: 0,
+  blobDepth: 0,
+  blobYaw: 0,
+  blobPitch: 0,
   blobRotation: 0,
   blobSpin: 0,
   blobScaleX: 0,
@@ -344,6 +359,15 @@ export interface BehaviourStatus {
 
 export interface HomeActivityStatus extends BehaviourStatus {
   mood: HomeMood;
+  intention: BlobIntention;
+  story: string;
+  destination: BlobDestination;
+  depth: number;
+  yaw: number;
+  pitch: number;
+  energy: number;
+  curiosity: number;
+  memory: string;
   gaze: string;
   lids: string;
   mouth: string;
@@ -443,10 +467,6 @@ export class BehaviourController {
   private mouthTurnTarget = 0;
   private mouthTurnSnapped = false;
 
-  private bodyXTarget = 0;
-  private bodyYTarget = 0;
-  private bodyRotationTarget = 0;
-  private bodyScaleYTarget = 0;
   private massXTarget = 0;
   private massYTarget = 0;
   private massRotationTarget = 0;
@@ -457,12 +477,41 @@ export class BehaviourController {
   private massOriginYTarget = 0.82;
 
   private readonly delta: PoseDelta = { ...NEUTRAL_DELTA };
+  private readonly mind = new BlobMind();
+  private mindIntentionOverride: BlobIntention | null = null;
+  private mindDestinationOverride: BlobDestination | null = null;
+  private mindDepthOverride: number | null = null;
+  private mindStoryRequestPending = false;
+  private currentStory: MindStory | null = null;
+  private lastStoryId = "SETTLE_CENTER";
+  private lastIntention: BlobIntention = "REST";
+  private lastDestination: BlobDestination = "CENTER";
+  private storyMoveAt = 0;
+  private storyMoveApplied = false;
+  private travelXTarget = 0;
+  private travelYTarget = 0;
+  private travelRotationTarget = 0;
+  private travelScaleYTarget = 0;
+  private travelDepthTarget = 0;
+  private travelYawTarget = 0;
+  private travelPitchTarget = 0;
 
   reset() {
     this.clock = 0;
     this.initialized = false;
     this.autoWasEnabled = true;
     this.rand = mulberry32(0x1a11ee);
+    this.mind.reset();
+    this.mindIntentionOverride = null;
+    this.mindDestinationOverride = null;
+    this.mindDepthOverride = null;
+    this.mindStoryRequestPending = false;
+    this.currentStory = null;
+    this.lastStoryId = "SETTLE_CENTER";
+    this.lastIntention = "REST";
+    this.lastDestination = "CENTER";
+    this.storyMoveAt = 0;
+    this.storyMoveApplied = false;
     this.mood = "CONTENT";
     this.lastMood = "CONTENT";
     this.nextMoodAt = 0;
@@ -487,6 +536,13 @@ export class BehaviourController {
     this.followXTarget = 0;
     this.followRotationTarget = 0;
     this.followScaleYTarget = 0;
+    this.travelXTarget = 0;
+    this.travelYTarget = 0;
+    this.travelRotationTarget = 0;
+    this.travelScaleYTarget = 0;
+    this.travelDepthTarget = 0;
+    this.travelYawTarget = 0;
+    this.travelPitchTarget = 0;
     this.spinStartedAt = -1;
     this.spinRotation = 0;
     this.impactAt = 0;
@@ -544,6 +600,35 @@ export class BehaviourController {
     if (this.mouthReleaseAt === 0) this.applyMoodMouthTargets();
   }
 
+  /** Changes the director's test overrides without restarting the render loop. */
+  setMindOverrides(
+    intention: BlobIntention | null,
+    destination: BlobDestination | null,
+    depth: number | null
+  ) {
+    if (
+      intention === this.mindIntentionOverride &&
+      destination === this.mindDestinationOverride &&
+      depth === this.mindDepthOverride
+    ) {
+      return;
+    }
+    this.mindIntentionOverride = intention;
+    this.mindDestinationOverride = destination;
+    this.mindDepthOverride = depth;
+    // A changed test target should be visible on the next tick, but an active
+    // manual cue is left to its caller. Auto will choose the new story once.
+    if (this.initialized) {
+      this.mindStoryRequestPending = true;
+      if (!this.manualBeat) {
+        this.currentStory = null;
+        this.storyMoveAt = 0;
+        this.storyMoveApplied = false;
+        this.nextBeatAt = this.clock;
+      }
+    }
+  }
+
   /** Future device states can take over every channel from the current pose. */
   cancel() {
     this.clearBeatCues();
@@ -557,6 +642,19 @@ export class BehaviourController {
     this.retargetEyes();
     this.clearBodyTargets();
     this.mood = "CONTENT";
+    this.currentStory = null;
+    this.mindStoryRequestPending = false;
+    this.lastIntention = "REST";
+    this.lastDestination = "CENTER";
+    this.storyMoveAt = 0;
+    this.storyMoveApplied = false;
+    this.travelXTarget = 0;
+    this.travelYTarget = 0;
+    this.travelRotationTarget = 0;
+    this.travelScaleYTarget = 0;
+    this.travelDepthTarget = 0;
+    this.travelYawTarget = 0;
+    this.travelPitchTarget = 0;
     this.applyMoodTargets();
     this.activityId = "REST";
     this.activityUntil = this.clock;
@@ -654,17 +752,18 @@ export class BehaviourController {
     this.ensureSchedule(cfg);
     this.clock += Math.max(0, dtMs);
 
+    this.updateStoryTravel();
     this.updateSpin();
     if (this.impactAt > 0 && this.clock >= this.impactAt) {
       this.impactAt = 0;
       // Impact arrives after the travel. Compress hard, then let the body
       // spring rebound from the wall instead of holding one static squish.
-      this.bodyXTarget = this.impactDirection * -4.5;
-      this.bodyRotationTarget = this.impactDirection * -5.2;
+      this.travelXTarget = this.impactDirection * -4.5;
+      this.travelRotationTarget = this.impactDirection * -5.2;
       this.massXTarget = this.impactDirection * -3.2;
       this.massRotationTarget = this.impactDirection * -5.4;
-      this.bodyYTarget = 4.8;
-      this.bodyScaleYTarget = -0.145;
+      this.travelYTarget = 4.8;
+      this.travelScaleYTarget = -0.145;
       this.massYTarget = 3.7;
       this.massScaleYTarget = -0.105;
       this.massSkewYTarget = this.impactDirection * 3.2;
@@ -708,13 +807,24 @@ export class BehaviourController {
       this.followScaleYTarget = 0;
     }
 
+    if (this.mindStoryRequestPending && !this.manualBeat) {
+      this.mindStoryRequestPending = false;
+      this.pickMindStory(cfg);
+      // Treat an explicit director selection like a manual preview so it also
+      // works while the seeded Auto playlist is switched off.
+      this.manualBeat = true;
+    }
+
+    // Manual preview cues must continue even when Auto is off. The old gate
+    // here made staged expression beats silently freeze halfway through.
+    this.runBeatCues(cfg);
+
     if (autoEnabled) {
-      this.runBeatCues(cfg);
 
       if (this.clock >= this.nextMoodAt) this.pickMood(cfg);
       if (this.clock >= this.nextMicroAt) this.pickMicro(cfg);
       if (this.clock >= this.nextBeatAt && this.beatUntil === 0)
-        this.pickBeat(cfg);
+        this.pickMindStory(cfg);
       if (this.clock >= this.nextBlinkAt && this.blinkStartedAt < 0)
         this.startBlink(this.rand() < 0.14, cfg);
     }
@@ -759,6 +869,9 @@ export class BehaviourController {
     this.beatMouthId = null;
     this.beatBodyId = null;
     this.manualBeat = false;
+    this.currentStory = null;
+    this.storyMoveAt = 0;
+    this.storyMoveApplied = false;
   }
 
   /** Deliver delayed cues in face-first, body-last order. */
@@ -790,95 +903,61 @@ export class BehaviourController {
     ) {
       this.beatUntil = 0;
       this.manualBeat = false;
+      this.currentStory = null;
+      this.storyMoveAt = 0;
+      this.storyMoveApplied = false;
     }
   }
 
-  /**
-   * Pick one small thought and stage its channels. This replaces four
-   * unrelated random action clocks: eyes lead, expression follows, then the
-   * body answers. Blinks and micro-saccades remain independent overlays.
-   */
-  private pickBeat(cfg: BehaviourConfig) {
-    const side = this.rand() < 0.5 ? "LEFT" : "RIGHT";
-    const r = this.rand();
-    let gaze: GazeBehaviour | null = null;
-    let expression: ExpressionBehaviour | null = null;
-    let mouth: MouthBehaviour | null = null;
-    let body: BodyBehaviour | null = null;
+  /** Move the whole character only after the face has announced the thought. */
+  private updateStoryTravel() {
+    const story = this.currentStory;
+    if (!story || this.storyMoveApplied || this.clock < this.storyMoveAt) return;
+    this.travelXTarget = story.x;
+    this.travelYTarget = story.y;
+    // A small roll sells weight; yaw is rendered separately as depth.
+    this.travelRotationTarget = story.yaw * 0.14;
+    this.travelScaleYTarget = 0;
+    this.travelDepthTarget = story.depth;
+    this.travelYawTarget = story.yaw;
+    this.travelPitchTarget = story.pitch;
+    this.storyMoveApplied = true;
+  }
 
-    // Large physical beats stay rare. They are still in the same global
-    // vocabulary, so HOME and quieter states get identical choreography.
-    if (r > 0.985) {
-      gaze = "LOOK_UP";
-      expression = "CURIOUS_WIDE";
-      mouth = "MOUTH_O";
-      body = "SPIN_360";
-    } else if (r > 0.97) {
-      expression = "SOFT_SQUINT";
-      mouth = "MOUTH_O";
-      body = this.rand() < 0.5 ? "WALL_IMPACT_LEFT" : "WALL_IMPACT_RIGHT";
-    } else if (r < 0.23) {
-      gaze = side === "LEFT" ? "GLANCE_LEFT" : "GLANCE_RIGHT";
-      expression =
-        this.rand() < 0.42
-          ? side === "LEFT"
-            ? "ONE_EYE_SQUINT_RIGHT"
-            : "ONE_EYE_SQUINT_LEFT"
-          : null;
-      mouth = this.rand() < 0.34 ? "MOUTH_TWITCH" : null;
-    } else if (r < 0.39) {
-      gaze = "LOOK_UP";
-      expression = "CURIOUS_WIDE";
-      mouth = this.rand() < 0.74 ? "MOUTH_O" : "MOUTH_TWITCH";
-    } else if (r < 0.53) {
-      gaze = "LOOK_DOWN";
-      expression = "SOFT_SQUINT";
-      mouth = "MOUTH_RELAX";
-    } else if (r < 0.68) {
-      gaze = side === "LEFT" ? "CURIOUS_TILT_LEFT" : "CURIOUS_TILT_RIGHT";
-      expression =
-        side === "LEFT" ? "ONE_EYE_SQUINT_LEFT" : "ONE_EYE_SQUINT_RIGHT";
-      mouth = "MOUTH_TWITCH";
-      body = side === "LEFT" ? "SOFT_SWAY_LEFT" : "SOFT_SWAY_RIGHT";
-    } else if (r < 0.82) {
-      expression = "SOFT_SQUINT";
-      mouth = "MOUTH_RELAX";
-      body = this.rand() < 0.52 ? "BODY_SETTLE" : "TINY_SQUISH";
-    } else if (r < 0.94) {
-      expression =
-        side === "LEFT" ? "ONE_EYE_SQUINT_LEFT" : "ONE_EYE_SQUINT_RIGHT";
-      mouth = "MOUTH_TWITCH";
-      body = side === "LEFT" ? "SIDE_SQUISH_LEFT" : "SIDE_SQUISH_RIGHT";
-    } else {
-      gaze = "LOOK_UP";
-      expression = "CURIOUS_WIDE";
-      mouth = "MOUTH_O";
-      body =
-        this.rand() < 0.58
-          ? "TALL_STRETCH"
-          : side === "LEFT"
-            ? "JELLY_TWIST_LEFT"
-            : "JELLY_TWIST_RIGHT";
-    }
+  /** Choose one intention-led thought and stage its channels as a story. */
+  private pickMindStory(cfg: BehaviourConfig) {
+    const next = this.mind.choose(
+      this.mood,
+      this.mindIntentionOverride,
+      this.mindDestinationOverride,
+      this.mindDepthOverride
+    );
+    this.currentStory = next;
+    this.lastStoryId = next.id;
+    this.lastIntention = next.intention;
+    this.lastDestination = next.destination;
+    this.storyMoveAt = this.clock + next.moveDelayMs;
+    this.storyMoveApplied = false;
+    this.beatExpressionAt = next.expression
+      ? this.clock + next.expressionDelayMs
+      : 0;
+    this.beatMouthAt = next.mouth ? this.clock + next.mouthDelayMs : 0;
+    this.beatBodyAt = next.body ? this.clock + next.bodyDelayMs : 0;
+    this.beatExpressionId = next.expression;
+    this.beatMouthId = next.mouth;
+    this.beatBodyId = next.body;
+    this.beatUntil = this.clock + next.durationMs;
+    this.manualBeat = false;
 
-    // The inverted mouth is a rare readable beat, not a normal resting pose.
-    if (mouth && this.rand() < 0.14) mouth = "MOUTH_FLIP";
+    if (next.gaze) this.startGaze(next.gaze, cfg);
+    this.activityId = next.primary;
+    this.activityStartedAt = this.clock;
+    this.activityUntil = this.beatUntil;
 
-    const expressionDelay = expression ? 48 + this.rand() * 35 : 0;
-    const mouthDelay = mouth ? 82 + this.rand() * 42 : 0;
-    const bodyDelay = body ? 106 + this.rand() * 24 : 0;
-    this.beatExpressionAt = expression ? this.clock + expressionDelay : 0;
-    this.beatMouthAt = mouth ? this.clock + mouthDelay : 0;
-    this.beatBodyAt = body ? this.clock + bodyDelay : 0;
-    this.beatExpressionId = expression;
-    this.beatMouthId = mouth;
-    this.beatBodyId = body;
-    this.beatUntil = this.clock + (body ? 2050 : gaze ? 1650 : 1400);
-
-    if (gaze) this.startGaze(gaze, cfg);
-
-    const next = this.clock + this.interval(1850, 3400, cfg);
-    this.nextBeatAt = Math.max(next, this.beatUntil + 260);
+    // A quiet tail lets the destination feel chosen rather than constantly
+    // re-targeted. The next story will still begin before the screen feels
+    // frozen, and a different story is preferred by BlobMind.
+    this.nextBeatAt = this.beatUntil + this.interval(520, 1180, cfg);
     this.nextGazeAt = this.nextBeatAt;
     this.nextExpressionAt = this.nextBeatAt;
     this.nextMouthAt = this.nextBeatAt;
@@ -1266,20 +1345,21 @@ export class BehaviourController {
       return;
     }
     const strength = clamp(cfg.squash / 0.032, 0.55, 1.35);
+    const storyOwnsTravel = this.currentStory !== null && this.storyMoveApplied;
     let sy = 0;
     let duration = 620;
     let dir = 0;
     this.clearBodyTargets();
     if (id === "BODY_SETTLE") {
       sy = -0.064 * strength;
-      this.bodyYTarget = 3.2;
+      if (!storyOwnsTravel) this.travelYTarget = 3.2;
       this.massYTarget = 1.6;
       this.massScaleYTarget = -0.025 * strength;
       this.massOriginYTarget = 0.96;
       duration = 520;
     } else if (id === "TINY_SQUISH") {
       sy = -0.052 * strength;
-      this.bodyYTarget = 1.8;
+      if (!storyOwnsTravel) this.travelYTarget = 1.8;
       this.massYTarget = 0.8;
       this.massScaleYTarget = -0.02 * strength;
       this.massOriginYTarget = 0.94;
@@ -1287,8 +1367,10 @@ export class BehaviourController {
     } else if (id === "SOFT_SWAY_LEFT" || id === "SOFT_SWAY_RIGHT") {
       dir = id === "SOFT_SWAY_LEFT" ? -1 : 1;
       sy = -0.025 * strength;
-      this.bodyXTarget = dir * 3;
-      this.bodyRotationTarget = dir * 1.75;
+      if (!storyOwnsTravel) {
+        this.travelXTarget = dir * 3;
+        this.travelRotationTarget = dir * 1.75;
+      }
       this.massXTarget = dir * 2;
       this.massRotationTarget = dir * 1.45;
       this.massSkewYTarget = dir * 1.8;
@@ -1298,18 +1380,22 @@ export class BehaviourController {
       dir = id === "SIDE_SQUISH_LEFT" ? -1 : 1;
       const sx = -0.066 * strength;
       sy = 1 / (1 + sx) - 1;
-      this.bodyXTarget = dir * 3.4;
-      this.bodyRotationTarget = dir * 1.05;
+      if (!storyOwnsTravel) {
+        this.travelXTarget = dir * 3.4;
+        this.travelRotationTarget = dir * 1.05;
+      }
       this.massXTarget = dir * 2.5;
       this.massRotationTarget = dir * 1.7;
       this.massSkewYTarget = dir * 2.6;
       this.massOriginXTarget = -dir;
-      this.bodyScaleYTarget = sy;
+      if (!storyOwnsTravel) this.travelScaleYTarget = sy;
       this.massScaleYTarget = sy * 0.34;
       duration = 570;
     } else if (id === "TALL_STRETCH" || id === "BREATH_STRETCH") {
       sy = (id === "TALL_STRETCH" ? 0.082 : 0.058) * strength;
-      this.bodyYTarget = id === "TALL_STRETCH" ? -2.6 : -1.5;
+      if (!storyOwnsTravel) {
+        this.travelYTarget = id === "TALL_STRETCH" ? -2.6 : -1.5;
+      }
       this.massYTarget = -1.1;
       this.massScaleYTarget = sy * 0.38;
       this.massOriginYTarget = 0.98;
@@ -1317,8 +1403,10 @@ export class BehaviourController {
     } else {
       dir = id === "JELLY_TWIST_LEFT" ? -1 : 1;
       sy = 0.034 * strength;
-      this.bodyXTarget = dir * 2.4;
-      this.bodyRotationTarget = dir * 1.55;
+      if (!storyOwnsTravel) {
+        this.travelXTarget = dir * 2.4;
+        this.travelRotationTarget = dir * 1.55;
+      }
       this.massXTarget = dir * 1.8;
       this.massRotationTarget = dir * 3.2;
       this.massSkewXTarget = -dir * 1.8;
@@ -1327,7 +1415,7 @@ export class BehaviourController {
       duration = 670;
     }
     if (id !== "SIDE_SQUISH_LEFT" && id !== "SIDE_SQUISH_RIGHT") {
-      this.bodyScaleYTarget = sy;
+      if (!storyOwnsTravel) this.travelScaleYTarget = sy;
     }
     this.bodyAction = id;
     this.bodyReleaseAt = this.clock + duration;
@@ -1335,10 +1423,10 @@ export class BehaviourController {
   }
 
   private clearBodyTargets() {
-    this.bodyXTarget = 0;
-    this.bodyYTarget = 0;
-    this.bodyRotationTarget = 0;
-    this.bodyScaleYTarget = 0;
+    // Travel targets are persistent world positions. Only the temporary
+    // deformation target resets when a body cue finishes, otherwise Blob would
+    // snap back to centre after every little thought.
+    this.travelScaleYTarget = 0;
     this.massXTarget = 0;
     this.massYTarget = 0;
     this.massRotationTarget = 0;
@@ -1370,13 +1458,13 @@ export class BehaviourController {
     const strength = clamp(cfg.squash / 0.032, 0.8, 1.5);
     this.impactDirection = direction;
     this.impactAt = this.clock + 320;
-    this.bodyXTarget = direction * 16;
-    this.bodyRotationTarget = direction * 2.8;
+    this.travelXTarget = direction * 16;
+    this.travelRotationTarget = direction * 2.8;
     this.massXTarget = direction * 7.5;
     this.massRotationTarget = direction * 3.8;
     this.massSkewYTarget = direction * 3.2;
     this.massOriginXTarget = -direction;
-    this.bodyScaleYTarget = 0.025 * strength;
+    this.travelScaleYTarget = 0.025 * strength;
     this.massScaleYTarget = 0.018 * strength;
     this.bodyAction = id;
     this.bodyReleaseAt = this.clock + 1040;
@@ -1394,10 +1482,10 @@ export class BehaviourController {
     const wobbleEnvelope = Math.sin(Math.PI * t);
     const wobble = Math.sin(t * Math.PI * 5.2) * wobbleEnvelope;
     const bob = Math.sin(t * Math.PI * 2.1) * wobbleEnvelope;
-    this.bodyXTarget = wobble * 3.6;
-    this.bodyYTarget = bob * 1.8;
-    this.bodyRotationTarget = wobble * 4.2;
-    this.bodyScaleYTarget = (-0.04 + bob * 0.022) * wobbleEnvelope;
+    this.travelXTarget = wobble * 3.6;
+    this.travelYTarget = bob * 1.8;
+    this.travelRotationTarget = wobble * 4.2;
+    this.travelScaleYTarget = (-0.04 + bob * 0.022) * wobbleEnvelope;
     this.massXTarget = wobble * 2.8;
     this.massYTarget = bob * 1.4;
     this.massRotationTarget = wobble * 5.1;
@@ -1537,7 +1625,7 @@ export class BehaviourController {
   pose(): PoseDelta {
     const followActive = this.followReleaseAt > 0;
     const scaleY =
-      this.bodyScaleYTarget + (followActive ? this.followScaleYTarget : 0);
+      this.travelScaleYTarget + (followActive ? this.followScaleYTarget : 0);
     const horizontalSpeed = Math.max(
       Math.abs(this.leftX.velocity),
       Math.abs(this.rightX.velocity)
@@ -1550,10 +1638,16 @@ export class BehaviourController {
     const velocityStretch = Math.min(0.075, verticalUpSpeed * 0.0021);
 
     this.delta.blobX =
-      this.bodyXTarget + (followActive ? this.followXTarget : 0);
-    this.delta.blobY = this.bodyYTarget;
+      this.travelXTarget + (followActive ? this.followXTarget : 0);
+    this.delta.blobY = this.travelYTarget;
+    this.delta.blobDepth = this.travelDepthTarget;
+    // The manual 360 cue is a full unwrapped turn around the vertical axis;
+    // keeping it unwrapped means the renderer can show the profile and return
+    // to front without an end-of-turn snap.
+    this.delta.blobYaw = this.travelYawTarget + this.spinRotation;
+    this.delta.blobPitch = this.travelPitchTarget;
     this.delta.blobRotation =
-      this.bodyRotationTarget +
+      this.travelRotationTarget +
       (followActive ? this.followRotationTarget : 0);
     this.delta.blobSpin = this.spinRotation;
     this.delta.blobScaleY = scaleY;
@@ -1599,6 +1693,15 @@ export class BehaviourController {
     Pick<
       HomeActivityStatus,
       | "mood"
+      | "intention"
+      | "story"
+      | "destination"
+      | "depth"
+      | "yaw"
+      | "pitch"
+      | "energy"
+      | "curiosity"
+      | "memory"
       | "gaze"
       | "lids"
       | "mouth"
@@ -1609,6 +1712,7 @@ export class BehaviourController {
       | "nextBodyMs"
     > {
     const active = this.clock < this.activityUntil;
+    const mindState = this.mind.state();
     const duration = Math.max(1, this.activityUntil - this.activityStartedAt);
     const next = Math.min(
       this.nextGazeAt,
@@ -1631,6 +1735,15 @@ export class BehaviourController {
       lids: this.lidAction,
       mouth: this.mouthAction,
       body: this.bodyAction,
+      intention: this.currentStory?.intention ?? this.lastIntention,
+      story: this.currentStory?.id ?? this.lastStoryId,
+      destination: this.currentStory?.destination ?? this.lastDestination,
+      depth: this.delta.blobDepth,
+      yaw: this.delta.blobYaw,
+      pitch: this.delta.blobPitch,
+      energy: mindState.energy,
+      curiosity: mindState.curiosity,
+      memory: mindState.memory,
       nextGazeMs: Math.max(0, this.nextGazeAt - this.clock),
       nextBlinkMs: Math.max(0, this.nextBlinkAt - this.clock),
       nextMouthMs: Math.max(0, this.nextMouthAt - this.clock),

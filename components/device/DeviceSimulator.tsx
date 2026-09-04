@@ -18,6 +18,12 @@ import {
 import { DEFAULT_IDLE, IDLE_LIMITS, type IdleConfig } from "@/lib/blobIdle";
 import type { BehaviourId, HomeActivityStatus, HomeMood } from "@/lib/blobBehaviour";
 import {
+  DESTINATIONS,
+  INTENTIONS,
+  type BlobDestination,
+  type BlobIntention,
+} from "@/lib/blobMind";
+import {
   EXPRESSION_FILTERS,
   EXPRESSION_GROUPS_BY_STATE,
   HOME_EXPRESSION_GROUPS,
@@ -53,6 +59,9 @@ export default function DeviceSimulator() {
   const [blobToolsOpen, setBlobToolsOpen] = useState(false);
   const [activeBlobTool, setActiveBlobTool] = useState<"colour" | "face" | "pupils" | null>(null);
   const [mood, setMood] = useState<HomeMood | null>(null);
+  const [mindIntention, setMindIntention] = useState<BlobIntention | null>(null);
+  const [mindDestination, setMindDestination] = useState<BlobDestination | null>(null);
+  const [mindDepth, setMindDepth] = useState<number | null>(null);
 
   // Temporary facial-layer alignment controls. The measured anchors in
   // lib/blobRig.ts already reproduce the master, so these start at 0/0/1x.
@@ -125,6 +134,9 @@ export default function DeviceSimulator() {
     setBlobToolsOpen(false);
     setActiveBlobTool(null);
     setMood(null);
+    setMindIntention(null);
+    setMindDestination(null);
+    setMindDepth(null);
     setCalibration(DEFAULT_FACE_CALIBRATION);
     setIdle(DEFAULT_IDLE);
     setAutoBehaviourEnabled(true);
@@ -188,6 +200,9 @@ export default function DeviceSimulator() {
                   mood={mood}
                   showPupils={showPupils}
                   blobColour={blobColour}
+                  mindIntention={mindIntention}
+                  mindDestination={mindDestination}
+                  mindDepth={mindDepth}
                 />
                 <BlobToolOrbs
                   open={blobToolsOpen}
@@ -276,6 +291,70 @@ export default function DeviceSimulator() {
                   </DevButton>
                 )
               )}
+            </DevGroup>
+
+            <DevGroup label="Mind">
+              <DevButton
+                active={mindIntention === null}
+                onClick={() => setMindIntention(null)}
+              >
+                Auto
+              </DevButton>
+              {INTENTIONS.filter((option) => option !== "REST").map((option) => (
+                <DevButton
+                  key={option}
+                  active={mindIntention === option}
+                  onClick={() => setMindIntention(option)}
+                >
+                  {option.toLowerCase()}
+                </DevButton>
+              ))}
+            </DevGroup>
+
+            <DevGroup label="Target">
+              <DevButton
+                active={mindDestination === null}
+                onClick={() => setMindDestination(null)}
+              >
+                Auto
+              </DevButton>
+              {DESTINATIONS.filter((option) => option !== "CENTER").map((option) => (
+                <DevButton
+                  key={option}
+                  active={mindDestination === option}
+                  onClick={() => setMindDestination(option)}
+                >
+                  {option.replace("_", " ").toLowerCase()}
+                </DevButton>
+              ))}
+            </DevGroup>
+
+            <div className="flex min-w-[220px] flex-1 items-center gap-2">
+              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/25">
+                Depth
+              </span>
+              <input
+                aria-label="Blob depth override"
+                type="range"
+                min={-0.2}
+                max={0.2}
+                step={0.01}
+                value={mindDepth ?? 0}
+                onChange={(event) => setMindDepth(Number(event.currentTarget.value))}
+                className="h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-white/10 accent-[#8A60E8]"
+              />
+              <span className="w-12 shrink-0 text-right font-mono text-[10px] tabular-nums text-white/40">
+                {mindDepth === null ? "auto" : mindDepth.toFixed(2)}
+              </span>
+              <DevButton active={mindDepth === null} onClick={() => setMindDepth(null)}>
+                Auto
+              </DevButton>
+            </div>
+
+            <DevGroup label="3D">
+              <DevButton onClick={() => fire("SPIN_360")}>Spin</DevButton>
+              <DevButton onClick={() => fire("WALL_IMPACT_LEFT")}>Impact L</DevButton>
+              <DevButton onClick={() => fire("WALL_IMPACT_RIGHT")}>Impact R</DevButton>
             </DevGroup>
 
             <DevButton
@@ -1247,10 +1326,22 @@ function ActivityReadout({
       <ActivityValue label="Activity" value={behaviour} accent />
       <ActivityValue label="Next" value={next} />
       <ActivityValue label="Mood" value={status?.mood ?? "CONTENT"} />
+      <ActivityValue label="Intention" value={status?.intention ?? "REST"} accent />
+      <ActivityValue label="Story" value={status?.story ?? "SETTLE_CENTER"} />
+      <ActivityValue label="Destination" value={status?.destination ?? "CENTER"} />
+      <ActivityValue
+        label="Energy / curiosity"
+        value={`${((status?.energy ?? 0.62) * 100).toFixed(0)}% / ${((status?.curiosity ?? 0.58) * 100).toFixed(0)}%`}
+      />
+      <ActivityValue label="Memory" value={status?.memory ?? "new"} />
       <ActivityValue label="Gaze" value={status?.gaze ?? "RESTING"} />
       <ActivityValue label="Lids" value={status?.lids ?? "OPEN"} />
       <ActivityValue label="Mouth" value={status?.mouth ?? "SMILE"} />
       <ActivityValue label="Body" value={status?.body ?? "SUSPENDED"} />
+      <ActivityValue
+        label="Depth / turn"
+        value={`${(status?.depth ?? 0).toFixed(2)} / ${(status?.yaw ?? 0).toFixed(1)}°`}
+      />
       <ActivityValue label="Idle offset" value={`${x.toFixed(2)}, ${y.toFixed(2)} px`} />
       <ActivityValue label="Body rotation" value={`${rotation.toFixed(2)} deg`} />
       <ActivityValue

@@ -67,6 +67,9 @@ export default function HomeState({
   mood,
   showPupils,
   blobColour,
+  mindIntention,
+  mindDestination,
+  mindDepth,
 }: StateViewProps) {
   const [rig, setRig] = useState<BlobRig>(() =>
     applyCalibration(
@@ -90,8 +93,24 @@ export default function HomeState({
 
   // Live config is read through a ref so changing a slider never restarts the
   // animation loop (which would visibly reset the character).
-  const cfg = useRef({ calibration, idle, autoBehaviourEnabled, onBehaviourStatus });
-  cfg.current = { calibration, idle, autoBehaviourEnabled, onBehaviourStatus };
+  const cfg = useRef({
+    calibration,
+    idle,
+    autoBehaviourEnabled,
+    onBehaviourStatus,
+    mindIntention,
+    mindDestination,
+    mindDepth,
+  });
+  cfg.current = {
+    calibration,
+    idle,
+    autoBehaviourEnabled,
+    onBehaviourStatus,
+    mindIntention,
+    mindDestination,
+    mindDepth,
+  };
 
   const reset = useCallback(() => {
     controller.current.reset();
@@ -125,9 +144,15 @@ export default function HomeState({
     let latestIdleY = 0;
     let latestRotation = 0;
     let latestBodySpeed = 0;
+    let latestDepth = 0;
+    let latestYaw = 0;
+    let latestPitch = 0;
     const jellyTarget: JellyTarget = {
       x: 0,
       y: 0,
+      depth: 0,
+      yaw: 0,
+      pitch: 0,
       rotation: 0,
       scaleX: 0,
       scaleY: 0,
@@ -153,6 +178,11 @@ export default function HomeState({
       } = cfg.current;
       const bc = behaviourConfig(cfgIdle);
 
+      controller.current.setMindOverrides(
+        cfg.current.mindIntention,
+        cfg.current.mindDestination,
+        cfg.current.mindDepth
+      );
       controller.current.update(dt, bc, autoBehaviourEnabled);
       const d = controller.current.pose();
 
@@ -166,6 +196,9 @@ export default function HomeState({
       const dsy = d.blobScaleY + amb.squashY;
       jellyTarget.x = amb.x + d.blobX;
       jellyTarget.y = amb.y + d.blobY;
+      jellyTarget.depth = d.blobDepth;
+      jellyTarget.yaw = d.blobYaw;
+      jellyTarget.pitch = d.blobPitch;
       jellyTarget.rotation = amb.rotation + d.blobRotation;
       jellyTarget.scaleX = clampDeform(dsx);
       jellyTarget.scaleY = clampDeform(dsy);
@@ -186,6 +219,9 @@ export default function HomeState({
       latestIdleY = amb.y;
       latestRotation = physical.rotation;
       latestBodySpeed = physical.bodySpeed;
+      latestDepth = physical.depth;
+      latestYaw = physical.yaw;
+      latestPitch = physical.pitch;
 
       const deformX = clampDeform(physical.scaleX);
       const deformY = clampDeform(physical.scaleY);
@@ -195,6 +231,9 @@ export default function HomeState({
           blob: {
             x: physical.x,
             y: physical.y,
+            depth: physical.depth,
+            yaw: physical.yaw,
+            pitch: physical.pitch,
             scale: 1 + amb.breath,
             // Squash lives on the shared body surface. BlobCharacter applies
             // that same transform to every face anchor, so features stay
@@ -275,6 +314,9 @@ export default function HomeState({
         idleY: latestIdleY,
         bodyRotation: latestRotation,
         bodySpeed: latestBodySpeed,
+        depth: latestDepth,
+        yaw: latestYaw,
+        pitch: latestPitch,
       };
       if (
         now - statusAt < 100 &&

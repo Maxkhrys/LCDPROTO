@@ -99,6 +99,9 @@ export default function SensedState({
   mood,
   showPupils,
   blobColour,
+  mindIntention,
+  mindDestination,
+  mindDepth,
 }: StateViewProps) {
   const [rig, setRig] = useState<BlobRig>(() =>
     applyCalibration(
@@ -127,12 +130,18 @@ export default function SensedState({
     idle,
     autoBehaviourEnabled,
     onBehaviourStatus,
+    mindIntention,
+    mindDestination,
+    mindDepth,
   });
   cfg.current = {
     calibration,
     idle,
     autoBehaviourEnabled,
     onBehaviourStatus,
+    mindIntention,
+    mindDestination,
+    mindDepth,
   };
 
   const reset = useCallback(() => {
@@ -169,9 +178,15 @@ export default function SensedState({
     let latestIdleY = 0;
     let latestRotation = 0;
     let latestBodySpeed = 0;
+    let latestDepth = 0;
+    let latestYaw = 0;
+    let latestPitch = 0;
     const jellyTarget: JellyTarget = {
       x: 0,
       y: 0,
+      depth: 0,
+      yaw: 0,
+      pitch: 0,
       rotation: 0,
       scaleX: 0,
       scaleY: 0,
@@ -195,6 +210,11 @@ export default function SensedState({
       const sensedIdle = sensedIdleConfig(sourceIdle);
       const bc = behaviourConfig(sensedIdle);
 
+      controller.current.setMindOverrides(
+        cfg.current.mindIntention,
+        cfg.current.mindDestination,
+        cfg.current.mindDepth
+      );
       controller.current.update(dt, bc, autoBehaviourEnabled);
       const d = controller.current.pose();
       const amb = sensedIdle.enabled
@@ -203,6 +223,9 @@ export default function SensedState({
 
       jellyTarget.x = amb.x + d.blobX;
       jellyTarget.y = amb.y + d.blobY;
+      jellyTarget.depth = d.blobDepth;
+      jellyTarget.yaw = d.blobYaw;
+      jellyTarget.pitch = d.blobPitch;
       jellyTarget.rotation = amb.rotation + d.blobRotation;
       jellyTarget.scaleX = clampDeform(d.blobScaleX + amb.squashX);
       jellyTarget.scaleY = clampDeform(d.blobScaleY + amb.squashY);
@@ -223,6 +246,9 @@ export default function SensedState({
       latestIdleY = amb.y;
       latestRotation = physical.rotation;
       latestBodySpeed = physical.bodySpeed;
+      latestDepth = physical.depth;
+      latestYaw = physical.yaw;
+      latestPitch = physical.pitch;
 
       const bodyDeformX = clampDeform(physical.scaleX);
       const bodyDeformY = clampDeform(physical.scaleY);
@@ -232,6 +258,9 @@ export default function SensedState({
           blob: {
             x: physical.x,
             y: physical.y,
+            depth: physical.depth,
+            yaw: physical.yaw,
+            pitch: physical.pitch,
             scale: 1 + amb.breath,
             scaleX: 1,
             scaleY: 1,
@@ -304,6 +333,9 @@ export default function SensedState({
         idleY: latestIdleY,
         bodyRotation: latestRotation,
         bodySpeed: latestBodySpeed,
+        depth: latestDepth,
+        yaw: latestYaw,
+        pitch: latestPitch,
       };
       if (
         now - statusAt < 100 &&

@@ -414,9 +414,22 @@ export default function BlobCharacter({
     // Whole-character transform: the surface and every facial layer move
     // together before any local expression is applied.
     const settingsDrop = settingsOpen ? size * 0.075 : 0;
-    ctx.translate(center + blob.x, center + blob.y + settingsDrop);
+    const depthScale = clamp(1 + blob.depth * 0.28, 0.84, 1.16);
+    const yawRadians = (blob.yaw * Math.PI) / 180;
+    // A raster character cannot be truly perspective-rendered on the ESP32,
+    // but foreshortening the width and softly hiding the face at profile gives
+    // the eye a convincing near/far turn with only scalar canvas transforms.
+    const yawWidth = 0.34 + Math.abs(Math.cos(yawRadians)) * 0.66;
+    const faceVisibility = 1 - Math.abs(Math.sin(yawRadians)) * 0.78;
+    ctx.translate(
+      center + blob.x,
+      center + blob.y + settingsDrop - blob.pitch * 0.18
+    );
     ctx.rotate((blob.rotation * Math.PI) / 180);
-    ctx.scale(blob.scale * blob.scaleX, blob.scale * blob.scaleY);
+    ctx.scale(
+      blob.scale * depthScale * yawWidth * blob.scaleX,
+      blob.scale * depthScale * blob.scaleY
+    );
     ctx.translate(-center, -center);
 
     // 1. Body surface. This exact transform is reused for the facial anchors.
@@ -470,7 +483,7 @@ export default function BlobCharacter({
       // They rise with curiosity, lower with squinting, and inherit the same
       // body transform and tiny eye tilt as the socket beneath them.
       ctx.save();
-      ctx.globalAlpha = t.opacity * 0.88;
+      ctx.globalAlpha = t.opacity * faceVisibility * 0.88;
       applyBodySurface(ctx, center, bw, bh, bt);
       ctx.translate(socketX, socketY);
       ctx.rotate((t.browRotation * Math.PI) / 180);
@@ -479,7 +492,7 @@ export default function BlobCharacter({
 
       if (open > 0.001) {
         ctx.save();
-        ctx.globalAlpha = t.opacity;
+        ctx.globalAlpha = t.opacity * faceVisibility;
         applyBodySurface(ctx, center, bw, bh, bt);
 
         // Clip is created before texture translation, so the socket does not
@@ -497,7 +510,7 @@ export default function BlobCharacter({
     const drawMouth = (t: ElementTransform) => {
       const a = faceAnchor("mouth", size, colour);
       ctx.save();
-      ctx.globalAlpha = t.opacity;
+      ctx.globalAlpha = t.opacity * faceVisibility;
       applyBodySurface(ctx, center, bw, bh, bt);
       ctx.translate(a.x - center + t.x, a.y - center + t.y);
       // Mouth orientation stays upright. Smile, frown and O are all shape
@@ -525,7 +538,7 @@ export default function BlobCharacter({
     ctx.beginPath();
     ctx.ellipse(0, 5, bw * 0.255, bh * 0.235, 0, 0, Math.PI * 2);
     ctx.clip();
-    ctx.globalAlpha = SKIN_INTEGRATION_ALPHA * bt.opacity;
+    ctx.globalAlpha = SKIN_INTEGRATION_ALPHA * bt.opacity * (0.86 + faceVisibility * 0.14);
     ctx.drawImage(layers.body, -bw / 2, -bh / 2, bw, bh);
     ctx.restore();
 

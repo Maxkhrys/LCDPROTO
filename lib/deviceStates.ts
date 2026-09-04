@@ -3,6 +3,7 @@ import type { IdleConfig } from "./blobIdle";
 import type { BehaviourId, HomeActivityStatus } from "./blobBehaviour";
 import type { HomeMood } from "./blobBehaviour";
 import type { BlobColour } from "./blobRig";
+import type { BlobDestination, BlobIntention } from "./blobMind";
 
 export type DisplayMode = "dark" | "warm" | "brown";
 
@@ -95,4 +96,10 @@ export interface StateViewProps {
   showPupils: boolean;
   /** Dev-only rig colour preview; every colour uses identical transforms. */
   blobColour: BlobColour;
+  /** Optional director override for the current Blob intention. */
+  mindIntention: BlobIntention | null;
+  /** Optional director override for the current travel destination. */
+  mindDestination: BlobDestination | null;
+  /** Optional normalised depth override; positive moves Blob closer. */
+  mindDepth: number | null;
 }

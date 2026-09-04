@@ -30,6 +30,7 @@ components/states/       one file per device state
 public/blob/             Blob-body.png + facial layers
 lib/deviceConfig.ts      resolution, bezel, fps/speed options
 lib/deviceStates.ts      DeviceState type, state table, StateViewProps
+lib/blobMind.ts          deterministic intention, mood, story and destination director
 lib/blobPhysics.ts       lightweight soft-body spring follow-through
 ```
 
@@ -110,13 +111,20 @@ correction; the layers are drawn exactly as supplied.
 
 ## HOME behaviour system
 
-HOME is a small character behaviour system, not a loop. Three stages compose:
+HOME is a small character behaviour system, not a loop. Four stages compose:
 
 **Ambient** (`lib/blobIdle.ts`) runs continuously — a gravity-like centre-of-mass
 drift that eases between seeded waypoints every 2.2-4.2s, with a smaller
 650-1250ms current layered over the broad path. It also provides composite
 breathing, sub-degree rotation, and slow silhouette deformation. It starts
 travelling on the first frame rather than sitting at zero for its first leg.
+
+**Mind** (`lib/blobMind.ts`) chooses a short intention-led story from the
+current mood: explore, inspect, play, watch, think, rest, or recover. Stories
+choose a destination around the round display and retain it long enough to read
+as a decision. Face cues lead the trip; the body follows toward the selected
+point; depth, yaw and pitch add a restrained near/far turn using scalar
+foreshortening rather than a 3D engine.
 
 **Behaviours** (`lib/blobBehaviour.ts`) are staged thought beats. A beat cues
 gaze or eyes first, mouth/lids 50-120ms later, then body mass last. Micro-saccades
@@ -134,6 +142,10 @@ settles.
 
 A beat starts roughly every 2-4s, with no forced repeated pose. Blink events stay
 independent and irregular; the mouth flip is deliberately rare.
+
+Mind stories begin roughly every 4-6s, with a short quiet tail. Their travel
+targets stay inside the display's safe centre area, so Blob can move around the
+ring without clipping while still feeling materially less anchored.
 
 ### Face and body stay connected
 
@@ -167,8 +179,8 @@ Scheduling uses a seeded PRNG advanced only inside the animation loop, so runs
 are reproducible, `Reset` restarts the schedule exactly, `Pause` freezes it,
 and nothing random happens during render.
 
-**Auto** toggles the seeded HOME behaviour playlist; the individual cue buttons
-remain available for manual testing when Auto is off. **Idle** toggles the
+**Auto** toggles the seeded HOME story playlist; the individual cue buttons and
+Mind/Target controls remain available for manual testing when Auto is off. **Idle** toggles the
 ambient layer. With both Auto and Idle off, the calibrated pose is static until
 a cue is fired. The side tuning rail exposes Float, Drift, Breath, Squash,
 Jelly, Ripple, Blink, Gaze, Rotate, and Activity controls beside the device so

@@ -9,6 +9,11 @@
 export interface JellyTarget {
   x: number;
   y: number;
+  /** Normalised distance from the screen plane; positive is nearer. */
+  depth: number;
+  /** Presentation-space turn axes, in degrees. */
+  yaw: number;
+  pitch: number;
   rotation: number;
   scaleX: number;
   scaleY: number;
@@ -64,6 +69,9 @@ class DampedAxis {
 export class BlobJellyPhysics {
   private readonly x = new DampedAxis();
   private readonly y = new DampedAxis();
+  private readonly depth = new DampedAxis();
+  private readonly yaw = new DampedAxis();
+  private readonly pitch = new DampedAxis();
   private readonly rotation = new DampedAxis();
   private readonly scaleX = new DampedAxis();
   private readonly scaleY = new DampedAxis();
@@ -85,6 +93,9 @@ export class BlobJellyPhysics {
   private readonly pose: JellyPose = {
     x: 0,
     y: 0,
+    depth: 0,
+    yaw: 0,
+    pitch: 0,
     rotation: 0,
     scaleX: 0,
     scaleY: 0,
@@ -109,6 +120,9 @@ export class BlobJellyPhysics {
   reset() {
     this.x.reset();
     this.y.reset();
+    this.depth.reset();
+    this.yaw.reset();
+    this.pitch.reset();
     this.rotation.reset();
     this.scaleX.reset();
     this.scaleY.reset();
@@ -130,6 +144,9 @@ export class BlobJellyPhysics {
     Object.assign(this.pose, {
       x: 0,
       y: 0,
+      depth: 0,
+      yaw: 0,
+      pitch: 0,
       rotation: 0,
       scaleX: 0,
       scaleY: 0,
@@ -162,6 +179,11 @@ export class BlobJellyPhysics {
       for (let i = 0; i < steps; i += 1) {
         this.x.step(target.x, dt, 2.8, 0.58);
         this.y.step(target.y, dt, 2.9, 0.56);
+        // Depth and turn are deliberately slower than the eye-leading face.
+        // That gives a small parallax catch-up without introducing a 3D engine.
+        this.depth.step(target.depth, dt, 1.8, 0.66);
+        this.yaw.step(target.yaw, dt, 1.95, 0.62);
+        this.pitch.step(target.pitch, dt, 1.8, 0.66);
         this.rotation.step(target.rotation, dt, 2.5, 0.6);
         this.scaleX.step(target.scaleX, dt, 3.05, 0.48);
         this.scaleY.step(target.scaleY, dt, 3.05, 0.48);
@@ -249,6 +271,7 @@ export class BlobJellyPhysics {
     // This is still capped tightly: one visible wave, then decay.
     const rippleAmount = Math.max(0, Math.min(2, target.rippleAmount));
     const motionSpeed = Math.hypot(motionX, motionY);
+    const turnSpeed = Math.abs(this.yaw.velocity) * 0.08;
     const previousSpeed = Math.hypot(
       this.previousMotionX,
       this.previousMotionY
@@ -256,7 +279,7 @@ export class BlobJellyPhysics {
     const speedChange = Math.abs(motionSpeed - previousSpeed);
     const impactKick = Math.min(
       52,
-      (motionDelta * 2.1 + speedChange * 0.8) *
+      (motionDelta * 2.1 + speedChange * 0.8 + turnSpeed) *
         (0.65 + rippleAmount * 0.35)
     );
     if (impactKick > 0.55) {
@@ -269,6 +292,8 @@ export class BlobJellyPhysics {
       this.rippleUpper.velocity += motionX * 0.022 * rippleAmount;
       this.rippleLower.velocity -= motionX * 0.014 * rippleAmount;
       this.rippleBottom.velocity -= motionX * 0.009 * rippleAmount;
+      this.rippleTop.velocity += this.yaw.velocity * 0.018 * rippleAmount;
+      this.rippleLower.velocity -= this.yaw.velocity * 0.012 * rippleAmount;
     }
     const rippleDt = seconds > 0 ? seconds : 1 / 60;
     this.rippleTop.step(0, rippleDt, 3.8, 0.42);
@@ -303,6 +328,9 @@ export class BlobJellyPhysics {
 
     this.pose.x = this.x.value;
     this.pose.y = this.y.value;
+    this.pose.depth = this.depth.value;
+    this.pose.yaw = this.yaw.value;
+    this.pose.pitch = this.pitch.value;
     this.pose.rotation = this.rotation.value;
     this.pose.scaleX = this.scaleX.value + dynamicX;
     this.pose.scaleY = this.scaleY.value + dynamicY;
@@ -320,7 +348,7 @@ export class BlobJellyPhysics {
     this.pose.bodySpeed = Math.hypot(
       this.x.velocity + this.bodyX.velocity,
       this.y.velocity + this.bodyY.velocity
-    );
+    ) + Math.abs(this.depth.velocity) * 70 + Math.abs(this.yaw.velocity) * 0.08;
     this.pose.rippleTop = Math.max(
       -3.2,
       Math.min(

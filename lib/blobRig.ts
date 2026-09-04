@@ -298,6 +298,11 @@ export interface ElementTransform {
 export interface BlobTransform {
   x: number;
   y: number;
+  /** Normalised distance from the LCD plane; positive is closer to camera. */
+  depth: number;
+  /** Simple presentation-space turn axes, in degrees. */
+  yaw: number;
+  pitch: number;
   scale: number;
   /** Non-uniform scale on top of `scale`, for jelly squash and stretch. */
   scaleX: number;
@@ -343,6 +348,9 @@ export const NEUTRAL_ELEMENT: ElementTransform = {
 export const NEUTRAL_BLOB: BlobTransform = {
   x: 0,
   y: 0,
+  depth: 0,
+  yaw: 0,
+  pitch: 0,
   scale: 1,
   scaleX: 1,
   scaleY: 1,
