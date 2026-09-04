@@ -282,6 +282,9 @@ export default function CloudBlobTest() {
     const jellyTarget: JellyTarget = {
       x: 0,
       y: 0,
+      depth: 0,
+      yaw: 0,
+      pitch: 0,
       rotation: 0,
       scaleX: 0,
       scaleY: 0,
@@ -294,6 +297,9 @@ export default function CloudBlobTest() {
       bodySkewY: 0,
       bodyOriginX: 0,
       bodyOriginY: 0.82,
+      bodyDeformAngle: 0,
+      jellyAmount: 1,
+      rippleAmount: 1,
     };
 
     const loop = (now: number) => {
@@ -329,6 +335,7 @@ export default function CloudBlobTest() {
       const rigOutput = applyCalibration(
         {
           blob: {
+            ...NEUTRAL_BLOB,
             x: physical.x,
             y: physical.y,
             scale: 1 + amb.breath,

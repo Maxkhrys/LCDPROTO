@@ -79,6 +79,10 @@ function eyeIrisColour(colour: BlobColour) {
       return "#e4b94e";
     case "green":
       return "#79d96a";
+    case "blue":
+      return "#5ba6f5";
+    case "red":
+      return "#e55a75";
     default:
       return "#8969e8";
   }
@@ -106,6 +110,20 @@ function eyePalette(colour: BlobColour) {
         rim: "#348b32",
         wash: "rgba(108, 217, 75, 0.38)",
         washEdge: "rgba(108, 217, 75, 0)",
+      };
+    case "blue":
+      return {
+        shade: "#082b58",
+        rim: "#1a5fb4",
+        wash: "rgba(53, 132, 228, 0.40)",
+        washEdge: "rgba(53, 132, 228, 0)",
+      };
+    case "red":
+      return {
+        shade: "#4b0d19",
+        rim: "#a51d2d",
+        wash: "rgba(224, 27, 36, 0.40)",
+        washEdge: "rgba(224, 27, 36, 0)",
       };
     default:
       return {

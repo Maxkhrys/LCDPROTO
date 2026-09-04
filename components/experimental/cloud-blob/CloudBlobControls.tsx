@@ -202,6 +202,8 @@ export default function CloudBlobControls({
                 purple: "bg-purple-400",
                 yellow: "bg-amber-400",
                 green: "bg-emerald-400",
+                blue: "bg-blue-400",
+                red: "bg-red-400",
               };
               return (
                 <button
