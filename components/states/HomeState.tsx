@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import BlobCharacter from "@/components/blob/BlobCharacter";
 import CloudCharacter from "@/components/blob/CloudCharacter";
+import { CHARACTERS } from "@/lib/characters";
 import { applyCalibration } from "@/lib/blobCalibration";
 import {
   BehaviourController,
@@ -113,6 +114,7 @@ export default function HomeState({
   // animation loop (which would visibly reset the character).
   const cfg = useRef({
     size,
+    character,
     calibration,
     idle,
     autoBehaviourEnabled,
@@ -124,6 +126,7 @@ export default function HomeState({
   });
   cfg.current = {
     size,
+    character,
     calibration,
     idle,
     autoBehaviourEnabled,
@@ -167,6 +170,9 @@ export default function HomeState({
     let latestIdleY = 0;
     let latestRotation = 0;
     let latestBodySpeed = 0;
+    let contactX = 0;
+    let contactY = 0;
+    let contactPressure = 0;
     let latestDepth = 0;
     let latestYaw = 0;
     let latestPitch = 0;
@@ -241,11 +247,15 @@ export default function HomeState({
       // inherits the existing body lag, squash and ripple response instead of
       // running a second animation system beside it.
       const screen = cfg.current.size;
+      // Each body has its own silhouette, so each stops at its own wall.
+      const characterRadius =
+        CHARACTERS.find((entry) => entry.id === cfg.current.character)
+          ?.radiusFraction ?? 0.5;
       const blobScaleNow = (1 + amb.breath) * (1 + d.blobScale);
       const dragPose = drag.current.step(
         dt,
         screen,
-        screen * BODY_FRACTION * 0.5 * blobScaleNow,
+        screen * BODY_FRACTION * characterRadius * blobScaleNow,
         jellyTarget.x,
         jellyTarget.y
       );
@@ -266,6 +276,9 @@ export default function HomeState({
       jellyTarget.bodyScaleY = clampBodyDeform(
         d.bodyScaleY + dragPose.bodyScaleY
       );
+      contactX = dragPose.contactX;
+      contactY = dragPose.contactY;
+      contactPressure = dragPose.wallPressure;
       jellyTarget.bodySkewX = d.bodySkewX + dragPose.skewX;
       jellyTarget.bodySkewY = d.bodySkewY + dragPose.skewY;
 
@@ -315,6 +328,9 @@ export default function HomeState({
             deformAngle: physical.bodyDeformAngle,
             scaleX: 1 + deformX + clampBodyDeform(physical.bodyScaleX),
             scaleY: 1 + deformY + clampBodyDeform(physical.bodyScaleY),
+            contactX,
+            contactY,
+            contactPressure,
             rippleTop: physical.rippleTop,
             rippleUpper: physical.rippleUpper,
             rippleLower: physical.rippleLower,
@@ -440,6 +456,7 @@ export default function HomeState({
         {character === "cloud" ? (
           <CloudCharacter
           size={size}
+          viewportSize={cssSize}
           renderScale={renderScale}
           rig={rig}
           colour={blobColour}

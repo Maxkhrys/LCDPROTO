@@ -20,6 +20,14 @@ export interface CharacterMeta {
   id: CharacterId;
   label: string;
   description: string;
+  /**
+   * Silhouette radius as a fraction of the display, used by the drag wall.
+   *
+   * Blob's core is BODY_FRACTION wide; the cloud's mist body measures wider
+   * than that, so sharing Blob's figure let it be dragged far enough that the
+   * circular crop sliced pieces off it.
+   */
+  radiusFraction: number;
 }
 
 export const CHARACTERS: readonly CharacterMeta[] = [
@@ -27,11 +35,15 @@ export const CHARACTERS: readonly CharacterMeta[] = [
     id: "blob",
     label: "Blob",
     description: "The production jelly body, drawn from the locked artwork.",
+    radiusFraction: 0.5,
   },
   {
     id: "cloud",
     label: "Cloud",
     description: "Procedural volumetric lobes wearing the same face.",
+    // Measured from the rendered silhouette: the mist body is about 20% wider
+    // than Blob's core, and its soft edge reaches further still.
+    radiusFraction: 0.84,
   },
 ] as const;
 

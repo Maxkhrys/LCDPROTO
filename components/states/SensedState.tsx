@@ -403,6 +403,7 @@ export default function SensedState({
         {character === "cloud" ? (
           <CloudCharacter
           size={size}
+          viewportSize={cssSize}
           renderScale={renderScale}
           rig={rig}
           colour={blobColour}

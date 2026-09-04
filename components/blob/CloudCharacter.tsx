@@ -34,6 +34,8 @@ import {
 interface CloudCharacterProps {
   /** Native screen size in pixels (466). */
   size: number;
+  /** CSS size of the display, which can differ from the native 466. */
+  viewportSize?: number;
   /** Pixels rasterised per 466-space pixel. */
   renderScale: number;
   /** Per-element transforms, from exactly the same rig Blob uses. */
@@ -86,6 +88,7 @@ const DEFAULT_TRAILS: CloudTrailConfig = {
  */
 export default function CloudCharacter({
   size,
+  viewportSize,
   renderScale,
   rig = NEUTRAL_RIG,
   colour = "teal",
@@ -138,16 +141,61 @@ export default function CloudCharacter({
     // blob.x into the lobe params instead would have moved nothing, which is
     // exactly how the face ended up floating beside the cloud on the first
     // attempt.
+    // Wall contact drives the lobes directly rather than through the rig's
+    // uniform scale. A cloud pressed into the glass has to lose its silhouette
+    // on the contact side and find that volume again on the opposite one,
+    // which is a per-lobe move that no whole-body squash can express.
+    const press = clamp(body.contactPressure, 0, 1);
+    const nx = body.contactX;
+    const ny = body.contactY;
+    const pressRight = press * Math.max(0, nx);
+    const pressLeft = press * Math.max(0, -nx);
+    const pressDown = press * Math.max(0, ny);
+    const pressUp = press * Math.max(0, -ny);
+
     const params: CloudDeformationParams = {
       ...DEFAULT_DEFORMATION,
       ...cloudParams,
-      squash:
+      // squash/stretch are normalised 0..1; the bulges and lean are in the
+      // lobe system's own units (pixels of lobe travel, and degrees/30), which
+      // is why these gains look so different from each other.
+      squash: clamp(
         (cloudParams?.squash ?? DEFAULT_DEFORMATION.squash) +
-        Math.max(0, 1 - body.scaleY) * 2.2,
-      stretch:
+          Math.max(0, 1 - body.scaleY) * 2.2 +
+          press * Math.abs(ny) * 0.7,
+        0,
+        0.95
+      ),
+      stretch: clamp(
         (cloudParams?.stretch ?? DEFAULT_DEFORMATION.stretch) +
-        Math.max(0, body.scaleY - 1) * 2.2,
-      lean: (cloudParams?.lean ?? DEFAULT_DEFORMATION.lean) + body.skewX * 1.6,
+          Math.max(0, body.scaleY - 1) * 2.2 +
+          press * Math.abs(nx) * 0.6,
+        0,
+        0.95
+      ),
+      // The crown trails the contact, the way a jelly's top lags its base.
+      lean:
+        (cloudParams?.lean ?? DEFAULT_DEFORMATION.lean) +
+        body.skewX * 1.6 -
+        nx * press * 20,
+      // Volume displaced at the contact reappears on the far side: the pressed
+      // lobes pull in, the opposite ones swell out.
+      leftBulge:
+        (cloudParams?.leftBulge ?? DEFAULT_DEFORMATION.leftBulge) +
+        pressRight * 26 -
+        pressLeft * 12,
+      rightBulge:
+        (cloudParams?.rightBulge ?? DEFAULT_DEFORMATION.rightBulge) +
+        pressLeft * 26 -
+        pressRight * 12,
+      topBulge:
+        (cloudParams?.topBulge ?? DEFAULT_DEFORMATION.topBulge) +
+        pressDown * 15 -
+        pressUp * 8,
+      bottomSag:
+        (cloudParams?.bottomSag ?? DEFAULT_DEFORMATION.bottomSag) +
+        pressUp * 15 -
+        pressDown * 8,
       gazeX: clamp(rig.leftEye.x / 9, -1, 1),
       gazeY: clamp(rig.leftEye.y / 7, -1, 1),
     };
@@ -175,8 +223,8 @@ export default function CloudCharacter({
       if (Math.hypot(vx, vy) > 50) {
         spawnWisp(
           wisps.current,
-          centre + offsetX,
-          centre + offsetY,
+          centre,
+          centre,
           vx,
           vy,
           26 * trails.trailStrength,
@@ -349,6 +397,7 @@ export default function CloudCharacter({
       width={size * renderScale}
       height={size * renderScale}
       className="block"
+      data-character="cloud"
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={endPointer}
@@ -364,8 +413,11 @@ export default function CloudCharacter({
         if (!settingsOpen && onOpenTools && hitTest(p.x, p.y)) onOpenTools();
       }}
       style={{
-        width: size,
-        height: size,
+        // Must track the display's CSS size, not the native 466: laid out at
+        // its native size inside a scaled stage the canvas overflowed the
+        // round crop and the cloud was sliced off along the edges.
+        width: viewportSize ?? size,
+        height: viewportSize ?? size,
         imageRendering: renderScale === 1 ? "pixelated" : "auto",
         touchAction: drag ? "none" : undefined,
         cursor: drag ? (grabbing ? "grabbing" : "grab") : undefined,

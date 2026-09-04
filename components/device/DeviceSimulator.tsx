@@ -785,7 +785,11 @@ export default function DeviceSimulator() {
         {controlContent}
       </ControlCenter>
 
-      <div className="flex min-h-0 w-full flex-1 items-center justify-center">
+      <div
+        className={`sim-stage flex min-h-0 w-full flex-1 items-center justify-center ${
+          controlsOpen ? "sim-stage-shifted" : ""
+        }`}
+      >
         <div ref={frameRef} className="flex aspect-square w-full max-w-full items-center justify-center" style={{ width: `min(100%, ${Math.round(DEFAULT_OUTER * screenScale)}px, max(280px, calc(100dvh - 76px)))` }}>
           <DeviceBezel screenSize={screenSize}>
             <div className="relative">
