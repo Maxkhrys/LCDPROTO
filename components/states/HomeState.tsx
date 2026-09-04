@@ -10,7 +10,13 @@ import {
 } from "@/lib/blobBehaviour";
 import { AmbientDrift, type IdleConfig } from "@/lib/blobIdle";
 import { BlobJellyPhysics, type JellyTarget } from "@/lib/blobPhysics";
-import { NEUTRAL_BLOB, NEUTRAL_ELEMENT, type BlobRig } from "@/lib/blobRig";
+import { BlobDragController } from "@/lib/blobDrag";
+import {
+  BODY_FRACTION,
+  NEUTRAL_BLOB,
+  NEUTRAL_ELEMENT,
+  type BlobRig,
+} from "@/lib/blobRig";
 import type { StateViewProps } from "@/lib/deviceStates";
 
 /** Safety cap on total body deformation, whatever the layers add up to. */
@@ -90,10 +96,13 @@ export default function HomeState({
   if (ambient.current === null) ambient.current = new AmbientDrift();
   const physics = useRef<BlobJellyPhysics>(null as never);
   if (physics.current === null) physics.current = new BlobJellyPhysics();
+  const drag = useRef<BlobDragController>(null as never);
+  if (drag.current === null) drag.current = new BlobDragController();
 
   // Live config is read through a ref so changing a slider never restarts the
   // animation loop (which would visibly reset the character).
   const cfg = useRef({
+    size,
     calibration,
     idle,
     autoBehaviourEnabled,
@@ -103,6 +112,7 @@ export default function HomeState({
     mindDepth,
   });
   cfg.current = {
+    size,
     calibration,
     idle,
     autoBehaviourEnabled,
@@ -116,6 +126,7 @@ export default function HomeState({
     controller.current.reset();
     ambient.current.reset();
     physics.current.reset();
+    drag.current.reset();
   }, []);
 
   useEffect(() => {
@@ -213,6 +224,32 @@ export default function HomeState({
       jellyTarget.bodyOriginY = d.bodyOriginY;
       jellyTarget.jellyAmount = cfgIdle.jellyAmount;
       jellyTarget.rippleAmount = cfgIdle.rippleAmount;
+      // The grab moves Blob before the jelly springs see it, so dragging
+      // inherits the existing body lag, squash and ripple response instead of
+      // running a second animation system beside it.
+      const screen = cfg.current.size;
+      const blobScaleNow = (1 + amb.breath) * (1 + d.blobScale);
+      const dragPose = drag.current.step(
+        dt,
+        screen,
+        screen * BODY_FRACTION * 0.5 * blobScaleNow,
+        jellyTarget.x,
+        jellyTarget.y
+      );
+      jellyTarget.x += dragPose.x;
+      jellyTarget.y += dragPose.y;
+      jellyTarget.rotation += dragPose.rotation;
+      jellyTarget.scaleX = clampDeform(dsx + dragPose.scaleX);
+      jellyTarget.scaleY = clampDeform(dsy + dragPose.scaleY);
+      jellyTarget.bodyScaleX = clampBodyDeform(
+        d.bodyScaleX + dragPose.scaleX * 0.5
+      );
+      jellyTarget.bodyScaleY = clampBodyDeform(
+        d.bodyScaleY + dragPose.scaleY * 0.5
+      );
+      jellyTarget.bodySkewX = d.bodySkewX + dragPose.skewX;
+      jellyTarget.bodySkewY = d.bodySkewY + dragPose.skewY;
+
       const physical = physics.current.update(dt, jellyTarget);
 
       latestIdleX = amb.x;
@@ -364,6 +401,7 @@ export default function HomeState({
         onCloseTools={onCloseBlobTools}
         settingsOpen={blobToolsOpen}
         showPupils={showPupils}
+        drag={drag.current}
       />
     </div>
   );
