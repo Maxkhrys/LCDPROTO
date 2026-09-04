@@ -111,17 +111,7 @@ of the body's solid width, with a scale relative to the body's own — the parts
 are drawn far larger than life on the sheet. Values were chosen by rendering
 candidate grids and comparing at native 466x466, not derived from the old 240x240 target.
 
-Normal rendering adds no glow, stroke, shadow, blur or colour correction. Shape
-experiments reuse supplied body pixels and add only a flat native colour under
-newly formed clipped corners.
-
-### Body shape experiments
-
-The Shape controls target three native 466-space body geometries: Jelly,
-Rounded Square, and Rounded Triangle. They share 24 contour points, so the
-renderer can spring between them while preserving Blob's material texture.
-Shape changes are clipped geometry changes with overscanned texture, never
-PNG crossfades. The normal face rig stays attached to the shared body surface.
+Normal rendering adds no glow, stroke, shadow, blur or colour correction.
 
 ## HOME behaviour system
 

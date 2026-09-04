@@ -9,7 +9,6 @@ import {
   faceAnchor,
   type BlobRig,
   type BlobColour,
-  type BlobShape,
   type ElementTransform,
   type FaceLayerId,
 } from "@/lib/blobRig";
@@ -24,8 +23,6 @@ interface BlobCharacterProps {
   rig?: BlobRig;
   /** Dev-only colour testing; geometry and motion are shared. */
   colour?: BlobColour;
-  /** Body geometry target. Face layers remain procedural and shared. */
-  shape?: BlobShape;
   /** Opens the floating Blob tool orbs after a deliberate double tap. */
   onOpenTools?: () => void;
   /** Closes floating tools after a single tap while they are open. */
@@ -50,133 +47,48 @@ const SKIN_INTEGRATION_ALPHA = 0.055;
 const clamp = (value: number, min: number, max: number) =>
   value < min ? min : value > max ? max : value;
 
-const SHAPE_POINT_COUNT = 24;
-const SHAPE_VALUES: Record<BlobShape, number> = {
-  jelly: 0,
-  "round-square": 1,
-  "round-triangle": 2,
-};
-
-function shapeRadius(shape: BlobShape, angle: number) {
-  const organic =
-    0.94 +
-    Math.sin(angle * 3 - 0.6) * 0.025 +
-    Math.sin(angle * 5 + 1.4) * 0.018;
-  if (shape === "jelly") return organic;
-  if (shape === "round-square") {
-    const squareRadius =
-      1 / Math.max(Math.abs(Math.cos(angle)), Math.abs(Math.sin(angle)));
-    return 0.88 + ((squareRadius - 1) / 0.4142) * 0.12;
-  }
-  const triangleWave = Math.max(0, Math.cos((angle + Math.PI / 2) * 3));
-  return 0.78 + Math.pow(triangleWave, 8) * 0.18;
-}
-
-const SHAPE_NAMES: readonly BlobShape[] = [
-  "jelly",
-  "round-square",
-  "round-triangle",
-];
-const SHAPE_GEOMETRIES = SHAPE_NAMES.map((shape) =>
-  Array.from({ length: SHAPE_POINT_COUNT }, (_, index) => {
-    const angle = -Math.PI / 2 + (index / SHAPE_POINT_COUNT) * Math.PI * 2;
-    const radius = shapeRadius(shape, angle);
-    return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
-  })
-);
-
-function drawShapePath(
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  shapeValue: number
-) {
-  const value = clamp(shapeValue, 0, 2);
-  const from = Math.floor(value) as 0 | 1 | 2;
-  const to = Math.min(2, from + 1) as 0 | 1 | 2;
-  const blend = value - from;
-  const fromPoints = SHAPE_GEOMETRIES[from];
-  const toPoints = SHAPE_GEOMETRIES[to];
-  const pointX = (index: number) =>
-    (fromPoints[index].x * (1 - blend) + toPoints[index].x * blend) * (width / 2);
-  const pointY = (index: number) =>
-    (fromPoints[index].y * (1 - blend) + toPoints[index].y * blend) * (height / 2);
-  const previous = SHAPE_POINT_COUNT - 1;
-  const firstMidX = (pointX(previous) + pointX(0)) / 2;
-  const firstMidY = (pointY(previous) + pointY(0)) / 2;
-  ctx.beginPath();
-  ctx.moveTo(firstMidX, firstMidY);
-  for (let i = 0; i < SHAPE_POINT_COUNT; i += 1) {
-    const next = (i + 1) % SHAPE_POINT_COUNT;
-    ctx.quadraticCurveTo(
-      pointX(i),
-      pointY(i),
-      (pointX(i) + pointX(next)) / 2,
-      (pointY(i) + pointY(next)) / 2
-    );
-  }
-  ctx.closePath();
-}
-
-function shapePalette(colour: BlobColour) {
-  switch (colour) {
-    case "teal":
-      return { base: "#0a7375" };
-    case "yellow":
-      return { base: "#a47410" };
-    case "green":
-      return { base: "#287b36" };
-    case "blue":
-      return { base: "#145c9e" };
-    case "red":
-      return { base: "#982334" };
-    default:
-      return { base: "#52229a" };
-  }
-}
-
-function drawShapeBody(
-  ctx: CanvasRenderingContext2D,
-  image: HTMLCanvasElement,
-  width: number,
-  height: number,
-  shapeValue: number,
-  colour: BlobColour
-) {
-  if (shapeValue < 0.04) {
-    ctx.drawImage(image, -width / 2, -height / 2, width, height);
-    return;
-  }
-  ctx.save();
-  drawShapePath(ctx, width, height, shapeValue);
-  ctx.clip();
-  const palette = shapePalette(colour);
-  ctx.fillStyle = palette.base;
-  ctx.fillRect(-width / 2, -height / 2, width, height);
-  // Overscan lets the original material texture cover newly formed corners.
-  // The clipped silhouette controls the shape; no opacity crossfade occurs.
-  ctx.globalAlpha *= 0.98;
-  ctx.drawImage(image, -width * 0.59, -height * 0.59, width * 1.18, height * 1.18);
-  ctx.restore();
-}
-
 function drawLidClosure(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
   open: number,
-  colour: BlobColour
+  bodyImage: HTMLCanvasElement,
+  bodyWidth: number,
+  bodyHeight: number,
+  socketX: number,
+  socketY: number
 ) {
-  const gap = height * (0.045 + clamp(open, 0, 1) * 0.955);
+  const gap = height * (0.02 + clamp(open, 0, 1) * 0.98);
   if (gap >= height * 0.995) return;
-  const palette = shapePalette(colour);
+  const lidHeight = Math.max(0, (height - gap) / 2);
   ctx.save();
   eyeSocketPath(ctx, 0, 0, width, height);
   ctx.clip();
-  ctx.fillStyle = palette.base;
-  ctx.globalAlpha *= 0.96;
-  ctx.fillRect(-width / 2, -height / 2, width, -height / 2 + gap / 2);
-  ctx.fillRect(-width / 2, gap / 2, width, height / 2 - gap / 2);
+  const paintLid = (top: boolean) => {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(
+      -width / 2,
+      top ? -height / 2 : gap / 2,
+      width,
+      lidHeight
+    );
+    ctx.clip();
+    // Repaint the same body pixels that sit behind the eye. This makes the
+    // closing lids inherit Blob's real colour, highlights and grain instead of
+    // exposing a flat mask or leaving half an eye cut away.
+    ctx.globalAlpha *= 0.98;
+    ctx.drawImage(
+      bodyImage,
+      -socketX - bodyWidth / 2,
+      -socketY - bodyHeight / 2,
+      bodyWidth,
+      bodyHeight
+    );
+    ctx.restore();
+  };
+  paintLid(true);
+  paintLid(false);
   ctx.restore();
 }
 
@@ -322,12 +234,10 @@ function drawProceduralEye(
   gazeY: number,
   showPupil: boolean
 ) {
-  // Keep the eye as one clean black mass. It is deliberately inset from the
-  // socket so a full left/right glance never kisses the aperture edge and
-  // reads as a clipped oval. The old asset's generous black silhouette stays,
-  // but the movement now has a safe internal margin.
-  const eyeWidth = width * 0.86;
-  const eyeHeight = height * 0.96;
+  // The caller supplies the exact shared eye silhouette. Lids use these same
+  // dimensions, so neither side of the eye is left exposed during a blink.
+  const eyeWidth = width;
+  const eyeHeight = height;
   const eyeX = clamp(gazeX * 0.72, -width * 0.14, width * 0.14);
   const eyeY = clamp(gazeY * 0.58, -height * 0.14, height * 0.14);
   eyeSocketPath(ctx, eyeX, eyeY, eyeWidth, eyeHeight);
@@ -454,11 +364,9 @@ export default function BlobCharacter({
   onCloseTools,
   settingsOpen = false,
   showPupils = false,
-  shape = "jelly",
 }: BlobCharacterProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [images, setImages] = useState<Images | null>(null);
-  const shapeSpring = useRef({ value: 0, velocity: 0, last: 0 });
 
   useEffect(() => {
     let cancelled = false;
@@ -538,18 +446,6 @@ export default function BlobCharacter({
 
     const center = size / 2;
     const { blob } = rig;
-    const shapeState = shapeSpring.current;
-    const now = performance.now();
-    const dt = shapeState.last > 0 ? Math.min(0.05, (now - shapeState.last) / 1000) : 1 / 60;
-    shapeState.last = now;
-    const shapeTarget = SHAPE_VALUES[shape];
-    const omega = Math.PI * 2 * 3.4;
-    shapeState.velocity +=
-      ((shapeTarget - shapeState.value) * omega * omega -
-        shapeState.velocity * 2 * 0.68 * omega) *
-      dt;
-    shapeState.value = clamp(shapeState.value + shapeState.velocity * dt, 0, 2);
-    const shapeValue = shapeState.value;
     const bodyAsset = RIG_ASSETS[colour].body;
     const bs = bodyScale(size, colour);
     const bw = bodyAsset.width * bs;
@@ -586,7 +482,7 @@ export default function BlobCharacter({
     ctx.save();
     ctx.globalAlpha = bt.opacity;
     applyBodySurface(ctx, center, bw, bh, bt);
-    drawShapeBody(ctx, layers.body, bw, bh, shapeValue, colour);
+    ctx.drawImage(layers.body, -bw / 2, -bh / 2, bw, bh);
     drawRippleBody(ctx, layers.body, bw, bh, bt);
     ctx.restore();
 
@@ -610,11 +506,12 @@ export default function BlobCharacter({
       const socketScaleY = clamp(t.eyeSocketScaleY, 0.72, 1.35);
       const socketWidth = a.width * socketScaleX;
       const socketHeight = a.height * socketScaleY;
-      // The aperture is a skin socket, not the exact silhouette of the
-      // procedural eye. A small horizontal cushion prevents the left edge
-      // from being shaved during a glance, especially at 1:1 rasterisation.
-      const apertureWidth = socketWidth * 1.1;
-      const apertureHeight = socketHeight * 1.04;
+      // The lid and eye share one exact silhouette. The socket has only a
+      // tiny safety margin so a gaze never clips the black eye at its edge.
+      const eyeWidth = socketWidth * 0.86;
+      const eyeHeight = socketHeight * 0.96;
+      const apertureWidth = eyeWidth * 1.025;
+      const apertureHeight = eyeHeight * 1.025;
       const open = clamp(t.eyeOpen, 0, 1);
       const gazeX = clamp(t.x, -socketWidth * 0.2, socketWidth * 0.2);
       const gazeY = clamp(
@@ -647,10 +544,20 @@ export default function BlobCharacter({
         eyeSocketPath(ctx, 0, 0, apertureWidth, apertureHeight);
         ctx.clip();
         ctx.rotate((t.rotation * Math.PI) / 180);
-        drawProceduralEye(ctx, socketWidth, socketHeight, gazeX, gazeY, showPupils);
+        drawProceduralEye(ctx, eyeWidth, eyeHeight, gazeX, gazeY, showPupils);
         ctx.restore();
       }
-      drawLidClosure(ctx, apertureWidth, apertureHeight, open, colour);
+      drawLidClosure(
+        ctx,
+        eyeWidth,
+        eyeHeight,
+        open,
+        layers.body,
+        bw,
+        bh,
+        socketX,
+        socketY
+      );
       ctx.restore();
     };
 
@@ -690,7 +597,7 @@ export default function BlobCharacter({
     ctx.restore();
 
     ctx.restore();
-  }, [layers, size, renderScale, rig, colour, showPupils, settingsOpen, shape]);
+  }, [layers, size, renderScale, rig, colour, showPupils, settingsOpen]);
 
   const isBlobHit = (event: MouseEvent<HTMLCanvasElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();

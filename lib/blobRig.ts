@@ -27,14 +27,6 @@ export type BlobColour =
   | "blue"
   | "red";
 
-export type BlobShape = "jelly" | "round-square" | "round-triangle";
-
-export const BLOB_SHAPES: readonly { id: BlobShape; label: string }[] = [
-  { id: "jelly", label: "Jelly" },
-  { id: "round-square", label: "Square" },
-  { id: "round-triangle", label: "Triangle" },
-] as const;
-
 export const BLOB_COLOURS: readonly { id: BlobColour; label: string }[] = [
   { id: "purple", label: "Purple" },
   { id: "teal", label: "Teal" },
