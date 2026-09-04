@@ -42,7 +42,7 @@ export const DEFAULT_IDLE: IdleConfig = {
   jellyAmount: 1.55,
   rippleAmount: 1.65,
   blinkInterval: 5.9,
-  gazeDriftPx: 6.8,
+  gazeDriftPx: 7.8,
   rotationDeg: 0.6,
   activityPace: 0.78,
 };

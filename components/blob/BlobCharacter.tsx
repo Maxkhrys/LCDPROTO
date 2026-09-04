@@ -238,8 +238,8 @@ function drawProceduralEye(
   // dimensions, so neither side of the eye is left exposed during a blink.
   const eyeWidth = width;
   const eyeHeight = height;
-  const eyeX = clamp(gazeX * 0.72, -width * 0.14, width * 0.14);
-  const eyeY = clamp(gazeY * 0.58, -height * 0.14, height * 0.14);
+  const eyeX = clamp(gazeX * 0.9, -width * 0.18, width * 0.18);
+  const eyeY = clamp(gazeY * 0.68, -height * 0.16, height * 0.16);
   eyeSocketPath(ctx, eyeX, eyeY, eyeWidth, eyeHeight);
   ctx.fillStyle = "#010204";
   ctx.fill();
@@ -262,12 +262,15 @@ function drawEyebrow(
   width: number,
   height: number,
   browLift: number,
+  gazeX: number,
   gazeY: number
 ) {
   const browWidth = width * 0.78;
+  const horizontalLook = clamp(gazeX / Math.max(width, 1), -1, 1);
+  const browFollow = gazeX * 0.12;
   const browY =
-    -height * 0.64 - browLift * height * 0.28 - gazeY * 0.04;
-  const arch = clamp((browLift + 0.04) * height * 0.3, -1.1, 1.1);
+    -height * 0.64 - browLift * height * 0.22 - gazeY * 0.06;
+  const arch = clamp((browLift + 0.04) * height * 0.24, -1, 1.2);
   const thickness = clamp(width * 0.11, 1.5, 2.6);
   const halfThickness = thickness / 2;
   const halfWidth = browWidth / 2;
@@ -275,6 +278,8 @@ function drawEyebrow(
   ctx.beginPath();
   // Filled contour rather than a canvas stroke keeps the brow crisp when the
   // whole character is rasterised at true hardware pixels.
+  ctx.translate(browFollow, 0);
+  ctx.rotate((horizontalLook * 7.5 * Math.PI) / 180);
   ctx.moveTo(-halfWidth, browY - halfThickness);
   ctx.quadraticCurveTo(0, controlY - halfThickness, halfWidth, browY - halfThickness);
   ctx.quadraticCurveTo(
@@ -528,7 +533,7 @@ export default function BlobCharacter({
       applyBodySurface(ctx, center, bw, bh, bt);
       ctx.translate(socketX, socketY);
       ctx.rotate((t.browRotation * Math.PI) / 180);
-      drawEyebrow(ctx, socketWidth, socketHeight, t.browLift, gazeY);
+      drawEyebrow(ctx, socketWidth, socketHeight, t.browLift, gazeX, gazeY);
       ctx.restore();
 
       ctx.save();
