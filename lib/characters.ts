@@ -41,9 +41,11 @@ export const CHARACTERS: readonly CharacterMeta[] = [
     id: "cloud",
     label: "Cloud",
     description: "Procedural volumetric lobes wearing the same face.",
-    // Measured from the rendered silhouette: the mist body is about 20% wider
-    // than Blob's core, and its soft edge reaches further still.
-    radiusFraction: 0.84,
+    // Measured from the rendered silhouette at every wall, including the
+    // diagonals: the mist body is much wider than Blob's core, and a wall
+    // press spreads it wider still. The worst case is the down-right
+    // diagonal, which is what this figure has to clear.
+    radiusFraction: 0.9,
   },
 ] as const;
 

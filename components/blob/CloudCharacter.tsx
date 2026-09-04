@@ -31,6 +31,9 @@ import {
   type BlobRig,
 } from "@/lib/blobRig";
 
+/** How much of the rig's body deformation the face inherits on the cloud. */
+const FACE_DEFORM_INHERIT = 0.3;
+
 interface CloudCharacterProps {
   /** Native screen size in pixels (466). */
   size: number;
@@ -309,8 +312,21 @@ export default function CloudCharacter({
         ...body,
         x: massX + face.offsetX,
         y: massY + face.offsetY,
-        scaleX: body.scaleX * face.scale,
-        scaleY: body.scaleY * face.scale,
+        // The face must NOT inherit the rig's body deformation here. On Blob
+        // that scale is the body, so the face rides it; on the cloud the body
+        // is the lobes, which already carry the contact, so passing it through
+        // sheared the eyes and mouth into diagonal slivers on top of a shape
+        // that had not deformed that way. A small share keeps it attached.
+        rotation: body.rotation * FACE_DEFORM_INHERIT,
+        // Skew is dropped outright rather than damped. It is what turned the
+        // eyes into slanted parallelograms: a shear of the body reads as
+        // material stretching on Blob, but the cloud's mist has no surface for
+        // the face to be painted on, so the shear only distorted the features.
+        skewX: 0,
+        skewY: 0,
+        deformAngle: 0,
+        scaleX: (1 + (body.scaleX - 1) * FACE_DEFORM_INHERIT) * face.scale,
+        scaleY: (1 + (body.scaleY - 1) * FACE_DEFORM_INHERIT) * face.scale,
       },
       bodyWidth: size * BODY_FRACTION,
       bodyHeight: size * BODY_FRACTION,
