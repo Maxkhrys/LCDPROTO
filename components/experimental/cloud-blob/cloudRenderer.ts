@@ -87,6 +87,7 @@ function drawVolumetricLobe(
   bodyRgb: { r: number; g: number; b: number },
   edgeRgb: { r: number; g: number; b: number },
   coreRgb: { r: number; g: number; b: number },
+  glowRgb: { r: number; g: number; b: number },
   translucency: number,
   softnessMult: number,
   isCore: boolean,
@@ -127,47 +128,46 @@ function drawVolumetricLobe(
 
     const outerRadius = 1.0 * softness;
 
-    // 1. Primary Solid Cumulus Mass: Pure creamy white body with tight soft anti-alias
-    // Light focal center shifted toward key light (-125°)
-    const fx = lightDirX * 0.28;
-    const fy = lightDirY * 0.28;
-    const baseGrad = ctx.createRadialGradient(fx, fy, 0.05, 0, 0, outerRadius);
+    // 1. Primary Volumetric Cumulus Billow:
+    // Sunlit warm-white crest -> soft airy sky-white body -> gentle atmospheric sky scatter
+    const fx = lightDirX * 0.30;
+    const fy = lightDirY * 0.30;
+    const baseGrad = ctx.createRadialGradient(fx, fy, 0.04, 0, 0, outerRadius);
 
-    // Pure brilliant white at sunlit crest
-    baseGrad.addColorStop(0.0, `rgba(255, 255, 255, ${Math.min(1.0, opac)})`);
-    // Rich, solid creamy white body
-    baseGrad.addColorStop(0.55, `rgba(${bodyRgb.r}, ${bodyRgb.g}, ${bodyRgb.b}, ${Math.min(1.0, opac)})`);
-    // Remains 95% solid white almost all the way to the edge!
-    baseGrad.addColorStop(0.86, `rgba(${bodyRgb.r}, ${bodyRgb.g}, ${bodyRgb.b}, ${Math.min(1.0, opac * 0.96)})`);
-    // Tight 4-6px soft anti-aliased edge (NO 40px muddy brown haze!)
-    baseGrad.addColorStop(0.96, `rgba(${bodyRgb.r}, ${bodyRgb.g}, ${bodyRgb.b}, ${opac * 0.40})`);
-    baseGrad.addColorStop(1.0, `rgba(${bodyRgb.r}, ${bodyRgb.g}, ${bodyRgb.b}, 0)`);
+    if (coreBlend) {
+      // Central core mass: soft, translucent sky-creamy cushion
+      baseGrad.addColorStop(0.0, `rgba(255, 255, 255, ${Math.min(0.96, opac)})`);
+      baseGrad.addColorStop(0.40, `rgba(${bodyRgb.r}, ${bodyRgb.g}, ${bodyRgb.b}, ${Math.min(0.88, opac * 0.86)})`);
+      baseGrad.addColorStop(0.72, `rgba(${glowRgb.r}, ${glowRgb.g}, ${glowRgb.b}, ${Math.min(0.55, opac * 0.45)})`);
+      baseGrad.addColorStop(1.0, `rgba(${glowRgb.r}, ${glowRgb.g}, ${glowRgb.b}, 0)`);
+    } else {
+      // Primary & secondary cumulus billows:
+      const crestAlpha = Math.min(0.96, opac * (isSubPuff ? 0.74 : 0.90));
+      const bodyAlpha = opac * (isSubPuff ? 0.60 : 0.78);
+      const skyAlpha = opac * (isSubPuff ? 0.32 : 0.44);
+
+      baseGrad.addColorStop(0.0, `rgba(255, 255, 255, ${crestAlpha})`);
+      baseGrad.addColorStop(0.38, `rgba(${bodyRgb.r}, ${bodyRgb.g}, ${bodyRgb.b}, ${bodyAlpha})`);
+      baseGrad.addColorStop(0.72, `rgba(${glowRgb.r}, ${glowRgb.g}, ${glowRgb.b}, ${skyAlpha})`);
+      baseGrad.addColorStop(1.0, `rgba(${glowRgb.r}, ${glowRgb.g}, ${glowRgb.b}, 0)`);
+    }
 
     ctx.fillStyle = baseGrad;
     ctx.beginPath();
     ctx.arc(0, 0, outerRadius, 0, Math.PI * 2);
     ctx.fill();
 
-    // 2. Directional Underside 3D Depth Pillow:
-    // Placed off-center at the bottom-right (away from key light), fading out before reaching the outer edge
-    const shadowAlpha = isSubPuff
-      ? 0.14 * opac
-      : coreBlend
-      ? 0.08 * opac
-      : def.depth < 0
-      ? 0.38 * opac
-      : def.depth === 1
-      ? 0.22 * opac
-      : 0.12 * opac; // Crown
-
-    if (shadowAlpha > 0.02) {
-      const shx = -lightDirX * 0.28 * outerRadius;
-      const shy = -lightDirY * 0.28 * outerRadius;
-      const shRadius = outerRadius * 0.68;
+    // 2. Directional Underside Depth:
+    // Only applied to lower grounded base lobes (def.depth < 0), never to sub-puffs or upper crown
+    if (!isSubPuff && def.depth < 0) {
+      const shx = -lightDirX * 0.24 * outerRadius;
+      const shy = -lightDirY * 0.24 * outerRadius;
+      const shRadius = outerRadius * 0.72;
+      const shadowAlpha = 0.24 * opac;
 
       const shadowGrad = ctx.createRadialGradient(shx, shy, 0.02, shx, shy, shRadius);
       shadowGrad.addColorStop(0.0, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, ${shadowAlpha})`);
-      shadowGrad.addColorStop(0.50, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, ${shadowAlpha * 0.45})`);
+      shadowGrad.addColorStop(0.55, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, ${shadowAlpha * 0.40})`);
       shadowGrad.addColorStop(1.0, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0)`);
 
       ctx.fillStyle = shadowGrad;
@@ -193,7 +193,20 @@ function drawVolumetricLobe(
     ctx.restore();
   };
 
-  // 1. Draw sub-puffs around perimeter to create subtle secondary transitions
+  // 1. Draw Primary Lobe Mass (Solid foundational volume)
+  drawPuffStamp(
+    lx,
+    ly,
+    rx,
+    ry,
+    state.rotation,
+    opacity,
+    def.baseSoftness * softnessMult,
+    isCore,
+    false
+  );
+
+  // 2. Draw sub-puffs on top to sculpt authentic cauliflower cumulus billow clusters
   const subPuffs = LOBE_SUB_PUFFS[def.id];
   if (subPuffs && fluffiness > 0.05) {
     for (const sub of subPuffs) {
@@ -202,7 +215,7 @@ function drawVolumetricLobe(
       const spy = ly + (sub.offsetY * fluffiness + breathWobble * lightDirY) * state.scaleY;
       const sprx = rx * sub.radiusRatio * (1 + breathWobble * 0.010);
       const spry = ry * sub.radiusRatio * (1 + breathWobble * 0.010);
-      const subOpacity = opacity * (0.90 + Math.min(0.10, fluffiness * 0.05));
+      const subOpacity = opacity * (0.88 + Math.min(0.12, fluffiness * 0.05));
 
       drawPuffStamp(
         spx,
@@ -217,19 +230,6 @@ function drawVolumetricLobe(
       );
     }
   }
-
-  // 2. Draw Primary Lobe Mass (Solid & sculpted)
-  drawPuffStamp(
-    lx,
-    ly,
-    rx,
-    ry,
-    state.rotation,
-    opacity,
-    def.baseSoftness * softnessMult,
-    isCore,
-    false
-  );
 }
 
 function drawInnerVolumeGlow(
@@ -352,8 +352,8 @@ function drawFaceRestingCradle(
   const fy = cy + coreState.y - 1;
   ctx.save();
   const cradleGrad = ctx.createRadialGradient(fx, fy - 4, 6, fx, fy, 78);
-  cradleGrad.addColorStop(0.0, "rgba(255, 255, 255, 0.95)");
-  cradleGrad.addColorStop(0.55, `rgba(${bodyRgb.r}, ${bodyRgb.g}, ${bodyRgb.b}, 0.85)`);
+  cradleGrad.addColorStop(0.0, "rgba(255, 255, 255, 0.35)");
+  cradleGrad.addColorStop(0.55, `rgba(${bodyRgb.r}, ${bodyRgb.g}, ${bodyRgb.b}, 0.18)`);
   cradleGrad.addColorStop(1.0, `rgba(${bodyRgb.r}, ${bodyRgb.g}, ${bodyRgb.b}, 0)`);
   ctx.fillStyle = cradleGrad;
   ctx.beginPath();
@@ -576,60 +576,43 @@ export function renderCloudBlob(
   for (const def of rearLobes) {
     const state = lobeStates[def.id];
     if (state) {
-      drawVolumetricLobe(ctx, cx, cy, def, state, bodyRgb, edgeRgb, coreRgb, colour.translucency, 1.0, false, fluffiness, lightAngle, idleTime, sandBounce);
+      drawVolumetricLobe(ctx, cx, cy, def, state, bodyRgb, edgeRgb, coreRgb, glowRgb, colour.translucency, 1.0, false, fluffiness, lightAngle, idleTime, sandBounce);
     }
   }
 
-  // 3. Subtle Interior Sculptural Crevice between rear base and core
-  const creviceGrad = ctx.createRadialGradient(
-    cx + coreState.x,
-    cy + coreState.y + 28,
-    4,
-    cx + coreState.x,
-    cy + coreState.y + 28,
-    72
-  );
-  creviceGrad.addColorStop(0, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0.16)`);
-  creviceGrad.addColorStop(0.55, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0.04)`);
-  creviceGrad.addColorStop(1.0, "rgba(0, 0, 0, 0)");
-  ctx.save();
-  ctx.fillStyle = creviceGrad;
-  ctx.beginPath();
-  ctx.ellipse(cx + coreState.x, cy + coreState.y + 28, 80, 36, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-
-  // 4. Render Dominant Central Core (depth = 0)
+  // 3. Render Dominant Central Core (depth = 0)
   const coreDef = LOBE_DEFINITIONS.find((d) => d.id === "core");
   if (coreDef && coreState) {
-    drawVolumetricLobe(ctx, cx, cy, coreDef, coreState, bodyRgb, edgeRgb, coreRgb, colour.translucency, 1.0, true, fluffiness * 0.75, lightAngle, idleTime, sandBounce);
+    drawVolumetricLobe(ctx, cx, cy, coreDef, coreState, bodyRgb, edgeRgb, coreRgb, glowRgb, colour.translucency, 1.0, true, fluffiness * 0.75, lightAngle, idleTime, sandBounce);
   }
 
-  // 5. Render Mid-Front Lobes (depth > 0 && depth < 10: leftCheek, rightCheek, trailingTuft, topCrown)
+  // 4. Render Mid-Front Lobes (depth > 0 && depth < 10: leftCheek, rightCheek, trailingTuft, topCrown)
   const midLobes = LOBE_DEFINITIONS.filter((d) => d.depth > 0 && d.depth < 10);
   for (const def of midLobes) {
     const state = lobeStates[def.id];
     if (state) {
-      drawVolumetricLobe(ctx, cx, cy, def, state, bodyRgb, edgeRgb, coreRgb, colour.translucency, 1.0, false, fluffiness, lightAngle, idleTime, sandBounce);
+      drawVolumetricLobe(ctx, cx, cy, def, state, bodyRgb, edgeRgb, coreRgb, glowRgb, colour.translucency, 1.0, false, fluffiness, lightAngle, idleTime, sandBounce);
     }
   }
 
-  // 6. Sculptural Overhang Shadow: Crown dome overhangs the central core
-  const crownOverhangGrad = ctx.createRadialGradient(
-    cx + topState.x,
-    cy + topState.y + 44,
-    4,
-    cx + topState.x,
-    cy + topState.y + 44,
-    64
+  // 5. Subtle Global Volumetric Underside Shading (soft, diffuse, non-ringed depth on shadow side)
+  const shadowCenterY = cy + coreState.y + 34;
+  const shadowCenterX = cx + coreState.x + 18;
+  const globalShadowGrad = ctx.createRadialGradient(
+    shadowCenterX,
+    shadowCenterY,
+    10,
+    shadowCenterX,
+    shadowCenterY,
+    130
   );
-  crownOverhangGrad.addColorStop(0.0, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0.18)`);
-  crownOverhangGrad.addColorStop(0.55, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0.04)`);
-  crownOverhangGrad.addColorStop(1.0, "rgba(0, 0, 0, 0)");
+  globalShadowGrad.addColorStop(0.0, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0.14)`);
+  globalShadowGrad.addColorStop(0.55, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0.04)`);
+  globalShadowGrad.addColorStop(1.0, "rgba(0, 0, 0, 0)");
   ctx.save();
-  ctx.fillStyle = crownOverhangGrad;
+  ctx.fillStyle = globalShadowGrad;
   ctx.beginPath();
-  ctx.ellipse(cx + topState.x, cy + topState.y + 44, 76, 18, 0, 0, Math.PI * 2);
+  ctx.ellipse(shadowCenterX, shadowCenterY, 130, 48, 0.05, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
@@ -670,7 +653,7 @@ export function renderCloudBlob(
       ...veilState,
       opacity: Math.min(0.05, veilState.opacity * (faceEmbedDepth / 0.12)),
     };
-    drawVolumetricLobe(ctx, cx, cy, veilDef, adjustedVeil, bodyRgb, edgeRgb, coreRgb, 1.0, 1.0, false, fluffiness * 0.5, lightAngle, idleTime, 0);
+    drawVolumetricLobe(ctx, cx, cy, veilDef, adjustedVeil, bodyRgb, edgeRgb, coreRgb, glowRgb, 1.0, 1.0, false, fluffiness * 0.5, lightAngle, idleTime, 0);
   }
 
   // 14. Trailing Mist Wisps

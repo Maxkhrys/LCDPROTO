@@ -59,13 +59,13 @@ export const DEFAULT_MOTION_CONFIG: CloudMotionConfig = {
 };
 
 export const DEFAULT_COLOUR: CloudColourConfig = {
-  body: "#f7f9fe", // Clean, bright, creamy cumulus white (solid, opaque volume)
-  innerGlow: "#d8e4fa", // Gentle atmospheric sky fill (NOT neon glow)
+  body: "#f2f6fc", // Soft, airy sky-tinted cloud white (living atmospheric vapor)
+  innerGlow: "#d0e3f8", // Atmospheric sky-blue scattering
   edge: "#ffffff", // Crisp sunlit rim highlight
-  coreTint: "#96a6c6", // Cool pale blue-grey / lavender depth & self-shadow
-  glowIntensity: 0.08, // Subtle internal atmospheric warmth (no bloom ball)
-  density: 1.12, // Dense, solid, sculptural cumulus volume
-  translucency: 0.85,
+  coreTint: "#849ab8", // Rich, soft, cool cloud shadow & internal billow depth
+  glowIntensity: 0.16, // Gentle internal sky light scattering
+  density: 0.98, // Soft, breathable vapor volume
+  translucency: 0.82, // Natural light penetration & billow separation
 };
 
 export const COLOUR_PRESETS: Record<string, CloudColourConfig> = {
@@ -121,22 +121,21 @@ export const COLOUR_PRESETS: Record<string, CloudColourConfig> = {
  * 7 Primary Cumulus Billows + 1 Trailing Tuft + 1 Front Veil.
  * Authored for 466x466 AMOLED screen space.
  * Establishes an iconic Disney/Pixar cumulus silhouette:
- * - Dominant tall crown dome (asymmetrical, slightly left)
- * - Upper-left and upper-right framing shoulders of different heights
- * - Broad central face resting plane
- * - Broad, flatter lower-left and lower-right shelves
- * - Wide grounding belly
+ * - Broad, buoyant cauliflower crown dome
+ * - Chubby lateral cheeks framing face
+ * - Broad, stable resting core
+ * - Gentle floating cumulus bottom shelves
  * - One cute asymmetrical trailing wind tuft
  */
 export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
-  // 1. REAR BASE LOBES (depth = -2 to -1): Broad, grounded lower shelves
+  // 1. REAR BASE LOBES (depth = -2 to -1): Broad, grounded buoyant cushion
   {
     id: "bottomBelly",
     name: "Broad Lower Grounding Shelf",
     baseX: -2,
-    baseY: 68,
-    radiusX: 92,
-    radiusY: 42,
+    baseY: 48,
+    radiusX: 106,
+    radiusY: 38,
     baseOpacity: 0.96,
     baseSoftness: 0.98,
     lagFactor: 0.85,
@@ -150,10 +149,10 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
   {
     id: "baseLeft",
     name: "Lower-Left Cumulus Shelf",
-    baseX: -68,
-    baseY: 54,
-    radiusX: 78,
-    radiusY: 50,
+    baseX: -66,
+    baseY: 38,
+    radiusX: 76,
+    radiusY: 42,
     baseOpacity: 0.95,
     baseSoftness: 0.98,
     lagFactor: 0.72,
@@ -167,10 +166,10 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
   {
     id: "baseRight",
     name: "Lower-Right Asymmetric Shelf",
-    baseX: 64,
-    baseY: 48,
+    baseX: 62,
+    baseY: 36,
     radiusX: 72,
-    radiusY: 46,
+    radiusY: 40,
     baseOpacity: 0.94,
     baseSoftness: 0.98,
     lagFactor: 0.76,
@@ -182,14 +181,14 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
     circPhase: 4.6,
   },
 
-  // 2. CENTRAL CORE (depth = 0): Broad calm face cradle mass
+  // 2. CENTRAL CORE (depth = 0): Broad buoyant face cradle mass
   {
     id: "core",
     name: "Central Face Cradle Mass",
     baseX: 0,
-    baseY: 2,
-    radiusX: 92,
-    radiusY: 80,
+    baseY: 6,
+    radiusX: 96,
+    radiusY: 72,
     baseOpacity: 1.0,
     baseSoftness: 0.95,
     lagFactor: 0.08,
@@ -201,14 +200,14 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
     circPhase: 2.0,
   },
 
-  // 3. MID LOBES (depth = 1): Sculpted asymmetric shoulders framing face
+  // 3. MID LOBES (depth = 1): Chubby cheek billows framing face
   {
     id: "leftCheek",
     name: "Upper-Left Shoulder Billow",
-    baseX: -74,
-    baseY: -12,
-    radiusX: 60,
-    radiusY: 54,
+    baseX: -84,
+    baseY: 4,
+    radiusX: 68,
+    radiusY: 56,
     baseOpacity: 0.95,
     baseSoftness: 0.98,
     lagFactor: 0.48,
@@ -222,10 +221,10 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
   {
     id: "rightCheek",
     name: "Upper-Right Shoulder",
-    baseX: 70,
-    baseY: -16,
-    radiusX: 56,
-    radiusY: 50,
+    baseX: 80,
+    baseY: 2,
+    radiusX: 64,
+    radiusY: 52,
     baseOpacity: 0.94,
     baseSoftness: 0.98,
     lagFactor: 0.52,
@@ -239,10 +238,10 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
   {
     id: "trailingTuft",
     name: "Trailing Wind Tuft",
-    baseX: 98,
-    baseY: 28,
+    baseX: 106,
+    baseY: 24,
     radiusX: 28,
-    radiusY: 24,
+    radiusY: 22,
     baseOpacity: 0.88,
     baseSoftness: 1.00,
     lagFactor: 0.82,
@@ -254,14 +253,14 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
     circPhase: 3.8,
   },
 
-  // 4. TOP CROWN (depth = 2): Taller, proud dome silhouette
+  // 4. TOP CROWN (depth = 2): Broad, proud cumulus dome
   {
     id: "topCrown",
     name: "Dominant Dome Crown",
     baseX: -4,
-    baseY: -78,
-    radiusX: 86,
-    radiusY: 70,
+    baseY: -48,
+    radiusX: 92,
+    radiusY: 58,
     baseOpacity: 0.98,
     baseSoftness: 0.96,
     lagFactor: 0.38,
@@ -278,9 +277,9 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
     id: "frontVeil",
     name: "Front Translucent Mist Veil",
     baseX: 0,
-    baseY: 45,
-    radiusX: 70,
-    radiusY: 40,
+    baseY: 42,
+    radiusX: 74,
+    radiusY: 36,
     baseOpacity: 0.06,
     baseSoftness: 1.04,
     lagFactor: 0.24,
@@ -302,10 +301,35 @@ export interface LobeSubPuff {
 }
 
 /**
- * Secondary transition billows. Kept empty so the 7 primary cumulus billows
- * and trailing tuft form clean, sculptural, pillowy masses without internal circular spots.
+ * Organic secondary cumulus billows.
+ * Creates authentic cauliflower-like dome clusters, chubby cheek rolls,
+ * and pillowy base contours that make the character feel fluffy, soft, and alive.
  */
-export const LOBE_SUB_PUFFS: Partial<Record<string, readonly LobeSubPuff[]>> = {};
+export const LOBE_SUB_PUFFS: Partial<Record<string, readonly LobeSubPuff[]>> = {
+  topCrown: [
+    { offsetX: -44, offsetY: -12, radiusRatio: 0.54, phaseOffset: 0.5 }, // Sunward left cauliflower crest
+    { offsetX: 40, offsetY: -10, radiusRatio: 0.50, phaseOffset: 1.3 }, // Right dome crest
+    { offsetX: -2, offsetY: -26, radiusRatio: 0.52, phaseOffset: 0.9 }, // Top cauliflower crest
+  ],
+  leftCheek: [
+    { offsetX: -32, offsetY: -14, radiusRatio: 0.52, phaseOffset: 1.8 }, // Upper cheek puff
+    { offsetX: -26, offsetY: 18, radiusRatio: 0.48, phaseOffset: 2.4 }, // Lower cheek puff
+  ],
+  rightCheek: [
+    { offsetX: 30, offsetY: -12, radiusRatio: 0.50, phaseOffset: 2.9 }, // Upper cheek puff
+    { offsetX: 24, offsetY: 16, radiusRatio: 0.46, phaseOffset: 3.5 }, // Lower cheek puff
+  ],
+  baseLeft: [
+    { offsetX: -26, offsetY: 12, radiusRatio: 0.46, phaseOffset: 4.1 },
+  ],
+  baseRight: [
+    { offsetX: 24, offsetY: 10, radiusRatio: 0.44, phaseOffset: 4.7 },
+  ],
+  bottomBelly: [
+    { offsetX: -32, offsetY: 10, radiusRatio: 0.44, phaseOffset: 5.2 },
+    { offsetX: 32, offsetY: 8, radiusRatio: 0.42, phaseOffset: 5.8 },
+  ],
+};
 
 /**
  * 5 Sparse, low-contrast diffuse vapor motes.
