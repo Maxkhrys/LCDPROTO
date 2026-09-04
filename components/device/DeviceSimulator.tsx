@@ -349,7 +349,6 @@ export default function DeviceSimulator() {
             <div className="mt-3 flex flex-wrap gap-1.5">
               <DevButton active={showCalibration} onClick={() => setShowCalibration((v) => !v)}>{showCalibration ? "Hide tuning" : "Show tuning"}</DevButton>
               <DevButton active={showExpressions} onClick={() => setShowExpressions((v) => !v)}>{showExpressions ? "Hide library" : "Open library"}</DevButton>
-              <DevButton active={showScreens} onClick={() => setShowScreens((v) => !v)}>{showScreens ? "Hide screens" : "Screen browser"}</DevButton>
             </div>
             {showCalibration && <div className="mt-3 flex max-h-[min(64vh,620px)] flex-col gap-3 overflow-y-auto pr-1">
               <BehaviourPanel status={status} autoEnabled={autoBehaviourEnabled} onToggle={() => setAutoBehaviourEnabled((v) => !v)} onTrigger={fire} />
@@ -369,24 +368,7 @@ export default function DeviceSimulator() {
         </nav>
       </div>
 
-      <div className="flex min-h-0 w-full flex-1 items-stretch justify-center gap-3">
-        {/* Developer-only screen browser. Never rendered inside the LCD. */}
-        {showScreens && (
-          <div className="hidden max-h-[min(78vh,760px)] self-center lg:block">
-            <ScreenBrowser
-              snapshot={screenSnapshot}
-              fps={fps}
-              nativeResolution={DEVICE_CONFIG.resolution}
-              onSelect={selectScreen}
-              onPlayFlow={playFlow}
-              onPlay={() => { lifecycle.current.play(); setPlaying(true); }}
-              onPause={() => lifecycle.current.pause()}
-              onReplay={() => lifecycle.current.replay()}
-              onReset={() => lifecycle.current.reset()}
-              onFps={(value) => setFps(value as Fps)}
-            />
-          </div>
-        )}
+      <div className="flex min-h-0 w-full flex-1 items-center justify-center">
         <div ref={frameRef} className="flex aspect-square w-full max-w-full items-center justify-center" style={{ width: `min(100%, ${Math.round(DEFAULT_OUTER * screenScale)}px, max(280px, calc(100dvh - 176px)))` }}>
           <DeviceBezel screenSize={screenSize}>
             <div className="relative">
@@ -424,6 +406,47 @@ export default function DeviceSimulator() {
                 <BlobToolOrbs open={blobToolsOpen} active={activeBlobTool} screenSize={screenSize} blobColour={blobColour} showPupils={showPupils} onSelect={(tool) => { setActiveBlobTool(tool); if (tool === "face") setShowExpressions(true); if (tool === "pupils") setShowPupils((value) => !value); }} onColourChange={setBlobColour} />
             </div>
           </DeviceBezel>
+        </div>
+      </div>
+
+      {/* Developer screen browser. Mirrors the Expressions tab on the right so
+          it is findable without opening a menu. Never inside the LCD. */}
+      <div className="pointer-events-none fixed inset-y-0 left-0 z-50 flex items-center">
+        <div
+          className="pointer-events-auto flex items-stretch transition-transform duration-200 ease-out"
+          style={{ transform: showScreens ? "translateX(0)" : "translateX(calc(-100% + 2.6rem))" }}
+        >
+          <aside
+            id="screen-browser"
+            aria-label="Screen browser"
+            className="expression-drawer flex h-[min(78vh,680px)] w-[min(300px,calc(100vw-52px))] flex-col rounded-r-xl border border-l-0 border-white/[0.1] shadow-2xl"
+            style={{ background: "var(--dev-panel-bg)", borderColor: "var(--dev-panel-border)" }}
+          >
+            <ScreenBrowser
+              snapshot={screenSnapshot}
+              fps={fps}
+              nativeResolution={DEVICE_CONFIG.resolution}
+              onSelect={selectScreen}
+              onPlayFlow={playFlow}
+              onPlay={() => { lifecycle.current.play(); setPlaying(true); }}
+              onPause={() => lifecycle.current.pause()}
+              onReplay={() => lifecycle.current.replay()}
+              onReset={() => lifecycle.current.reset()}
+              onFps={(value) => setFps(value as Fps)}
+              onClose={() => setShowScreens(false)}
+            />
+          </aside>
+          <button
+            type="button"
+            onClick={() => setShowScreens((v) => !v)}
+            aria-expanded={showScreens}
+            aria-controls="screen-browser"
+            className="flex h-36 w-10 shrink-0 items-center justify-center rounded-r-xl border border-l-0 border-white/[0.1] bg-black/40 text-white/55 shadow-xl transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
+          >
+            <span className="font-mono text-[9px] uppercase tracking-[0.2em]" style={{ writingMode: "vertical-rl" }}>
+              Screens
+            </span>
+          </button>
         </div>
       </div>
 

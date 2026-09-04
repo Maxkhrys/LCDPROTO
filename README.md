@@ -267,8 +267,9 @@ for brand work; the device boots straight into loading.
 
 ### Previewing one screen
 
-Open **Tools → Screen browser** in the top nav. The browser is a developer tool
-and is rendered outside the circular display — nothing in it is ever drawn
+Open the **SCREENS** tab on the left edge of the window — it mirrors the
+EXPRESSIONS tab on the right. The browser is a developer tool and is rendered
+outside the circular display — nothing in it is ever drawn
 inside the 466×466 canvas.
 
 Click any screen to preview it alone, without running a flow. Play, Pause,
