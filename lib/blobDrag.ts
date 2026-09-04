@@ -55,6 +55,9 @@ export interface DragPose {
   skewY: number;
   /** 0 free, 1 pressed hard into the wall. */
   wallPressure: number;
+  /** Unit vector from Blob toward the contact point, for silhouette squash. */
+  contactX: number;
+  contactY: number;
   grabbed: boolean;
 }
 
@@ -85,6 +88,8 @@ export class BlobDragController {
     skewX: 0,
     skewY: 0,
     wallPressure: 0,
+    contactX: 0,
+    contactY: 0,
     grabbed: false,
   };
 
@@ -252,6 +257,8 @@ export class BlobDragController {
     this.pose.x = x + this.wobbleX.value;
     this.pose.y = y + this.wobbleY.value;
     this.pose.wallPressure = pressure;
+    this.pose.contactX = cos;
+    this.pose.contactY = sin;
     this.pose.grabbed = this.grabbed;
     return this.pose;
   }

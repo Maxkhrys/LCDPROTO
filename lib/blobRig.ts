@@ -287,6 +287,16 @@ export interface ElementTransform {
   /** Procedural mouth shape controls. */
   mouthCurve: number;
   mouthO: number;
+  /**
+   * Contact normal and pressure for the soft-body silhouette warp.
+   *
+   * Uniform scaleX/scaleY alone reads as "smaller", never as "squashed": a
+   * jelly pressed against glass flattens on the contact side and bulges
+   * opposite it. These drive that per-slice deformation in BlobCharacter.
+   */
+  contactX: number;
+  contactY: number;
+  contactPressure: number;
   /** Body-only surface ripple offsets, in 466-space pixels. */
   rippleTop: number;
   rippleUpper: number;
@@ -339,6 +349,9 @@ export const NEUTRAL_ELEMENT: ElementTransform = {
   browRotation: 0,
   mouthCurve: 0,
   mouthO: 0,
+  contactX: 0,
+  contactY: 0,
+  contactPressure: 0,
   rippleTop: 0,
   rippleUpper: 0,
   rippleLower: 0,

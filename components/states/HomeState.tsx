@@ -21,8 +21,16 @@ import {
 import type { StateViewProps } from "@/lib/deviceStates";
 
 /** Safety cap on total body deformation, whatever the layers add up to. */
-const MAX_DEFORM = 0.1;
-const MAX_BODY_DEFORM = 0.05;
+/**
+ * Deformation ceilings.
+ *
+ * These were 0.10 / 0.05, which capped a wall squash at 5-10% — small enough
+ * that Blob read as slightly smaller rather than squashed, and the whole
+ * reason he kept his shape against a wall. A jelly pressed on glass flattens
+ * far harder than that; the silhouette warp in BlobCharacter carries the rest.
+ */
+const MAX_DEFORM = 0.26;
+const MAX_BODY_DEFORM = 0.16;
 const clampDeform = (v: number) =>
   v < -MAX_DEFORM ? -MAX_DEFORM : v > MAX_DEFORM ? MAX_DEFORM : v;
 const clampBodyDeform = (v: number) =>
@@ -164,6 +172,9 @@ export default function HomeState({
     let latestIdleY = 0;
     let latestRotation = 0;
     let latestBodySpeed = 0;
+    let contactX = 0;
+    let contactY = 0;
+    let contactPressure = 0;
     let latestDepth = 0;
     let latestYaw = 0;
     let latestPitch = 0;
@@ -258,6 +269,9 @@ export default function HomeState({
       );
       jellyTarget.bodySkewX = d.bodySkewX + dragPose.skewX;
       jellyTarget.bodySkewY = d.bodySkewY + dragPose.skewY;
+      contactX = dragPose.contactX;
+      contactY = dragPose.contactY;
+      contactPressure = dragPose.wallPressure;
 
       const physical = physics.current.update(dt, jellyTarget);
 
@@ -303,6 +317,9 @@ export default function HomeState({
             originY: physical.bodyOriginY,
             scaleX: 1 + deformX + clampBodyDeform(physical.bodyScaleX),
             scaleY: 1 + deformY + clampBodyDeform(physical.bodyScaleY),
+            contactX,
+            contactY,
+            contactPressure,
             rippleTop: physical.rippleTop,
             rippleUpper: physical.rippleUpper,
             rippleLower: physical.rippleLower,

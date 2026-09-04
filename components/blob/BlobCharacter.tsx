@@ -371,6 +371,128 @@ function drawEyebrow(
   ctx.restore();
 }
 
+/**
+ * Number of horizontal slices the body is drawn in when it is deforming.
+ *
+ * Enough that the stepped edges between slices stay sub-pixel at native size,
+ * few enough that the device can afford one scaled blit each. The flat draw is
+ * still used whenever nothing is squashing him, so idle costs nothing extra.
+ */
+const SOFT_SLICES = 40;
+/** Below this contact pressure the cheap single drawImage is used instead. */
+const SOFT_THRESHOLD = 0.012;
+
+/**
+ * The four ripple springs as a smooth curve down the body.
+ *
+ * They sit at the centres of the four bands; between them the value is
+ * interpolated, so neighbouring slices never jump.
+ */
+function sampleWave(t: ElementTransform, v: number) {
+  const points = [t.rippleTop, t.rippleUpper, t.rippleLower, t.rippleBottom];
+  // Map v (-1..1) onto the control points at -0.75, -0.25, 0.25, 0.75.
+  const position = clamp((v + 0.75) / 0.5, 0, points.length - 1);
+  const index = Math.floor(position);
+  const next = Math.min(points.length - 1, index + 1);
+  const blend = position - index;
+  // Smoothstep between control points keeps the first derivative gentle.
+  const eased = blend * blend * (3 - 2 * blend);
+  return points[index] + (points[next] - points[index]) * eased;
+}
+
+/**
+ * Draws the body as a soft silhouette that genuinely changes shape.
+ *
+ * Scaling the whole sprite reads as Blob getting smaller, not squashed. A real
+ * jelly pressed against something flattens on the contact side, bulges either
+ * side of the contact, and keeps roughly its area. This slices the cached body
+ * into horizontal bands and gives each its own width, x offset and height, so
+ * the outline itself deforms.
+ *
+ * Each slice is one drawImage of the already-rasterised body — no mesh, no
+ * filters, no new artwork — which is a scanline blit on the device.
+ */
+function drawSoftBody(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLCanvasElement,
+  width: number,
+  height: number,
+  t: ElementTransform
+) {
+  const pressure = clamp(t.contactPressure, 0, 1);
+  const wobble =
+    Math.abs(t.rippleTop) +
+    Math.abs(t.rippleUpper) +
+    Math.abs(t.rippleLower) +
+    Math.abs(t.rippleBottom);
+
+  if (pressure < SOFT_THRESHOLD && wobble < 0.25) {
+    // Nothing is deforming him; keep the single crisp blit.
+    ctx.drawImage(image, -width / 2, -height / 2, width, height);
+    return;
+  }
+
+  const nx = t.contactX;
+  const ny = t.contactY;
+  const lateral = Math.abs(nx);
+  const vertical = Math.abs(ny);
+  const sliceHeight = height / SOFT_SLICES;
+  const sourceSlice = image.height / SOFT_SLICES;
+  const halfWidth = width / 2;
+
+  for (let i = 0; i < SOFT_SLICES; i += 1) {
+    const centre = (i + 0.5) / SOFT_SLICES;
+    // -1 at the top of the body, +1 at the bottom.
+    const v = centre * 2 - 1;
+
+    // How much this slice is involved in the contact. A raised cosine across
+    // the whole body: peaked at the contact latitude but with a gentle slope
+    // everywhere, so neighbouring slices never differ by much. A narrow
+    // triangular profile here swung the width 85% across twenty slices and
+    // combed the silhouette into visible teeth.
+    const reach = clamp((v - ny) * 0.85, -1, 1);
+    const involvement = 0.5 * (1 + Math.cos(reach * Math.PI));
+
+    // Side-on contact flattens the edge Blob is pressed against, and lets the
+    // displaced volume out of the other side. Working per edge rather than on
+    // the total width is what produces a flat face against the wall instead
+    // of a symmetrically thinner Blob.
+    const squashEdge = pressure * lateral * involvement * 0.34;
+    const freeEdge = pressure * lateral * involvement * 0.13;
+    const contactSide = nx >= 0 ? 1 : -1;
+    const right = halfWidth * (contactSide > 0 ? 1 - squashEdge : 1 + freeEdge);
+    const left = halfWidth * (contactSide > 0 ? 1 + freeEdge : 1 - squashEdge);
+
+    // Top or bottom contact is the same effect a quarter turn round: slices
+    // near the contact are compressed together and the body spreads sideways.
+    const squeeze = pressure * vertical * involvement * 0.34;
+    const spread = pressure * vertical * involvement * 0.2;
+
+    const wave = sampleWave(t, v);
+    const destLeft = -left * (1 + spread) + wave;
+    const destRight = right * (1 + spread) + wave;
+    // Compressed slices are pulled toward the contact surface, which is what
+    // keeps the far side of the body from stretching away from it.
+    const destY =
+      -height / 2 +
+      i * sliceHeight +
+      ny * squeeze * height * 0.16 * (1 - involvement);
+
+    ctx.drawImage(
+      image,
+      0,
+      i * sourceSlice,
+      image.width,
+      sourceSlice,
+      destLeft,
+      destY,
+      destRight - destLeft,
+      // A hair of overlap hides the seam between neighbouring slices.
+      sliceHeight * (1 - squeeze) + 0.7
+    );
+  }
+}
+
 function drawRippleBody(
   ctx: CanvasRenderingContext2D,
   image: HTMLCanvasElement,
@@ -555,7 +677,7 @@ export default function BlobCharacter({
     ctx.save();
     ctx.globalAlpha = bt.opacity;
     applyBodySurface(ctx, center, bw, bh, bt);
-    ctx.drawImage(layers.body, -bw / 2, -bh / 2, bw, bh);
+    drawSoftBody(ctx, layers.body, bw, bh, bt);
     drawRippleBody(ctx, layers.body, bw, bh, bt);
     ctx.restore();
 
