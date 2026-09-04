@@ -57,6 +57,8 @@ export function getStateMeta(id: DeviceState): DeviceStateMeta {
 export interface StateViewProps {
   /** Native screen size in pixels (466). */
   size: number;
+  /** Visible CSS diameter; drawing coordinates remain in native space. */
+  viewportSize?: number;
   /** False when the dev controls are paused; states should freeze. */
   playing: boolean;
   /** Animation speed multiplier from the dev controls. */

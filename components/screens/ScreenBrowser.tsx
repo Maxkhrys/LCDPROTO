@@ -67,25 +67,25 @@ export default function ScreenBrowser({
 
   return (
     <div className="screen-browser flex h-full min-h-0 flex-col gap-3 p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/70">
-            Screen browser
-          </p>
-          <p className="mt-1 text-[11px] leading-relaxed text-white/35">
-            Preview any lifecycle screen on its own.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close screen browser"
-          className="rounded-md px-1.5 text-lg leading-none text-white/35 transition-colors hover:text-white/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
-        >
-          ×
-        </button>
-      </div>
       <div>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/70">
+              Screen browser
+            </p>
+            <p className="mt-1 text-[11px] leading-relaxed text-white/35">
+              Preview any lifecycle screen on its own.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close screen browser"
+            className="rounded-md px-1.5 text-lg leading-none text-white/35 transition-colors hover:text-white/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
+          >
+            ×
+          </button>
+        </div>
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}

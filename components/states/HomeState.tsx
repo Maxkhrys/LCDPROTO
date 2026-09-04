@@ -57,6 +57,7 @@ const behaviourConfig = (idle: IdleConfig): BehaviourConfig => ({
  */
 export default function HomeState({
   size,
+  viewportSize,
   playing,
   speed,
   runId,
@@ -82,6 +83,7 @@ export default function HomeState({
   environment,
   onEnvironmentStatus,
 }: StateViewProps) {
+  const cssSize = viewportSize ?? size;
   const [rig, setRig] = useState<BlobRig>(() =>
     applyCalibration(
       {
@@ -401,6 +403,7 @@ export default function HomeState({
     >
       <EnvironmentLayer
         size={size}
+        viewportSize={cssSize}
         renderScale={renderScale}
         playing={playing}
         speed={speed}
@@ -413,6 +416,7 @@ export default function HomeState({
       <div className="relative z-10 h-full w-full">
         <BlobCharacter
           size={size}
+          viewportSize={cssSize}
           renderScale={renderScale}
           rig={rig}
           colour={blobColour}

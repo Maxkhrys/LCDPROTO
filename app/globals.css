@@ -108,6 +108,24 @@ html[data-simulator-theme="warm"] [class~="bg-black/10"] {
 html[data-simulator-theme="warm"] [class~="text-[#b295ff]"] {
   color: #694895 !important;
 }
+html[data-simulator-theme="warm"] .top-menu-trigger {
+  color: rgb(44 39 34 / 0.78);
+}
+html[data-simulator-theme="warm"] .top-menu-trigger:hover {
+  color: rgb(44 39 34 / 0.96);
+  background-color: rgb(62 48 34 / 0.08);
+}
+html[data-simulator-theme="warm"] .top-menu-trigger-active {
+  color: rgb(44 39 34 / 0.98);
+  border-color: rgb(62 48 34 / 0.22);
+  background-color: rgb(255 249 239 / 0.3);
+}
+html[data-simulator-theme="warm"] .top-menu-summary {
+  color: rgb(44 39 34 / 0.52);
+}
+html[data-simulator-theme="warm"] .top-menu-chevron {
+  color: rgb(44 39 34 / 0.5);
+}
 
 /* Brown is a lower-luminance variant of the warm inspection theme. */
 html[data-simulator-theme="brown"] [class*="text-white"] {
@@ -125,6 +143,24 @@ html[data-simulator-theme="brown"] [class*="bg-black"] {
 html[data-simulator-theme="brown"] [class~="text-[#b295ff]"] {
   color: #5d3e72 !important;
 }
+html[data-simulator-theme="brown"] .top-menu-trigger {
+  color: rgb(44 39 34 / 0.78);
+}
+html[data-simulator-theme="brown"] .top-menu-trigger:hover {
+  color: rgb(44 39 34 / 0.96);
+  background-color: rgb(62 48 34 / 0.08);
+}
+html[data-simulator-theme="brown"] .top-menu-trigger-active {
+  color: rgb(44 39 34 / 0.98);
+  border-color: rgb(62 48 34 / 0.22);
+  background-color: rgb(255 248 237 / 0.3);
+}
+html[data-simulator-theme="brown"] .top-menu-summary {
+  color: rgb(44 39 34 / 0.52);
+}
+html[data-simulator-theme="brown"] .top-menu-chevron {
+  color: rgb(44 39 34 / 0.5);
+}
 
 /* The panel is a fixed-resolution render surface: never let the browser
    smooth it when it is scaled up. */
@@ -132,11 +168,31 @@ canvas {
   image-rendering: auto;
 }
 
+.simulator-toolbar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr)) auto;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.simulator-toolbar > .top-menu-anchor {
+  min-width: 0;
+}
+
+.simulator-toolbar-reset {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .top-menu-trigger {
   display: inline-flex;
+  width: 100%;
+  min-width: 0;
   min-height: 42px;
   align-items: center;
   gap: 8px;
+  justify-content: flex-start;
   border: 1px solid transparent;
   border-radius: 9px;
   padding: 6px 10px;
@@ -167,6 +223,8 @@ canvas {
 }
 
 .top-menu-summary {
+  min-width: 0;
+  flex: 1 1 auto;
   max-width: 92px;
   overflow: hidden;
   color: rgb(255 255 255 / 0.3);
@@ -186,13 +244,13 @@ canvas {
 }
 
 .top-menu-popover {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
+  position: fixed;
   z-index: 60;
   width: min(420px, calc(100vw - 32px));
   max-height: min(70vh, 620px);
+  box-sizing: border-box;
   overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--dev-panel-border);
   border-radius: 13px;
   padding: 15px;
@@ -203,6 +261,49 @@ canvas {
 
 .top-menu-popover-wide {
   width: min(540px, calc(100vw - 32px));
+}
+
+.screen-drawer-shell {
+  bottom: 164px;
+}
+
+.screen-drawer-track,
+.activity-drawer-track {
+  will-change: transform;
+  transition: transform 220ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.screen-drawer-panel {
+  width: min(320px, calc(100vw - 56px));
+  height: min(68vh, 640px);
+  max-height: calc(100dvh - 176px);
+}
+
+.activity-drawer-panel {
+  width: min(420px, calc(100vw - 56px));
+  height: min(560px, calc(100dvh - 32px));
+  max-height: calc(100dvh - 32px);
+}
+
+.drawer-tab {
+  width: 44px;
+  height: 132px;
+  border-color: var(--dev-panel-border);
+}
+
+.expression-drawer-shell {
+  right: 12px;
+}
+
+.expression-drawer {
+  min-width: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 1280px) {
+  .simulator-toolbar {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .menu-kicker {
@@ -341,6 +442,18 @@ canvas {
 }
 
 @media (max-width: 640px) {
+  .simulator-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .simulator-toolbar-reset {
+    justify-content: stretch;
+  }
+
+  .simulator-toolbar-reset > button {
+    width: 100%;
+  }
+
   .top-menu-trigger {
     min-height: 38px;
     padding: 5px 8px;
@@ -348,5 +461,31 @@ canvas {
 
   .top-menu-summary {
     max-width: 62px;
+  }
+
+  .screen-drawer-panel,
+  .activity-drawer-panel {
+    width: calc(100vw - 56px);
+  }
+
+  /* Keep the mobile drawers below the four-row toolbar. The tabs still sit
+     in their own lower-left lanes, with a clear gap between them. */
+  .screen-drawer-shell {
+    top: 184px;
+    bottom: 164px;
+  }
+
+  .screen-drawer-panel {
+    height: min(68vh, 640px);
+    max-height: calc(100dvh - 348px);
+  }
+
+  .activity-drawer-panel {
+    height: min(560px, calc(100dvh - 216px));
+    max-height: calc(100dvh - 216px);
+  }
+
+  .expression-drawer-shell {
+    right: 8px;
   }
 }

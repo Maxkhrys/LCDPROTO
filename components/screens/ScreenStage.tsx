@@ -44,7 +44,6 @@ export default function ScreenStage({
   ...viewProps
 }: ScreenStageProps) {
   const native = DEVICE_CONFIG.resolution;
-  const scale = screenSize / native;
   const definition = getScreen(screen);
   const veil = screenVeil(screen, progress);
   const stillness = screenStillness(screen);
@@ -88,18 +87,14 @@ export default function ScreenStage({
       <div
         style={{
           position: "absolute",
-          left: 0,
-          top: 0,
-          width: native,
-          height: native,
-          transform: `scale(${scale})`,
-          transformOrigin: "top left",
+          inset: 0,
           zIndex: 2,
           pointerEvents: "none",
         }}
       >
         <SystemScreenLayer
           size={native}
+          viewportSize={screenSize}
           renderScale={viewProps.renderScale}
           screen={screen}
           progress={progress}

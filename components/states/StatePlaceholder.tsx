@@ -15,6 +15,7 @@ interface StatePlaceholderProps extends StateViewProps {
  */
 export default function StatePlaceholder({
   size,
+  viewportSize,
   playing,
   speed,
   label,
@@ -23,11 +24,12 @@ export default function StatePlaceholder({
 }: StatePlaceholderProps) {
   const duration = 6 / (speed || 1);
   const background = screenColour;
+  const cssSize = viewportSize ?? size;
 
   return (
     <div
       className="relative h-full w-full overflow-hidden rounded-full"
-      style={{ width: size, height: size, background }}
+      style={{ width: cssSize, height: cssSize, background }}
     >
       <motion.div
         className="absolute inset-0"

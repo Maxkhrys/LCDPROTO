@@ -108,6 +108,7 @@ function drawField(
 
 interface SensedFieldProps {
   size: number;
+  viewportSize?: number;
   renderScale: number;
   playing: boolean;
   speed: number;
@@ -115,6 +116,7 @@ interface SensedFieldProps {
 
 export default function SensedField({
   size,
+  viewportSize = size,
   renderScale,
   playing,
   speed,
@@ -152,8 +154,8 @@ export default function SensedField({
       aria-hidden="true"
       className="pointer-events-none absolute inset-0 z-0 block"
       style={{
-        width: size,
-        height: size,
+        width: viewportSize,
+        height: viewportSize,
         imageRendering: "auto",
       }}
     />
