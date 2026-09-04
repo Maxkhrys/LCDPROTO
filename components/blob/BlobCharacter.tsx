@@ -366,10 +366,12 @@ function drawEyebrow(
   browRotation: number,
   clearance: number
 ) {
-  const halfWidth = eye.width * 0.46;
-  const thickness = clamp(eye.width * 0.165, 2.2, 3.4);
+  const halfWidth = eye.width * 0.44;
+  const thickness = clamp(eye.width * 0.15, 2.2, 3.2);
   const halfThickness = thickness / 2;
-  const arch = clamp((browLift + 0.06) * eye.height * 0.26, -1.4, 1.8);
+  // Natural authored Pixar brow arch even at neutral rest
+  const baseArch = Math.max(1.8, eye.height * 0.085);
+  const arch = clamp(baseArch + browLift * eye.height * 0.24, -1.0, 3.2);
 
   // Gaze leans the brow with the eye: right gaze tilts right, left tilts left,
   // and the pair shifts slightly in the direction Blob is looking.
@@ -381,9 +383,8 @@ function drawEyebrow(
   const radians = (tilt * Math.PI) / 180;
 
   const eyeTop = eye.centerY - eye.height * 0.5;
-  // Looking up raises the brow a little further than the eye alone does;
-  // looking down lowers it, but only until the clearance rule takes over.
-  let browY = eyeTop - eye.height * 0.2 - browLift * eye.height * 0.22 + eye.centerY * 0.1;
+  // Position brow comfortably close to eye aperture (3-4px clearance at rest)
+  let browY = eyeTop - eye.height * 0.14 - browLift * eye.height * 0.20 + eye.centerY * 0.08;
   // Lowest point of the rotated, arched bar measured from its own centre.
   const reach =
     halfThickness * Math.abs(Math.cos(radians)) +

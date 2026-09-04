@@ -80,7 +80,13 @@ export default function DeviceSimulator() {
   const [displayMode, setDisplayMode] = useState<DisplayMode>(DEFAULT_DISPLAY_MODE);
   const [screenColour, setScreenColour] = useState(DISPLAY_BACKGROUNDS[DEFAULT_DISPLAY_MODE]);
   const [blobColour, setBlobColour] = useState<BlobColour>(DEFAULT_BLOB_COLOUR);
-  const [character, setCharacter] = useState<CharacterId>(DEFAULT_CHARACTER);
+  const [character, setCharacter] = useState<CharacterId>(() => {
+    if (typeof window !== "undefined") {
+      const param = new URLSearchParams(window.location.search).get("character");
+      if (param === "cloud" || param === "blob") return param;
+    }
+    return DEFAULT_CHARACTER;
+  });
   const [cloudSettings, setCloudSettings] =
     useState<CloudSettings>(DEFAULT_CLOUD_SETTINGS);
   const [characterScale, setCharacterScale] = useState(DEFAULT_CHARACTER_SCALE);

@@ -59,13 +59,13 @@ export const DEFAULT_MOTION_CONFIG: CloudMotionConfig = {
 };
 
 export const DEFAULT_COLOUR: CloudColourConfig = {
-  body: "#f2f5fd", // Creamy cumulus white with subtle warm-sun daylight tone
-  innerGlow: "#d4e0fa", // Soft atmospheric sky fill (NOT neon glow)
+  body: "#f7f9fe", // Clean, bright, creamy cumulus white (solid, opaque volume)
+  innerGlow: "#d8e4fa", // Gentle atmospheric sky fill (NOT neon glow)
   edge: "#ffffff", // Crisp sunlit rim highlight
-  coreTint: "#90a2c8", // Sculptural cool blue-grey interior depth & ambient occlusion
-  glowIntensity: 0.12, // Extremely restrained internal warmth (no bloom ball)
-  density: 1.05, // Solid, sculptural cumulus volume
-  translucency: 0.88,
+  coreTint: "#96a6c6", // Cool pale blue-grey / lavender depth & self-shadow
+  glowIntensity: 0.08, // Subtle internal atmospheric warmth (no bloom ball)
+  density: 1.12, // Dense, solid, sculptural cumulus volume
+  translucency: 0.85,
 };
 
 export const COLOUR_PRESETS: Record<string, CloudColourConfig> = {
@@ -129,55 +129,55 @@ export const COLOUR_PRESETS: Record<string, CloudColourConfig> = {
  * - One cute asymmetrical trailing wind tuft
  */
 export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
-  // 1. REAR BASE LOBES (depth = -2 to -1): Broad, flatter lower shelves
+  // 1. REAR BASE LOBES (depth = -2 to -1): Broad, grounded lower shelves
   {
     id: "bottomBelly",
     name: "Broad Lower Grounding Shelf",
-    baseX: -4,
-    baseY: 78,
-    radiusX: 112,
-    radiusY: 46, // Broad, flatter foundation
-    baseOpacity: 0.92,
-    baseSoftness: 1.08,
-    lagFactor: 0.88,
-    stiffness: 95,
-    damping: 11.0,
+    baseX: -2,
+    baseY: 68,
+    radiusX: 92,
+    radiusY: 42,
+    baseOpacity: 0.96,
+    baseSoftness: 0.98,
+    lagFactor: 0.85,
+    stiffness: 100,
+    damping: 12.0,
     breathPhase: 4.2,
-    breathAmp: 0.038,
+    breathAmp: 0.034,
     depth: -2,
     circPhase: 5.4,
   },
   {
     id: "baseLeft",
     name: "Lower-Left Cumulus Shelf",
-    baseX: -82,
-    baseY: 56,
-    radiusX: 94,
-    radiusY: 62,
-    baseOpacity: 0.92,
-    baseSoftness: 1.05,
+    baseX: -68,
+    baseY: 54,
+    radiusX: 78,
+    radiusY: 50,
+    baseOpacity: 0.95,
+    baseSoftness: 0.98,
     lagFactor: 0.72,
-    stiffness: 110,
-    damping: 12.0,
+    stiffness: 115,
+    damping: 12.5,
     breathPhase: 3.14,
-    breathAmp: 0.038,
+    breathAmp: 0.035,
     depth: -1,
     circPhase: 6.2,
   },
   {
     id: "baseRight",
     name: "Lower-Right Asymmetric Shelf",
-    baseX: 76,
+    baseX: 64,
     baseY: 48,
-    radiusX: 86,
-    radiusY: 58,
-    baseOpacity: 0.90,
-    baseSoftness: 1.02,
+    radiusX: 72,
+    radiusY: 46,
+    baseOpacity: 0.94,
+    baseSoftness: 0.98,
     lagFactor: 0.76,
-    stiffness: 105,
-    damping: 12.0,
+    stiffness: 110,
+    damping: 12.5,
     breathPhase: 3.8,
-    breathAmp: 0.036,
+    breathAmp: 0.032,
     depth: -1,
     circPhase: 4.6,
   },
@@ -187,16 +187,16 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
     id: "core",
     name: "Central Face Cradle Mass",
     baseX: 0,
-    baseY: 6,
-    radiusX: 104,
-    radiusY: 88,
-    baseOpacity: 0.98,
-    baseSoftness: 0.92,
+    baseY: 2,
+    radiusX: 92,
+    radiusY: 80,
+    baseOpacity: 1.0,
+    baseSoftness: 0.95,
     lagFactor: 0.08,
     stiffness: 240,
     damping: 20.0,
     breathPhase: 0.0,
-    breathAmp: 0.024,
+    breathAmp: 0.022,
     depth: 0,
     circPhase: 2.0,
   },
@@ -205,51 +205,51 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
   {
     id: "leftCheek",
     name: "Upper-Left Shoulder Billow",
-    baseX: -82,
-    baseY: -18,
-    radiusX: 68,
-    radiusY: 60,
-    baseOpacity: 0.90,
-    baseSoftness: 1.02,
+    baseX: -74,
+    baseY: -12,
+    radiusX: 60,
+    radiusY: 54,
+    baseOpacity: 0.95,
+    baseSoftness: 0.98,
     lagFactor: 0.48,
-    stiffness: 135,
-    damping: 13.0,
+    stiffness: 140,
+    damping: 13.5,
     breathPhase: 1.2,
-    breathAmp: 0.038,
+    breathAmp: 0.034,
     depth: 1,
     circPhase: 0.0,
   },
   {
     id: "rightCheek",
     name: "Upper-Right Shoulder",
-    baseX: 76,
-    baseY: -26, // Asymmetrical height vs left
-    radiusX: 62,
-    radiusY: 54,
-    baseOpacity: 0.88,
-    baseSoftness: 1.00,
+    baseX: 70,
+    baseY: -16,
+    radiusX: 56,
+    radiusY: 50,
+    baseOpacity: 0.94,
+    baseSoftness: 0.98,
     lagFactor: 0.52,
-    stiffness: 130,
-    damping: 13.0,
+    stiffness: 135,
+    damping: 13.5,
     breathPhase: 1.8,
-    breathAmp: 0.036,
+    breathAmp: 0.032,
     depth: 1,
     circPhase: 3.0,
   },
   {
     id: "trailingTuft",
     name: "Trailing Wind Tuft",
-    baseX: 118,
-    baseY: 24,
-    radiusX: 36,
-    radiusY: 30,
-    baseOpacity: 0.78,
-    baseSoftness: 1.15,
-    lagFactor: 0.82, // Lags behind on drag
-    stiffness: 90,
-    damping: 10.0,
+    baseX: 98,
+    baseY: 28,
+    radiusX: 28,
+    radiusY: 24,
+    baseOpacity: 0.88,
+    baseSoftness: 1.00,
+    lagFactor: 0.82,
+    stiffness: 95,
+    damping: 10.5,
     breathPhase: 2.6,
-    breathAmp: 0.048,
+    breathAmp: 0.042,
     depth: 1,
     circPhase: 3.8,
   },
@@ -258,36 +258,36 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
   {
     id: "topCrown",
     name: "Dominant Dome Crown",
-    baseX: -6,
-    baseY: -76, // Taller crown
+    baseX: -4,
+    baseY: -78,
     radiusX: 86,
-    radiusY: 64, // Dominant mass
-    baseOpacity: 0.94,
-    baseSoftness: 0.98,
+    radiusY: 70,
+    baseOpacity: 0.98,
+    baseSoftness: 0.96,
     lagFactor: 0.38,
-    stiffness: 155,
-    damping: 15.0,
+    stiffness: 160,
+    damping: 15.5,
     breathPhase: 0.7,
-    breathAmp: 0.040,
+    breathAmp: 0.036,
     depth: 2,
     circPhase: 1.0,
   },
 
-  // 5. FRONT VEIL (depth = 10): Translucent mist veil
+  // 5. FRONT VEIL (depth = 10): Translucent bottom mist veil
   {
     id: "frontVeil",
     name: "Front Translucent Mist Veil",
     baseX: 0,
-    baseY: 10,
-    radiusX: 80,
-    radiusY: 64,
-    baseOpacity: 0.10,
-    baseSoftness: 1.25,
+    baseY: 45,
+    radiusX: 70,
+    radiusY: 40,
+    baseOpacity: 0.06,
+    baseSoftness: 1.04,
     lagFactor: 0.24,
     stiffness: 180,
     damping: 16.5,
     breathPhase: 0.4,
-    breathAmp: 0.020,
+    breathAmp: 0.018,
     depth: 10,
     circPhase: 1.8,
   },
@@ -302,52 +302,21 @@ export interface LobeSubPuff {
 }
 
 /**
- * Sculpted secondary transition puffs.
- * Restrained to 11 key billow ridges (rather than noisy circular perimeter clusters)
- * preserving 75-80% of each primary billow's clean, readable contour.
+ * Secondary transition billows. Kept empty so the 7 primary cumulus billows
+ * and trailing tuft form clean, sculptural, pillowy masses without internal circular spots.
  */
-export const LOBE_SUB_PUFFS: Partial<Record<string, readonly LobeSubPuff[]>> = {
-  topCrown: [
-    { offsetX: -28, offsetY: -22, radiusRatio: 0.50, phaseOffset: 0.3 }, // Upper-left dome crest
-    { offsetX: 32, offsetY: -16, radiusRatio: 0.44, phaseOffset: 1.1 }, // Upper-right dome crest
-  ],
-  leftCheek: [
-    { offsetX: -32, offsetY: 14, radiusRatio: 0.46, phaseOffset: 0.6 },
-    { offsetX: -24, offsetY: -20, radiusRatio: 0.40, phaseOffset: 1.4 },
-  ],
-  rightCheek: [
-    { offsetX: 28, offsetY: 16, radiusRatio: 0.45, phaseOffset: 2.1 },
-  ],
-  baseLeft: [
-    { offsetX: -36, offsetY: 18, radiusRatio: 0.44, phaseOffset: 1.8 },
-  ],
-  baseRight: [
-    { offsetX: 32, offsetY: 16, radiusRatio: 0.42, phaseOffset: 2.6 },
-  ],
-  bottomBelly: [
-    { offsetX: -36, offsetY: 14, radiusRatio: 0.42, phaseOffset: 1.2 },
-    { offsetX: 38, offsetY: 12, radiusRatio: 0.40, phaseOffset: 2.8 },
-  ],
-  trailingTuft: [
-    { offsetX: 16, offsetY: -6, radiusRatio: 0.45, phaseOffset: 0.8 },
-  ],
-  core: [
-    { offsetX: 0, offsetY: 28, radiusRatio: 0.40, phaseOffset: 1.6 },
-  ],
-};
+export const LOBE_SUB_PUFFS: Partial<Record<string, readonly LobeSubPuff[]>> = {};
 
 /**
- * 6 Sparse, low-contrast diffuse vapor motes.
- * Replaces previous bright star/fairy-light look with subtle atmospheric motes
- * visible primarily when drifting across darker internal volume pockets.
+ * 5 Sparse, low-contrast diffuse vapor motes.
+ * Very faint, soft atmospheric motes (NO bright stars, NO sparkle, NO fairy lights).
  */
 export const SUSPENDED_DROPLETS: readonly SuspendedDroplet[] = [
-  { x: -34, y: 18, radius: 2.2, brightness: 0.32, driftPhase: 0.4, driftSpeed: 0.75 },
-  { x: 38, y: -16, radius: 1.8, brightness: 0.26, driftPhase: 1.8, driftSpeed: 0.65 },
-  { x: -16, y: 46, radius: 2.4, brightness: 0.30, driftPhase: 3.2, driftSpeed: 0.80 },
-  { x: 42, y: 34, radius: 2.0, brightness: 0.24, driftPhase: 4.6, driftSpeed: 0.70 },
-  { x: -8, y: -38, radius: 2.1, brightness: 0.28, driftPhase: 1.1, driftSpeed: 0.60 },
-  { x: 18, y: 16, radius: 1.9, brightness: 0.25, driftPhase: 5.2, driftSpeed: 0.72 },
+  { x: -32, y: 38, radius: 2.4, brightness: 0.18, driftPhase: 0.4, driftSpeed: 0.65 },
+  { x: 36, y: -24, radius: 2.0, brightness: 0.16, driftPhase: 1.8, driftSpeed: 0.55 },
+  { x: -18, y: 52, radius: 2.6, brightness: 0.20, driftPhase: 3.2, driftSpeed: 0.70 },
+  { x: 44, y: 38, radius: 2.2, brightness: 0.15, driftPhase: 4.6, driftSpeed: 0.60 },
+  { x: 14, y: 22, radius: 2.0, brightness: 0.16, driftPhase: 5.2, driftSpeed: 0.62 },
 ];
 
 export function createLobeStates(): Record<string, LobeState> {

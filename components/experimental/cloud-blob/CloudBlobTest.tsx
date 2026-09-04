@@ -58,7 +58,13 @@ export default function CloudBlobTest() {
   const [activePreset, setActivePreset] = useState<CloudPresetName | null>("NEUTRAL");
   const [activeBehaviour, setActiveBehaviour] = useState<BehaviourId | "HOME / REST">("HOME / REST");
   const [zoom, setZoom] = useState(1.0);
-  const [displayMode, setDisplayMode] = useState<"dark" | "warm">("dark");
+  const [displayMode, setDisplayMode] = useState<"dark" | "warm">(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search).get("mode");
+      if (p === "warm" || p === "dark") return p;
+    }
+    return "dark";
+  });
 
   // Drag interaction state
   const [dragState, setDragState] = useState<DragInteractionState>({
