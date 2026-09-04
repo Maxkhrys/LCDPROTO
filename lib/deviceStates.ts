@@ -3,6 +3,7 @@ import type { IdleConfig } from "./blobIdle";
 import type { BehaviourId, HomeActivityStatus } from "./blobBehaviour";
 import type { HomeMood } from "./blobBehaviour";
 import type { BlobColour } from "./blobRig";
+import type { CharacterId, CloudSettings } from "./characters";
 import type { BlobDestination, BlobIntention } from "./blobMind";
 import type { EnvironmentConfig, EnvironmentStatus } from "./environmentConfig";
 
@@ -99,6 +100,10 @@ export interface StateViewProps {
   showPupils: boolean;
   /** Dev-only rig colour preview; every colour uses identical transforms. */
   blobColour: BlobColour;
+  /** Which character body the rig drives. Both wear the same face. */
+  character: CharacterId;
+  /** Cloud-only body sliders; ignored by the Blob body. */
+  cloudSettings: CloudSettings;
   /** Dev-only whole Blob scale, centred inside the circular display. */
   characterScale: number;
   /** Optional director override for the current Blob intention. */

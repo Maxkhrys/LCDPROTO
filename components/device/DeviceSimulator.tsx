@@ -12,6 +12,14 @@ import EmojiMakerPanel from "./EmojiMakerPanel";
 import PerformanceLabPanel from "./PerformanceLabPanel";
 import { ScreenLifecycle, type LifecycleSnapshot } from "@/lib/screenLifecycle";
 import { isDeviceState, type FlowId, type ScreenId } from "@/lib/screenCatalogue";
+import {
+  CHARACTERS,
+  CLOUD_SLIDERS,
+  DEFAULT_CHARACTER,
+  DEFAULT_CLOUD_SETTINGS,
+  type CharacterId,
+  type CloudSettings,
+} from "@/lib/characters";
 import { DEVICE_CONFIG, type Fps, type Speed } from "@/lib/deviceConfig";
 import {
   DEFAULT_FACE_CALIBRATION,
@@ -72,6 +80,9 @@ export default function DeviceSimulator() {
   const [displayMode, setDisplayMode] = useState<DisplayMode>(DEFAULT_DISPLAY_MODE);
   const [screenColour, setScreenColour] = useState(DISPLAY_BACKGROUNDS[DEFAULT_DISPLAY_MODE]);
   const [blobColour, setBlobColour] = useState<BlobColour>(DEFAULT_BLOB_COLOUR);
+  const [character, setCharacter] = useState<CharacterId>(DEFAULT_CHARACTER);
+  const [cloudSettings, setCloudSettings] =
+    useState<CloudSettings>(DEFAULT_CLOUD_SETTINGS);
   const [characterScale, setCharacterScale] = useState(DEFAULT_CHARACTER_SCALE);
   const [screenScale, setScreenScale] = useState(1.2);
   const [environment, setEnvironment] = useState<EnvironmentConfig>(DEFAULT_ENVIRONMENT);
@@ -250,6 +261,13 @@ export default function DeviceSimulator() {
       group: "Monitor",
     },
     {
+      id: "character",
+      label: "Character",
+      description: "Choose which body the rig drives, and tune the cloud.",
+      summary: character,
+      group: "Character",
+    },
+    {
       id: "blob",
       label: "Blob",
       description: "Set character colour, scale, mood, and automatic behaviour.",
@@ -397,6 +415,79 @@ export default function DeviceSimulator() {
                 ))}
               </div>
             </ControlCard>
+          </div>
+        );
+      case "character":
+        return (
+          <div className="control-card-stack">
+            <ControlCard
+              title="Body"
+              description="The rig, face, drives and physics are shared. Only the body changes."
+            >
+              <ChoiceGroup label="Character">
+                {CHARACTERS.map((option) => (
+                  <DevButton
+                    key={option.id}
+                    active={character === option.id}
+                    onClick={() => setCharacter(option.id)}
+                  >
+                    {option.label}
+                  </DevButton>
+                ))}
+              </ChoiceGroup>
+              <p className="control-card-note">
+                {CHARACTERS.find((item) => item.id === character)?.description}
+              </p>
+            </ControlCard>
+
+            {character === "cloud" &&
+              (["params", "motion", "trails", "colour", "face"] as const).map((group) => (
+                <ControlCard
+                  key={group}
+                  title={CLOUD_GROUP_TITLES[group]}
+                  description={CLOUD_GROUP_NOTES[group]}
+                >
+                  {CLOUD_SLIDERS.filter((slider) => slider.group === group).map(
+                    (slider) => {
+                      const bucket = cloudSettings[slider.group] as Record<
+                        string,
+                        number | undefined
+                      >;
+                      const value = bucket[slider.key] ?? slider.fallback;
+                      return (
+                        <ControlRange
+                          key={`${slider.group}.${slider.key}`}
+                          label={slider.label}
+                          value={value}
+                          min={slider.min}
+                          max={slider.max}
+                          step={slider.step}
+                          display={value.toFixed(2)}
+                          onChange={(next) =>
+                            setCloudSettings((current) => ({
+                              ...current,
+                              [slider.group]: {
+                                ...current[slider.group],
+                                [slider.key]: next,
+                              },
+                            }))
+                          }
+                        />
+                      );
+                    }
+                  )}
+                </ControlCard>
+              ))}
+
+            {character === "cloud" && (
+              <ControlCard title="Reset">
+                <ChoiceGroup label="Cloud">
+                  <DevButton onClick={() => setCloudSettings(DEFAULT_CLOUD_SETTINGS)}>
+                    Reset cloud sliders
+                  </DevButton>
+                </ChoiceGroup>
+              </ControlCard>
+            )}
           </div>
         );
       case "blob":
@@ -685,9 +776,21 @@ export default function DeviceSimulator() {
           />
         );
       case "emoji":
-        return <EmojiMakerPanel colour={blobColour} />;
+        return (
+          <EmojiMakerPanel
+            colour={blobColour}
+            initialCharacter={character}
+            cloudSettings={cloudSettings}
+          />
+        );
       case "performance":
-        return <PerformanceLabPanel colour={blobColour} />;
+        return (
+          <PerformanceLabPanel
+            colour={blobColour}
+            initialCharacter={character}
+            cloudSettings={cloudSettings}
+          />
+        );
     }
   })();
 
@@ -704,7 +807,11 @@ export default function DeviceSimulator() {
         {controlContent}
       </ControlCenter>
 
-      <div className="flex min-h-0 w-full flex-1 items-center justify-center">
+      <div
+        className={`sim-stage flex min-h-0 w-full flex-1 items-center justify-center ${
+          controlsOpen ? "sim-stage-shifted" : ""
+        }`}
+      >
         <div ref={frameRef} className="flex aspect-square w-full max-w-full items-center justify-center" style={{ width: `min(100%, ${Math.round(DEFAULT_OUTER * screenScale)}px, max(280px, calc(100dvh - 76px)))` }}>
           <DeviceBezel screenSize={screenSize}>
             <div className="relative">
@@ -737,6 +844,8 @@ export default function DeviceSimulator() {
                 mindDestination={mindDestination}
                 mindDepth={mindDepth}
                 environment={environment}
+                character={character}
+                cloudSettings={cloudSettings}
                 onEnvironmentStatus={setEnvironmentStatus}
               />
                 <BlobToolOrbs
@@ -887,6 +996,23 @@ function ChoiceGroup({
     </div>
   );
 }
+
+/** Titles for the cloud slider groups, kept out of the JSX. */
+const CLOUD_GROUP_TITLES = {
+  params: "Cloud shape",
+  motion: "Cloud motion",
+  trails: "Mist trails",
+  colour: "Cloud material",
+  face: "Face placement",
+} as const;
+
+const CLOUD_GROUP_NOTES = {
+  params: "Lobe deformation. These stack on top of whatever the rig is doing.",
+  motion: "Float, drift and how far the lobes lag the core.",
+  trails: "Wisps shed when the cloud is moved quickly.",
+  colour: "Volume, glow and translucency of the mist body.",
+  face: "The shared face is anchored for Blob's silhouette; seat it on the cloud here.",
+} as const;
 
 function ControlRange({
   label,

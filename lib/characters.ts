@@ -1,0 +1,134 @@
+/**
+ * The character roster.
+ *
+ * A character is a *body*. Everything above it — the rig, the behaviour
+ * controller, the drives, the jelly physics, the drag and the screen
+ * lifecycle — is shared, and so is the face. Adding a body here does not
+ * fork any of that; it only changes what the rig is drawn as.
+ */
+
+import type {
+  CloudColourConfig,
+  CloudDeformationParams,
+  CloudMotionConfig,
+  CloudTrailConfig,
+} from "@/components/experimental/cloud-blob/cloudTypes";
+
+export type CharacterId = "blob" | "cloud";
+
+export interface CharacterMeta {
+  id: CharacterId;
+  label: string;
+  description: string;
+  /**
+   * Silhouette radius as a fraction of the display, used by the drag wall.
+   *
+   * Blob's core is BODY_FRACTION wide; the cloud's mist body measures wider
+   * than that, so sharing Blob's figure let it be dragged far enough that the
+   * circular crop sliced pieces off it.
+   */
+  radiusFraction: number;
+}
+
+export const CHARACTERS: readonly CharacterMeta[] = [
+  {
+    id: "blob",
+    label: "Blob",
+    description: "The production jelly body, drawn from the locked artwork.",
+    radiusFraction: 0.5,
+  },
+  {
+    id: "cloud",
+    label: "Cloud",
+    description: "Procedural volumetric lobes wearing the same face.",
+    // Measured from the rendered silhouette at every wall, including the
+    // diagonals: the mist body is much wider than Blob's core, and a wall
+    // press spreads it wider still. The worst case is the down-right
+    // diagonal, which is what this figure has to clear.
+    radiusFraction: 0.9,
+  },
+] as const;
+
+export const DEFAULT_CHARACTER: CharacterId = "blob";
+
+/** Every cloud-only slider, in one place so the console can drive them all. */
+export interface CloudSettings {
+  params: Partial<CloudDeformationParams>;
+  motion: Partial<CloudMotionConfig>;
+  trails: Partial<CloudTrailConfig>;
+  colour: Partial<CloudColourConfig>;
+  /**
+   * Where the shared face sits on the cloud.
+   *
+   * The face anchors are calibrated against Blob's silhouette, and the cloud
+   * is wider and shorter, so it needs its own placement rather than inheriting
+   * one that was measured for a different body.
+   */
+  face: CloudFaceSettings;
+}
+
+export interface CloudFaceSettings {
+  offsetX: number;
+  offsetY: number;
+  scale: number;
+}
+
+/**
+ * Starting values.
+ *
+ * Deliberately empty rather than a copy of the experimental defaults: an empty
+ * override means the cloud modules stay the single source of truth for its own
+ * look, so improvements to those files show up here without being shadowed by
+ * a stale duplicate of their numbers.
+ */
+export const DEFAULT_CLOUD_SETTINGS: CloudSettings = {
+  params: {},
+  motion: {},
+  trails: {},
+  colour: {},
+  face: { offsetX: 0, offsetY: 10, scale: 1.04 },
+};
+
+/** Slider definitions for the console, so the UI carries no magic numbers. */
+export interface CloudSliderDef {
+  group: "params" | "motion" | "trails" | "colour" | "face";
+  key: string;
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  fallback: number;
+}
+
+export const CLOUD_SLIDERS: readonly CloudSliderDef[] = [
+  { group: "params", key: "puff", label: "Puff", min: -1, max: 1, step: 0.02, fallback: 0 },
+  { group: "params", key: "squash", label: "Squash", min: 0, max: 1, step: 0.02, fallback: 0 },
+  { group: "params", key: "stretch", label: "Stretch", min: 0, max: 1, step: 0.02, fallback: 0 },
+  { group: "params", key: "lean", label: "Lean", min: -1, max: 1, step: 0.02, fallback: 0 },
+  { group: "params", key: "leftBulge", label: "Left bulge", min: -1, max: 1, step: 0.02, fallback: 0 },
+  { group: "params", key: "rightBulge", label: "Right bulge", min: -1, max: 1, step: 0.02, fallback: 0 },
+  { group: "params", key: "topBulge", label: "Top bulge", min: -1, max: 1, step: 0.02, fallback: 0 },
+  { group: "params", key: "bottomSag", label: "Bottom sag", min: -1, max: 1, step: 0.02, fallback: 0 },
+  { group: "params", key: "coreDensity", label: "Core density", min: 0, max: 2, step: 0.02, fallback: 1 },
+  { group: "params", key: "lobeSoftness", label: "Lobe softness", min: 0, max: 2, step: 0.02, fallback: 1 },
+  { group: "params", key: "faceEmbedDepth", label: "Face embed", min: 0, max: 0.35, step: 0.01, fallback: 0.12 },
+
+  { group: "motion", key: "floatAmount", label: "Float", min: 0, max: 2, step: 0.02, fallback: 1 },
+  { group: "motion", key: "driftAmount", label: "Drift", min: 0, max: 2, step: 0.02, fallback: 1 },
+  { group: "motion", key: "wobbleAmount", label: "Wobble", min: 0, max: 2, step: 0.02, fallback: 1 },
+  { group: "motion", key: "lobeLag", label: "Lobe lag", min: 0, max: 2, step: 0.02, fallback: 1 },
+  { group: "motion", key: "springStiffness", label: "Stiffness", min: 20, max: 300, step: 1, fallback: 140 },
+  { group: "motion", key: "springDamping", label: "Damping", min: 2, max: 40, step: 0.5, fallback: 14 },
+
+  { group: "trails", key: "trailStrength", label: "Mist strength", min: 0, max: 1, step: 0.02, fallback: 0.6 },
+  { group: "trails", key: "lifetime", label: "Mist life", min: 0.2, max: 2, step: 0.05, fallback: 0.9 },
+  { group: "trails", key: "driftAmount", label: "Mist drift", min: 0, max: 2, step: 0.05, fallback: 1 },
+
+  { group: "colour", key: "glowIntensity", label: "Glow", min: 0, max: 2, step: 0.02, fallback: 1 },
+  { group: "colour", key: "density", label: "Density", min: 0, max: 2, step: 0.02, fallback: 1 },
+  { group: "colour", key: "translucency", label: "Translucency", min: 0, max: 1, step: 0.02, fallback: 0.6 },
+
+  { group: "face", key: "offsetX", label: "Face X", min: -40, max: 40, step: 1, fallback: 0 },
+  { group: "face", key: "offsetY", label: "Face Y", min: -40, max: 40, step: 1, fallback: 10 },
+  { group: "face", key: "scale", label: "Face scale", min: 0.7, max: 1.4, step: 0.01, fallback: 1.04 },
+];

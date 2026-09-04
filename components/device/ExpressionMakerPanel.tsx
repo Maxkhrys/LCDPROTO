@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import BlobCharacter from "@/components/blob/BlobCharacter";
+import CloudCharacter from "@/components/blob/CloudCharacter";
+import type { CharacterId, CloudSettings } from "@/lib/characters";
 import { type BlobColour, type BlobRig } from "@/lib/blobRig";
 import {
   type ExpressionRecipe,
@@ -17,7 +19,18 @@ import {
   DEFAULT_MOUTH_RECIPE,
 } from "@/lib/expressions";
 
-export default function ExpressionMakerPanel({ colour }: { colour: BlobColour }) {
+export interface ExpressionMakerPanelProps {
+  colour: BlobColour;
+  initialCharacter?: CharacterId;
+  cloudSettings?: CloudSettings;
+}
+
+export default function ExpressionMakerPanel({
+  colour,
+  initialCharacter = "blob",
+  cloudSettings,
+}: ExpressionMakerPanelProps) {
+  const [character, setCharacter] = useState<CharacterId>(initialCharacter);
   const [customList, setCustomList] = useState<ExpressionRecipe[]>([]);
   const [selectedId, setSelectedId] = useState<string>("NEUTRAL");
   const [recipeName, setRecipeName] = useState("Neutral");
@@ -268,19 +281,55 @@ export default function ExpressionMakerPanel({ colour }: { colour: BlobColour })
             </div>
             <output>{statusMessage}</output>
           </div>
+          {/* Character Body Switcher */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 8, marginTop: 4 }}>
+            <button
+              type="button"
+              className={`emoji-maker-button ${character === "blob" ? "emoji-maker-button-primary" : ""}`}
+              onClick={() => setCharacter("blob")}
+              style={{ flex: 1, padding: "5px 8px", fontSize: "0.8rem" }}
+            >
+              Jelly Blob
+            </button>
+            <button
+              type="button"
+              className={`emoji-maker-button ${character === "cloud" ? "emoji-maker-button-primary" : ""}`}
+              onClick={() => setCharacter("cloud")}
+              style={{ flex: 1, padding: "5px 8px", fontSize: "0.8rem" }}
+            >
+              Fluffy Cloud
+            </button>
+          </div>
+
           <div className="emoji-maker-preview-stage">
-            <BlobCharacter
-              size={466}
-              viewportSize={250}
-              renderScale={1}
-              rig={rig}
-              colour={colour}
-              canvasRef={canvasRef}
-            />
+            {character === "cloud" ? (
+              <CloudCharacter
+                size={466}
+                viewportSize={250}
+                renderScale={1}
+                rig={rig}
+                colour={colour}
+                canvasRef={canvasRef}
+                cloudParams={cloudSettings?.params}
+                cloudMotion={cloudSettings?.motion}
+                cloudTrails={cloudSettings?.trails}
+                cloudColour={cloudSettings?.colour}
+                cloudFace={cloudSettings?.face}
+              />
+            ) : (
+              <BlobCharacter
+                size={466}
+                viewportSize={250}
+                renderScale={1}
+                rig={rig}
+                colour={colour}
+                canvasRef={canvasRef}
+              />
+            )}
           </div>
           <p className="emoji-maker-preview-note">
-            Character System V2: Full expression decoupling. Solid black procedural eyes (#010204),
-            negative-space eyelids, floating brows, and parametric mouth.
+            Character System V2: Universal face decoupling works on both Blob and Cloud. Sockets,
+            negative-space aperture eyelids, floating brows, and parametric mouth.
           </p>
           <div className="emoji-maker-actions" style={{ marginTop: 12 }}>
             <button type="button" className="emoji-maker-button" onClick={copyTsCode}>

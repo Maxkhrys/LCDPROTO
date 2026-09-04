@@ -258,12 +258,19 @@ canvas {
   font-size: 11px;
 }
 
-.control-center-backdrop {
-  position: fixed;
-  z-index: 79;
-  inset: 0;
-  border: 0;
-  background: rgb(12 9 6 / 0.58);
+/*
+ * With the console open the display slides clear of the panel instead of
+ * sitting under a dimmed overlay: the point of opening the console is to watch
+ * the character react to the sliders, so it stays lit and fully interactive.
+ */
+.sim-stage {
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (min-width: 1100px) {
+  .sim-stage-shifted {
+    transform: translateX(min(34vw, 430px));
+  }
 }
 
 .control-center-panel {
@@ -1997,4 +2004,12 @@ canvas {
   .expression-drawer-shell {
     right: 8px;
   }
+}
+
+/* Description under the character picker. */
+.control-card-note {
+  margin: 8px 0 0;
+  color: var(--console-muted);
+  font-size: 11px;
+  line-height: 1.5;
 }

@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import BlobCharacter from "@/components/blob/BlobCharacter";
+import CloudCharacter from "@/components/blob/CloudCharacter";
+import type { CharacterId, CloudSettings } from "@/lib/characters";
 import { type BlobColour, type BlobRig } from "@/lib/blobRig";
 import {
   CORE_PERFORMANCES,
@@ -26,7 +28,18 @@ const PRESET_COMBOS = [
   { label: "Sad Settle", exprId: "SAD", clipId: "SAD_SETTLE" },
 ];
 
-export default function PerformanceLabPanel({ colour }: { colour: BlobColour }) {
+export interface PerformanceLabPanelProps {
+  colour: BlobColour;
+  initialCharacter?: CharacterId;
+  cloudSettings?: CloudSettings;
+}
+
+export default function PerformanceLabPanel({
+  colour,
+  initialCharacter = "blob",
+  cloudSettings,
+}: PerformanceLabPanelProps) {
+  const [character, setCharacter] = useState<CharacterId>(initialCharacter);
   const [selectedClipId, setSelectedClipId] = useState<string>("JOY_HOP");
   const [selectedExprId, setSelectedExprId] = useState<string>("HAPPY");
   const [customExpressions, setCustomExpressions] = useState<ExpressionRecipe[]>([]);
@@ -93,8 +106,10 @@ export default function PerformanceLabPanel({ colour }: { colour: BlobColour }) 
     baseRig.blob.scaleY = (bodyPose.scaleY ?? 1) * squashY;
     baseRig.blob.opacity = bodyPose.opacity ?? 1;
 
-    // Apply body-specific lean/skew
-    baseRig.body.skewX = bodyPose.skewX ?? 0;
+    // Apply body-specific lean/skew and scale for Cloud lobe deformation
+    baseRig.body.scaleX = squashX;
+    baseRig.body.scaleY = squashY;
+    baseRig.body.skewX = bodyPose.skewX ?? (bodyPose.lean ? bodyPose.lean / 20 : 0);
     baseRig.body.skewY = bodyPose.skewY ?? 0;
     baseRig.body.rotation = bodyPose.lean ?? 0;
 
@@ -184,15 +199,51 @@ export default function PerformanceLabPanel({ colour }: { colour: BlobColour }) 
             </output>
           </div>
 
+          {/* Character Body Switcher */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 8, marginTop: 4 }}>
+            <button
+              type="button"
+              className={`emoji-maker-button ${character === "blob" ? "emoji-maker-button-primary" : ""}`}
+              onClick={() => setCharacter("blob")}
+              style={{ flex: 1, padding: "5px 8px", fontSize: "0.8rem" }}
+            >
+              Jelly Blob
+            </button>
+            <button
+              type="button"
+              className={`emoji-maker-button ${character === "cloud" ? "emoji-maker-button-primary" : ""}`}
+              onClick={() => setCharacter("cloud")}
+              style={{ flex: 1, padding: "5px 8px", fontSize: "0.8rem" }}
+            >
+              Fluffy Cloud
+            </button>
+          </div>
+
           <div className="emoji-maker-preview-stage">
-            <BlobCharacter
-              size={466}
-              viewportSize={250}
-              renderScale={1}
-              rig={compositeRig}
-              colour={colour}
-              canvasRef={canvasRef}
-            />
+            {character === "cloud" ? (
+              <CloudCharacter
+                size={466}
+                viewportSize={250}
+                renderScale={1}
+                rig={compositeRig}
+                colour={colour}
+                canvasRef={canvasRef}
+                cloudParams={cloudSettings?.params}
+                cloudMotion={cloudSettings?.motion}
+                cloudTrails={cloudSettings?.trails}
+                cloudColour={cloudSettings?.colour}
+                cloudFace={cloudSettings?.face}
+              />
+            ) : (
+              <BlobCharacter
+                size={466}
+                viewportSize={250}
+                renderScale={1}
+                rig={compositeRig}
+                colour={colour}
+                canvasRef={canvasRef}
+              />
+            )}
           </div>
 
           {/* Current Beat & Expression Indicator */}

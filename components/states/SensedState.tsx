@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import BlobCharacter from "@/components/blob/BlobCharacter";
+import CloudCharacter from "@/components/blob/CloudCharacter";
 import { applyCalibration } from "@/lib/blobCalibration";
 import {
   BehaviourController,
@@ -100,6 +101,8 @@ export default function SensedState({
   mood,
   showPupils,
   blobColour,
+  character,
+  cloudSettings,
   mindIntention,
   mindDestination,
   mindDepth,
@@ -397,7 +400,8 @@ export default function SensedState({
         speed={speed}
       />
       <div className="relative z-10 h-full w-full">
-        <BlobCharacter
+        {character === "cloud" ? (
+          <CloudCharacter
           size={size}
           viewportSize={cssSize}
           renderScale={renderScale}
@@ -407,7 +411,25 @@ export default function SensedState({
           onCloseTools={onCloseBlobTools}
           settingsOpen={blobToolsOpen}
           showPupils={showPupils}
-        />
+            cloudParams={cloudSettings.params}
+            cloudMotion={cloudSettings.motion}
+            cloudTrails={cloudSettings.trails}
+            cloudColour={cloudSettings.colour}
+    cloudFace={cloudSettings.face}
+          />
+        ) : (
+          <BlobCharacter
+          size={size}
+          viewportSize={cssSize}
+          renderScale={renderScale}
+          rig={rig}
+          colour={blobColour}
+          onOpenTools={onOpenBlobTools}
+          onCloseTools={onCloseBlobTools}
+          settingsOpen={blobToolsOpen}
+          showPupils={showPupils}
+          />
+        )}
       </div>
     </div>
   );

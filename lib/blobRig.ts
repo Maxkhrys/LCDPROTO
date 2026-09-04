@@ -318,6 +318,16 @@ export interface ElementTransform {
   mouthO: number;
   /** Amount of the flat-top, rounded-bottom D mouth. */
   mouthD: number;
+  /**
+   * Wall contact: unit normal toward the contact point, and how hard.
+   *
+   * Lives on the body because it is body state, and because a character that
+   * deforms on impact needs it without the drag controller knowing which
+   * character is on screen.
+   */
+  contactX: number;
+  contactY: number;
+  contactPressure: number;
   /** Body-only surface ripple offsets, in 466-space pixels. */
   rippleTop: number;
   rippleUpper: number;
@@ -379,6 +389,9 @@ export const NEUTRAL_ELEMENT: ElementTransform = {
   mouthCurve: 0,
   mouthO: 0,
   mouthD: 0,
+  contactX: 0,
+  contactY: 0,
+  contactPressure: 0,
   rippleTop: 0,
   rippleUpper: 0,
   rippleLower: 0,

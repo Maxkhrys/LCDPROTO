@@ -4,6 +4,7 @@ import { useEffect } from "react";
 
 export type ControlSectionId =
   | "screens"
+  | "character"
   | "activity"
   | "state"
   | "playback"
@@ -86,19 +87,11 @@ export default function ControlCenter({
 
       {open && (
         <>
-          <button
-            type="button"
-            className="control-center-backdrop"
-            aria-label="Close controls"
-            tabIndex={-1}
-            onClick={() => onOpenChange(false)}
-          />
           <aside
             id="lcdproto-control-center"
             aria-label="LCDPROTO controls"
-            aria-modal="true"
             className="control-center-panel"
-            role="dialog"
+            role="region"
           >
             <header className="control-center-header">
               <div className="control-center-title-block">
