@@ -89,6 +89,16 @@ type GazeBehaviour =
   | "LOOK_DOWN"
   | "CURIOUS_TILT_LEFT"
   | "CURIOUS_TILT_RIGHT";
+/** Glance directions used by the free look-around scheduler. */
+const IDLE_GAZES: readonly GazeBehaviour[] = [
+  "GLANCE_LEFT",
+  "LOOK_UP",
+  "GLANCE_RIGHT",
+  "LOOK_DOWN",
+  "CURIOUS_TILT_LEFT",
+  "CURIOUS_TILT_RIGHT",
+];
+
 type ExpressionBehaviour =
   | "SOFT_SQUINT"
   | "ONE_EYE_SQUINT_LEFT"
@@ -433,6 +443,7 @@ export class BehaviourController {
   private impactAt = 0;
   private impactDirection = 0;
   private specialAction: SpecialBehaviour | null = null;
+  private lastIdleGaze: GazeBehaviour | null = null;
   private specialStartedAt = -1;
   private specialEmoteStarted = false;
   private specialScale = 0;
@@ -573,6 +584,7 @@ export class BehaviourController {
     this.impactAt = 0;
     this.impactDirection = 0;
     this.specialAction = null;
+    this.lastIdleGaze = null;
     this.specialStartedAt = -1;
     this.specialEmoteStarted = false;
     this.specialScale = 0;
@@ -881,6 +893,16 @@ export class BehaviourController {
         this.specialAction === null
       )
         this.pickMindStory(cfg);
+      // Between stories Blob still looks around on his own. Without this the
+      // eyes only ever moved when a whole thought was scheduled, which read as
+      // a stare.
+      if (
+        this.clock >= this.nextGazeAt &&
+        this.gazeReleaseAt === 0 &&
+        this.beatUntil === 0 &&
+        this.specialAction === null
+      )
+        this.pickIdleGaze(cfg);
       if (this.clock >= this.nextBlinkAt && this.blinkStartedAt < 0)
         this.startBlink(this.rand() < 0.14, cfg);
     }
@@ -1055,8 +1077,23 @@ export class BehaviourController {
     this.nextMicroAt = this.clock + this.interval(350, 900, cfg);
   }
 
+  /**
+   * A free glance between scheduled thoughts. Directions rotate through the
+   * deterministic sequence, never repeating the last one, so Blob covers left,
+   * right, up and down instead of favouring one axis.
+   */
+  private pickIdleGaze(cfg: BehaviourConfig) {
+    let next = IDLE_GAZES[Math.floor(this.rand() * IDLE_GAZES.length)];
+    if (next === this.lastIdleGaze) {
+      next = IDLE_GAZES[(IDLE_GAZES.indexOf(next) + 2) % IDLE_GAZES.length];
+    }
+    this.lastIdleGaze = next;
+    this.startGaze(next, cfg);
+    this.nextGazeAt = this.gazeReleaseAt + this.interval(420, 1400, cfg);
+  }
+
   private startGaze(id: BehaviourId, cfg: BehaviourConfig) {
-    const amount = clamp(cfg.gazePx, 0, 8.5);
+    const amount = clamp(cfg.gazePx, 0, 11);
     let x = 0;
     let y = 0;
     let bodyDir = 0;

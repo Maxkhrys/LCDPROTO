@@ -42,7 +42,7 @@ export const DEFAULT_IDLE: IdleConfig = {
   jellyAmount: 1.55,
   rippleAmount: 1.65,
   blinkInterval: 5.9,
-  gazeDriftPx: 7.8,
+  gazeDriftPx: 9,
   rotationDeg: 0.6,
   activityPace: 0.78,
 };
@@ -55,7 +55,7 @@ export const IDLE_LIMITS = {
   jellyAmount: { min: 0.5, max: 1.6, step: 0.05 },
   rippleAmount: { min: 0, max: 2, step: 0.05 },
   blinkInterval: { min: 4, max: 10, step: 0.1 },
-  gazeDriftPx: { min: 0, max: 8, step: 0.1 },
+  gazeDriftPx: { min: 0, max: 11, step: 0.1 },
   rotationDeg: { min: 0, max: 1, step: 0.05 },
   activityPace: { min: 0.65, max: 1.8, step: 0.05 },
 } as const;

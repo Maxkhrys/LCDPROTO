@@ -1,6 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
+import type { BlobDragController } from "@/lib/blobDrag";
 import {
   NEUTRAL_RIG,
   RIG_ASSETS,
@@ -31,7 +39,14 @@ interface BlobCharacterProps {
   settingsOpen?: boolean;
   /** Dev-only pupil preview. */
   showPupils?: boolean;
+  /** Optional pointer grab. When absent the canvas stays tap-only. */
+  drag?: BlobDragController;
 }
+
+/** Native-space pointer travel that turns a tap into a drag. */
+const DRAG_THRESHOLD = 4;
+/** Taps are ignored for this long after a real drag ends. */
+const TAP_SUPPRESSION_MS = 350;
 
 type LayerId = "body";
 type Images = Record<LayerId, HTMLImageElement>;
@@ -47,49 +62,58 @@ const SKIN_INTEGRATION_ALPHA = 0.055;
 const clamp = (value: number, min: number, max: number) =>
   value < min ? min : value > max ? max : value;
 
-function drawLidClosure(
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  open: number,
-  bodyImage: HTMLCanvasElement,
-  bodyWidth: number,
-  bodyHeight: number,
-  socketX: number,
-  socketY: number
-) {
-  const gap = height * (0.02 + clamp(open, 0, 1) * 0.98);
-  if (gap >= height * 0.995) return;
-  const lidHeight = Math.max(0, (height - gap) / 2);
-  ctx.save();
-  eyeSocketPath(ctx, 0, 0, width, height);
-  ctx.clip();
-  const paintLid = (top: boolean) => {
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(
-      -width / 2,
-      top ? -height / 2 : gap / 2,
-      width,
-      lidHeight
-    );
-    ctx.clip();
-    // Repaint the same body pixels that sit behind the eye. This makes the
-    // closing lids inherit Blob's real colour, highlights and grain instead of
-    // exposing a flat mask or leaving half an eye cut away.
-    ctx.globalAlpha *= 0.98;
-    ctx.drawImage(
-      bodyImage,
-      -socketX - bodyWidth / 2,
-      -socketY - bodyHeight / 2,
-      bodyWidth,
-      bodyHeight
-    );
-    ctx.restore();
+/**
+ * The single source of truth for one eye's silhouette.
+ *
+ * Eye mass, lids and brow are all derived from this one description, so the
+ * black oval and its closures can never drift apart into two shapes.
+ */
+interface EyeGeometry {
+  /** Black oval size, in 466-space pixels. */
+  width: number;
+  height: number;
+  /** Oval centre inside the socket, after gaze travel. */
+  centerX: number;
+  centerY: number;
+  /** Aperture opening, 0 fully closed, 1 fully open. */
+  open: number;
+}
+
+/** Gaze travel budget, as a share of the eye oval. Roughly 8.6 x 6.5 px. */
+const GAZE_TRAVEL_X = 0.28;
+const GAZE_TRAVEL_Y = 0.13;
+/** Minimum native-space gap kept between a brow's lowest point and the eye. */
+const BROW_CLEARANCE_RATIO = 2.4 / 466;
+
+function eyeGeometry(
+  anchorWidth: number,
+  anchorHeight: number,
+  t: ElementTransform,
+  settingsDrop: boolean
+): EyeGeometry {
+  const socketScaleX = clamp(t.eyeSocketScaleX, 0.72, 1.35);
+  const socketScaleY = clamp(t.eyeSocketScaleY, 0.72, 1.35);
+  const socketWidth = anchorWidth * socketScaleX;
+  const socketHeight = anchorHeight * socketScaleY;
+  const width = socketWidth * 0.86;
+  const height = socketHeight * 0.96;
+  const gazeX = clamp(t.x, -socketWidth * 0.26, socketWidth * 0.26);
+  const gazeY = clamp(
+    t.y - (settingsDrop ? socketHeight * 0.2 : 0),
+    -socketHeight * 0.2,
+    socketHeight * 0.14
+  );
+  return {
+    width,
+    height,
+    centerX: clamp(gazeX, -width * GAZE_TRAVEL_X, width * GAZE_TRAVEL_X),
+    centerY: clamp(
+      gazeY * 0.72,
+      -height * GAZE_TRAVEL_Y,
+      height * GAZE_TRAVEL_Y
+    ),
+    open: clamp(t.eyeOpen, 0, 1),
   };
-  paintLid(true);
-  paintLid(false);
-  ctx.restore();
 }
 
 function applyBodySurface(
@@ -113,17 +137,6 @@ function applyBodySurface(
   );
   ctx.scale(transform.scaleX, transform.scaleY);
   ctx.translate(-pivotX, -pivotY);
-}
-
-function eyeSocketPath(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number
-) {
-  ctx.beginPath();
-  ctx.ellipse(x, y, width * 0.5, height * 0.5, 0, 0, Math.PI * 2);
 }
 
 function drawMouthShape(
@@ -226,90 +239,134 @@ function eyePalette(colour: BlobColour) {
   }
 }
 
+/**
+ * Eye mass plus both lids, from one shared geometry.
+ *
+ * The lids are not painted objects: they are the parts of the aperture the eye
+ * is clipped out of, so the body surface already drawn underneath shows
+ * through untouched. That removes every possible outline, halo or second oval,
+ * and guarantees the lids can never be a different size to the eye.
+ *
+ * The open band is centred on the eye itself, so the top lid closes downward,
+ * the bottom lid closes upward, and a squint moves both toward the centre.
+ */
 function drawProceduralEye(
   ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  gazeX: number,
-  gazeY: number,
+  eye: EyeGeometry,
   showPupil: boolean
 ) {
-  // The caller supplies the exact shared eye silhouette. Lids use these same
-  // dimensions, so neither side of the eye is left exposed during a blink.
-  const eyeWidth = width;
-  const eyeHeight = height;
-  const eyeX = clamp(gazeX * 0.9, -width * 0.18, width * 0.18);
-  const eyeY = clamp(gazeY * 0.68, -height * 0.16, height * 0.16);
-  eyeSocketPath(ctx, eyeX, eyeY, eyeWidth, eyeHeight);
+  if (eye.open <= 0.004) return;
+  const gap = eye.height * eye.open;
+  ctx.save();
+  // Only this band of the eye survives. At full open the band covers the whole
+  // oval, so a normal eye is drawn exactly as before.
+  ctx.beginPath();
+  ctx.rect(-eye.width, eye.centerY - gap / 2, eye.width * 2, gap);
+  ctx.clip();
+  ctx.beginPath();
+  ctx.ellipse(
+    eye.centerX,
+    eye.centerY,
+    eye.width * 0.5,
+    eye.height * 0.5,
+    0,
+    0,
+    Math.PI * 2
+  );
   ctx.fillStyle = "#010204";
   ctx.fill();
   if (showPupil) {
     ctx.beginPath();
     ctx.arc(
-      eyeX - eyeWidth * 0.18,
-      eyeY - eyeHeight * 0.22,
-      Math.max(0.75, Math.min(width, height) * 0.065),
+      eye.centerX - eye.width * 0.18,
+      eye.centerY - eye.height * 0.22,
+      Math.max(0.75, Math.min(eye.width, eye.height) * 0.065),
       0,
       Math.PI * 2
     );
     ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
     ctx.fill();
   }
+  ctx.restore();
 }
 
+/**
+ * A soft rounded bar above the eye.
+ *
+ * Position is derived from the same EyeGeometry as the eye, and a hard
+ * geometric clearance rule keeps the brow's lowest rotated point above the
+ * eye's top edge in every pose — squint, angry tilt, or downward gaze.
+ */
 function drawEyebrow(
   ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
+  eye: EyeGeometry,
   browLift: number,
-  gazeX: number,
-  gazeY: number
+  browRotation: number,
+  clearance: number
 ) {
-  const browWidth = width * 0.78;
-  const horizontalLook = clamp(gazeX / Math.max(width, 1), -1, 1);
-  const browFollow = gazeX * 0.12;
-  const browY =
-    -height * 0.64 - browLift * height * 0.22 - gazeY * 0.06;
-  const arch = clamp((browLift + 0.04) * height * 0.24, -1, 1.2);
-  const thickness = clamp(width * 0.11, 1.5, 2.6);
+  const halfWidth = eye.width * 0.46;
+  const thickness = clamp(eye.width * 0.13, 1.6, 2.8);
   const halfThickness = thickness / 2;
-  const halfWidth = browWidth / 2;
-  const controlY = browY - arch;
-  ctx.beginPath();
+  const arch = clamp((browLift + 0.05) * eye.height * 0.22, -1.2, 1.4);
+
+  // Gaze leans the brow with the eye: right gaze tilts right, left tilts left,
+  // and the pair shifts slightly in the direction Blob is looking.
+  const look = clamp(eye.centerX / Math.max(eye.width * GAZE_TRAVEL_X, 0.001), -1, 1);
+  const offsetX = eye.centerX * 0.18;
+  // Directional lean stacks with an authored angry tilt, but the total stays
+  // small enough that two brows can never read as crossed.
+  const tilt = clamp(look * 4.5 + browRotation, -11, 11);
+  const radians = (tilt * Math.PI) / 180;
+
+  const eyeTop = eye.centerY - eye.height * 0.5;
+  // Looking up raises the brow a little further than the eye alone does;
+  // looking down lowers it, but only until the clearance rule takes over.
+  let browY = eyeTop - eye.height * 0.2 - browLift * eye.height * 0.22 + eye.centerY * 0.1;
+  // Lowest point of the rotated, arched bar measured from its own centre.
+  const reach =
+    halfThickness * Math.abs(Math.cos(radians)) +
+    (halfWidth + halfThickness) * Math.abs(Math.sin(radians)) +
+    Math.max(0, -arch);
+  browY = Math.min(browY, eyeTop - clearance - reach);
+
+  ctx.save();
+  ctx.translate(offsetX, browY);
+  ctx.rotate(radians);
   // Filled contour rather than a canvas stroke keeps the brow crisp when the
   // whole character is rasterised at true hardware pixels.
-  ctx.translate(browFollow, 0);
-  ctx.rotate((horizontalLook * 7.5 * Math.PI) / 180);
-  ctx.moveTo(-halfWidth, browY - halfThickness);
-  ctx.quadraticCurveTo(0, controlY - halfThickness, halfWidth, browY - halfThickness);
+  const controlY = -arch;
+  ctx.beginPath();
+  ctx.moveTo(-halfWidth, -halfThickness);
+  ctx.quadraticCurveTo(0, controlY - halfThickness, halfWidth, -halfThickness);
   ctx.quadraticCurveTo(
     halfWidth + halfThickness,
-    browY - halfThickness,
+    -halfThickness,
     halfWidth + halfThickness,
-    browY
+    0
   );
   ctx.quadraticCurveTo(
     halfWidth + halfThickness,
-    browY + halfThickness,
+    halfThickness,
     halfWidth,
-    browY + halfThickness
+    halfThickness
   );
-  ctx.quadraticCurveTo(0, controlY + halfThickness, -halfWidth, browY + halfThickness);
+  ctx.quadraticCurveTo(0, controlY + halfThickness, -halfWidth, halfThickness);
   ctx.quadraticCurveTo(
     -halfWidth - halfThickness,
-    browY + halfThickness,
+    halfThickness,
     -halfWidth - halfThickness,
-    browY
+    0
   );
   ctx.quadraticCurveTo(
     -halfWidth - halfThickness,
-    browY - halfThickness,
+    -halfThickness,
     -halfWidth,
-    browY - halfThickness
+    -halfThickness
   );
   ctx.closePath();
   ctx.fillStyle = "#010204";
   ctx.fill();
+  ctx.restore();
 }
 
 function drawRippleBody(
@@ -369,9 +426,17 @@ export default function BlobCharacter({
   onCloseTools,
   settingsOpen = false,
   showPupils = false,
+  drag,
 }: BlobCharacterProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [images, setImages] = useState<Images | null>(null);
+  // Pointer bookkeeping lives in refs: a grab must never re-render the loop.
+  const pointerId = useRef<number | null>(null);
+  const downX = useRef(0);
+  const downY = useRef(0);
+  const dragging = useRef(false);
+  const tapBlockedUntil = useRef(0);
+  const [grabbing, setGrabbing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -503,66 +568,31 @@ export default function BlobCharacter({
     // Eyes are sockets in body space. Gaze offsets move the texture inside a
     // fixed aperture; blink and squint clip from the top while the lower edge
     // stays planted.
+    const browClearance = size * BROW_CLEARANCE_RATIO;
     const drawEye = (id: FaceLayerId, t: ElementTransform) => {
       const a = faceAnchor(id, size, colour);
       const socketX = a.x - center + t.socketX;
       const socketY = a.y - center + t.socketY;
-      const socketScaleX = clamp(t.eyeSocketScaleX, 0.72, 1.35);
-      const socketScaleY = clamp(t.eyeSocketScaleY, 0.72, 1.35);
-      const socketWidth = a.width * socketScaleX;
-      const socketHeight = a.height * socketScaleY;
-      // The lid and eye share one exact silhouette. The socket has only a
-      // tiny safety margin so a gaze never clips the black eye at its edge.
-      const eyeWidth = socketWidth * 0.86;
-      const eyeHeight = socketHeight * 0.96;
-      const apertureWidth = eyeWidth * 1.025;
-      const apertureHeight = eyeHeight * 1.025;
-      const open = clamp(t.eyeOpen, 0, 1);
-      const gazeX = clamp(t.x, -socketWidth * 0.2, socketWidth * 0.2);
-      const gazeY = clamp(
-        t.y - (settingsOpen ? socketHeight * 0.2 : 0),
-        -socketHeight * 0.2,
-        socketHeight * 0.12
-      );
+      // One geometry drives the eye, both lids and the brow. Nothing else may
+      // compute an eye size, so they cannot drift apart again.
+      const eye = eyeGeometry(a.width, a.height, t, settingsOpen);
 
       // Brows are part of the facial surface, not a separate floating asset.
-      // They rise with curiosity, lower with squinting, and inherit the same
-      // body transform and tiny eye tilt as the socket beneath them.
+      // They rise with curiosity, lean with gaze, and are held clear of the
+      // eye by drawEyebrow's own geometric clearance rule.
       ctx.save();
       ctx.globalAlpha = t.opacity * faceVisibility * 0.88;
       applyBodySurface(ctx, center, bw, bh, bt);
       ctx.translate(socketX, socketY);
-      ctx.rotate((t.browRotation * Math.PI) / 180);
-      drawEyebrow(ctx, socketWidth, socketHeight, t.browLift, gazeX, gazeY);
+      drawEyebrow(ctx, eye, t.browLift, t.browRotation, browClearance);
       ctx.restore();
 
       ctx.save();
       ctx.globalAlpha = t.opacity * faceVisibility;
       applyBodySurface(ctx, center, bw, bh, bt);
-
-      // Keep aperture fixed in the face. Draw eye mass first, then paint both
-      // lids over it. This gives a real coloured upper and lower closure
-      // instead of cutting away only the top half of the eye.
       ctx.translate(socketX, socketY);
-      if (open > 0.001) {
-        ctx.save();
-        eyeSocketPath(ctx, 0, 0, apertureWidth, apertureHeight);
-        ctx.clip();
-        ctx.rotate((t.rotation * Math.PI) / 180);
-        drawProceduralEye(ctx, eyeWidth, eyeHeight, gazeX, gazeY, showPupils);
-        ctx.restore();
-      }
-      drawLidClosure(
-        ctx,
-        eyeWidth,
-        eyeHeight,
-        open,
-        layers.body,
-        bw,
-        bh,
-        socketX,
-        socketY
-      );
+      ctx.rotate((t.rotation * Math.PI) / 180);
+      drawProceduralEye(ctx, eye, showPupils);
       ctx.restore();
     };
 
@@ -604,14 +634,71 @@ export default function BlobCharacter({
     ctx.restore();
   }, [layers, size, renderScale, rig, colour, showPupils, settingsOpen]);
 
-  const isBlobHit = (event: MouseEvent<HTMLCanvasElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const px = ((event.clientX - rect.left) / rect.width) * size;
-    const py = ((event.clientY - rect.top) / rect.height) * size;
+  const nativePoint = (
+    element: HTMLCanvasElement,
+    clientX: number,
+    clientY: number
+  ) => {
+    // Map browser coordinates into 466-space, whatever the simulator's scale.
+    const rect = element.getBoundingClientRect();
+    return {
+      x: ((clientX - rect.left) / rect.width) * size,
+      y: ((clientY - rect.top) / rect.height) * size,
+    };
+  };
+
+  const hitTest = (x: number, y: number) => {
     const blobX = size / 2 + rig.blob.x;
     const blobY = size / 2 + rig.blob.y + (settingsOpen ? size * 0.075 : 0);
-    return Math.hypot(px - blobX, py - blobY) <= size * BODY_FRACTION * 0.62;
+    return Math.hypot(x - blobX, y - blobY) <= size * BODY_FRACTION * 0.62;
   };
+
+  const isBlobHit = (event: MouseEvent<HTMLCanvasElement>) => {
+    const p = nativePoint(event.currentTarget, event.clientX, event.clientY);
+    return hitTest(p.x, p.y);
+  };
+
+  const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (!drag) return;
+    const p = nativePoint(event.currentTarget, event.clientX, event.clientY);
+    if (!hitTest(p.x, p.y)) return;
+    pointerId.current = event.pointerId;
+    downX.current = p.x;
+    downY.current = p.y;
+    dragging.current = false;
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handlePointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (!drag || pointerId.current !== event.pointerId) return;
+    const p = nativePoint(event.currentTarget, event.clientX, event.clientY);
+    if (!dragging.current) {
+      // Below the threshold this is still a tap, so nothing moves yet.
+      if (Math.hypot(p.x - downX.current, p.y - downY.current) < DRAG_THRESHOLD)
+        return;
+      dragging.current = true;
+      setGrabbing(true);
+      drag.begin(downX.current, downY.current, event.timeStamp);
+    }
+    drag.move(p.x, p.y, event.timeStamp);
+  };
+
+  const endPointer = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (pointerId.current !== event.pointerId) return;
+    pointerId.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (dragging.current) {
+      dragging.current = false;
+      setGrabbing(false);
+      drag?.end();
+      // A drag must never also count as the first half of a double tap.
+      tapBlockedUntil.current = performance.now() + TAP_SUPPRESSION_MS;
+    }
+  };
+
+  const tapAllowed = () => performance.now() >= tapBlockedUntil.current;
 
   return (
     <canvas
@@ -619,16 +706,24 @@ export default function BlobCharacter({
       width={size * renderScale}
       height={size * renderScale}
       className="block"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={endPointer}
+      onPointerCancel={endPointer}
       onClick={(event) => {
+        if (!tapAllowed()) return;
         if (settingsOpen && onCloseTools && isBlobHit(event)) onCloseTools();
       }}
       onDoubleClick={(event) => {
+        if (!tapAllowed()) return;
         if (!settingsOpen && onOpenTools && isBlobHit(event)) onOpenTools();
       }}
       style={{
         width: size,
         height: size,
         imageRendering: renderScale === 1 ? "pixelated" : "auto",
+        touchAction: drag ? "none" : undefined,
+        cursor: drag ? (grabbing ? "grabbing" : "grab") : undefined,
       }}
     />
   );
