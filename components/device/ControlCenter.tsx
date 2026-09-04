@@ -13,7 +13,8 @@ export type ControlSectionId =
   | "environment"
   | "tools"
   | "expressions"
-  | "emoji";
+  | "emoji"
+  | "performance";
 
 export interface ControlSectionDefinition {
   id: ControlSectionId;

@@ -9,6 +9,7 @@ import ControlCenter, {
 import ScreenStage from "@/components/screens/ScreenStage";
 import ScreenBrowser from "@/components/screens/ScreenBrowser";
 import EmojiMakerPanel from "./EmojiMakerPanel";
+import PerformanceLabPanel from "./PerformanceLabPanel";
 import { ScreenLifecycle, type LifecycleSnapshot } from "@/lib/screenLifecycle";
 import { isDeviceState, type FlowId, type ScreenId } from "@/lib/screenCatalogue";
 import { DEVICE_CONFIG, type Fps, type Speed } from "@/lib/deviceConfig";
@@ -77,7 +78,7 @@ export default function DeviceSimulator() {
   const [environmentStatus, setEnvironmentStatus] = useState<EnvironmentStatus | null>(null);
   const [showPupils, setShowPupils] = useState(false);
   const [blobToolsOpen, setBlobToolsOpen] = useState(false);
-  const [activeBlobTool, setActiveBlobTool] = useState<"colour" | "face" | "pupils" | null>(null);
+  const [activeBlobTool, setActiveBlobTool] = useState<"colour" | "face" | "performance" | "pupils" | null>(null);
   const [mood, setMood] = useState<HomeMood | null>(null);
   const [mindIntention, setMindIntention] = useState<BlobIntention | null>(null);
   const [mindDestination, setMindDestination] = useState<BlobDestination | null>(null);
@@ -271,9 +272,16 @@ export default function DeviceSimulator() {
     },
     {
       id: "emoji",
-      label: "Emoji Maker",
-      description: "Build a face recipe, preview it on Blob, and export a native PNG.",
+      label: "Expression Maker",
+      description: "Build a face recipe, preview it on Blob, and export a native PNG or TS code.",
       summary: "face editor",
+      group: "Character",
+    },
+    {
+      id: "performance",
+      label: "Performance Lab",
+      description: "Pair facial expressions with physical acting and scrub the keyframe timeline.",
+      summary: "acting studio",
       group: "Character",
     },
     {
@@ -678,6 +686,8 @@ export default function DeviceSimulator() {
         );
       case "emoji":
         return <EmojiMakerPanel colour={blobColour} />;
+      case "performance":
+        return <PerformanceLabPanel colour={blobColour} />;
     }
   })();
 
@@ -738,7 +748,11 @@ export default function DeviceSimulator() {
                   onSelect={(tool) => {
                     setActiveBlobTool(tool);
                     if (tool === "face") {
-                      setActiveControl("expressions");
+                      setActiveControl("emoji");
+                      setControlsOpen(true);
+                    }
+                    if (tool === "performance") {
+                      setActiveControl("performance");
                       setControlsOpen(true);
                     }
                     if (tool === "pupils") setShowPupils((value) => !value);
@@ -909,7 +923,7 @@ function ControlRange({
   );
 }
 
-type BlobTool = "colour" | "face" | "pupils";
+type BlobTool = "colour" | "face" | "performance" | "pupils";
 
 function BlobToolOrbs({
   open,
@@ -929,7 +943,7 @@ function BlobToolOrbs({
   onColourChange: (colour: BlobColour) => void;
 }) {
   if (!open) return null;
-  const orbSize = Math.max(34, Math.min(52, screenSize * 0.14));
+  const orbSize = Math.max(32, Math.min(48, screenSize * 0.125));
   const orbStyle = (left: string, top: number) => ({
     left,
     top: screenSize * top,
@@ -941,20 +955,31 @@ function BlobToolOrbs({
     <div className="pointer-events-none absolute inset-0 z-30">
       <div
         className="blob-tool-orb blob-tool-orb-left pointer-events-auto absolute"
-        style={orbStyle("25%", 0.13)}
+        style={orbStyle("18%", 0.14)}
       >
         <OrbButton active={active === "colour"} label="Blob colour" onClick={() => onSelect("colour")}>
           <span className="h-4 w-4 rounded-full border border-white/70" style={{ background: blobColourSwatch(blobColour) }} />
         </OrbButton>
       </div>
-      <div className="blob-tool-orb blob-tool-orb-center pointer-events-auto absolute" style={orbStyle("50%", 0.055)}>
-        <OrbButton active={active === "face"} label="Eyes and mouth settings" onClick={() => onSelect("face")}>
+      <div
+        className="blob-tool-orb blob-tool-orb-face pointer-events-auto absolute"
+        style={orbStyle("38%", 0.06)}
+      >
+        <OrbButton active={active === "face"} label="Expression Maker" onClick={() => onSelect("face")}>
           <span className="text-[17px] leading-none">☺</span>
         </OrbButton>
       </div>
       <div
+        className="blob-tool-orb blob-tool-orb-performance pointer-events-auto absolute"
+        style={orbStyle("62%", 0.06)}
+      >
+        <OrbButton active={active === "performance"} label="Performance Lab" onClick={() => onSelect("performance")}>
+          <span className="text-[16px] leading-none">🎭</span>
+        </OrbButton>
+      </div>
+      <div
         className="blob-tool-orb blob-tool-orb-right pointer-events-auto absolute"
-        style={orbStyle("75%", 0.13)}
+        style={orbStyle("82%", 0.14)}
       >
         <OrbButton active={active === "pupils"} label={showPupils ? "Hide pupils" : "Show pupils"} onClick={() => onSelect("pupils")}>
           <span className="relative block h-4 w-4 rounded-full border border-white/75">
