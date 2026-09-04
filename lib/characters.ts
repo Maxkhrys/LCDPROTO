@@ -41,11 +41,10 @@ export const CHARACTERS: readonly CharacterMeta[] = [
     id: "cloud",
     label: "Cloud",
     description: "Procedural volumetric lobes wearing the same face.",
-    // Measured from the rendered silhouette at every wall, including the
-    // diagonals: the mist body is much wider than Blob's core, and a wall
-    // press spreads it wider still. The worst case is the down-right
-    // diagonal, which is what this figure has to clear.
-    radiusFraction: 0.9,
+    // Calibrated for circular AMOLED boundary (466x466, R=233):
+    // Allows generous, responsive drag travel across the display while
+    // giving the per-lobe collision physics room to compress and bunch naturally.
+    radiusFraction: 0.64,
   },
 ] as const;
 

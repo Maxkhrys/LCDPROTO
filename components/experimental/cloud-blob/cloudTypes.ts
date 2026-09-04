@@ -34,6 +34,7 @@ export interface LobeDefinition {
   breathPhase: number;
   breathAmp: number;
   depth: number; // Order: <0 rear base, 0 core, 1-2 mid crown/cheeks, 10 front veil over face
+  circPhase?: number; // Phase offset in radians for traveling wind circulation
 }
 
 export interface LobeState {

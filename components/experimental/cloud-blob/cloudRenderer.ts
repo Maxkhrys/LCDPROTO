@@ -53,6 +53,8 @@ interface RenderOptions {
   lightAngle?: number;
   cheekBlush?: number;
   cloudBrows?: boolean;
+  clear?: boolean;
+  skipTransform?: boolean;
 }
 
 const clamp = (v: number, min: number, max: number) =>
@@ -396,6 +398,7 @@ function drawVolumetricLobe(
       grad.addColorStop(0, `rgba(${Math.min(255, coreRgb.r + 30)}, ${Math.min(255, coreRgb.g + 30)}, ${Math.min(255, coreRgb.b + 35)}, ${cAlpha})`);
       grad.addColorStop(0.38, `rgba(${bodyRgb.r}, ${bodyRgb.g}, ${bodyRgb.b}, ${mAlpha})`);
       grad.addColorStop(0.74, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, ${eAlpha})`);
+      grad.addColorStop(0.92, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, ${eAlpha * 0.22})`);
       grad.addColorStop(1.0, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, 0)`);
     } else {
       // Outer billowy lobes: bright sunlit crest with translucent feathered falloff
@@ -408,8 +411,9 @@ function drawVolumetricLobe(
       const crestB = Math.min(255, edgeRgb.b + (isSubPuff ? 18 : 12));
 
       grad.addColorStop(0, `rgba(${crestR}, ${crestG}, ${crestB}, ${cAlpha})`);
-      grad.addColorStop(0.42, `rgba(${bodyRgb.r}, ${bodyRgb.g}, ${bodyRgb.b}, ${mAlpha})`);
-      grad.addColorStop(0.76, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, ${eAlpha})`);
+      grad.addColorStop(0.38, `rgba(${bodyRgb.r}, ${bodyRgb.g}, ${bodyRgb.b}, ${mAlpha})`);
+      grad.addColorStop(0.72, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, ${eAlpha})`);
+      grad.addColorStop(0.91, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, ${eAlpha * 0.20})`);
       grad.addColorStop(1.0, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, 0)`);
     }
 
@@ -504,22 +508,23 @@ function drawRimAccent(
   const lightRad = (lightAngle * Math.PI) / 180;
   const rx = 72 * topState.scaleX;
   const ry = 50 * topState.scaleY;
-  const lx = cx + topState.x + Math.cos(lightRad) * 6;
-  const ly = cy + topState.y + Math.sin(lightRad) * 6;
+  const lx = cx + topState.x + Math.cos(lightRad) * 5;
+  const ly = cy + topState.y + Math.sin(lightRad) * 5;
 
   ctx.save();
   ctx.globalCompositeOperation = "screen";
   ctx.translate(lx, ly);
   ctx.rotate(topState.rotation + (lightAngle + 90) * 0.005);
 
-  const grad = ctx.createRadialGradient(0, -ry * 0.52, 3, 0, 0, rx);
-  grad.addColorStop(0, `rgba(255, 255, 255, 0.45)`);
-  grad.addColorStop(0.35, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, 0.22)`);
-  grad.addColorStop(0.8, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, 0)`);
+  const grad = ctx.createRadialGradient(0, -ry * 0.54, 2, 0, -ry * 0.15, rx * 0.95);
+  grad.addColorStop(0, `rgba(255, 255, 255, 0.32)`);
+  grad.addColorStop(0.35, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, 0.16)`);
+  grad.addColorStop(0.72, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, 0.04)`);
+  grad.addColorStop(1.0, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, 0)`);
 
   ctx.fillStyle = grad;
   ctx.beginPath();
-  ctx.ellipse(0, -ry * 0.28, rx * 0.88, ry * 0.46, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, -ry * 0.30, rx * 0.86, ry * 0.42, 0, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.restore();
@@ -660,20 +665,70 @@ function drawSuspendedDroplets(
   idleTime: number
 ) {
   ctx.save();
-  for (const d of SUSPENDED_DROPLETS) {
-    const driftX = Math.sin(idleTime * d.driftSpeed + d.driftPhase) * 3.5;
-    const driftY = Math.cos(idleTime * d.driftSpeed * 0.75 + d.driftPhase) * 2.5;
-    const px = cx + coreState.x + d.x + driftX;
-    const py = cy + coreState.y + d.y + driftY;
+  const dropletCount = SUSPENDED_DROPLETS.length;
 
+  for (let i = 0; i < dropletCount; i++) {
+    const d = SUSPENDED_DROPLETS[i];
+    let px: number;
+    let py: number;
+    let alpha: number;
+
+    if (i % 4 === 0) {
+      // 1. Convection updraft motes rising through warm central core
+      const riseSpeed = 0.08 * d.driftSpeed;
+      const progress = ((idleTime * riseSpeed + d.driftPhase * 0.25) % 1 + 1) % 1; // 0 at bottom, 1 at top
+      const laneX = d.x * 0.72 + Math.sin(idleTime * 0.45 + d.driftPhase) * 10;
+      const sCurvX = Math.sin(progress * Math.PI * 2 + d.driftPhase) * 7;
+      const spanY = 56 - progress * 118; // from bottom belly (56) to crown (-62)
+
+      px = cx + coreState.x + laneX + sCurvX;
+      py = cy + coreState.y + spanY;
+
+      // Soft entry at base, full glow in core, soft exit at dome
+      const verticalFade = Math.sin(progress * Math.PI);
+      const twinkle = 0.75 + 0.25 * Math.sin(idleTime * 1.8 + d.driftPhase);
+      alpha = d.brightness * verticalFade * twinkle;
+    } else {
+      // 2. Continuous elliptical circulation streamlines orbiting the cloud mass
+      const dir = i % 2 === 0 ? 1 : -1;
+      const angVel = (0.22 + (d.driftSpeed - 0.7) * 0.12) * dir;
+      const homeDist = Math.hypot(d.x, d.y) * 0.95 + 8;
+      const homeAngle = Math.atan2(d.y, d.x);
+      const currentAngle = homeAngle + idleTime * angVel;
+
+      const breathWobble = Math.sin(idleTime * 0.5 + d.driftPhase) * 5;
+      const orbRadius = homeDist + breathWobble;
+
+      // Elliptical shape matching pear-shaped cloud volume (wider than tall)
+      const lx = Math.cos(currentAngle) * (orbRadius * 1.14);
+      const ly = Math.sin(currentAngle) * (orbRadius * 0.84) - 2;
+
+      // Subtle atmospheric turbulent drift
+      const turbX = Math.sin(idleTime * 0.75 + d.driftPhase * 1.8) * 3.5;
+      const turbY = Math.cos(idleTime * 0.60 + d.driftPhase * 2.2) * 2.8;
+
+      px = cx + coreState.x + lx + turbX;
+      py = cy + coreState.y + ly + turbY;
+
+      // Soft edge falloff when drifting near outer mist envelope (fade out and wrap seamlessly)
+      const currentDist = Math.hypot(lx, ly);
+      const edgeFade = clamp((92 - currentDist) / 26, 0, 1);
+      const twinkle = 0.65 + 0.35 * Math.sin(idleTime * (1.1 * d.driftSpeed) + d.driftPhase);
+      alpha = d.brightness * edgeFade * twinkle;
+    }
+
+    if (alpha <= 0.02) continue;
+
+    // Ethereal luminous outer halo
     ctx.beginPath();
-    ctx.arc(px, py, d.radius * 2.2, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, ${d.brightness * 0.22})`;
+    ctx.arc(px, py, d.radius * 2.4, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, ${alpha * 0.28})`;
     ctx.fill();
 
+    // Crisp glowing pinpoint core
     ctx.beginPath();
     ctx.arc(px, py, d.radius * 0.75, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(255, 255, 255, ${d.brightness * 0.88})`;
+    ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.92})`;
     ctx.fill();
   }
   ctx.restore();
@@ -913,11 +968,17 @@ export function renderCloudBlob(
     lightAngle = -45,
     cheekBlush = 0,
     cloudBrows = true,
+    clear = true,
+    skipTransform = false,
   } = options;
 
   ctx.save();
-  ctx.scale(renderScale, renderScale);
-  ctx.clearRect(0, 0, size, size);
+  if (!skipTransform) {
+    ctx.scale(renderScale, renderScale);
+  }
+  if (clear) {
+    ctx.clearRect(0, 0, size, size);
+  }
 
   const cx = size / 2;
   const cy = size / 2;
@@ -955,13 +1016,38 @@ export function renderCloudBlob(
     }
   }
 
-  // 3. Render Dominant Central Core (depth = 0)
+  // 3. Subtle Interior Sculptural Density Pocket between rear base and core
+  const pocketGrad = ctx.createRadialGradient(
+    cx + coreState.x,
+    cy + coreState.y + 22,
+    8,
+    cx + coreState.x,
+    cy + coreState.y + 22,
+    80
+  );
+  pocketGrad.addColorStop(
+    0,
+    `rgba(${Math.round(coreRgb.r * 0.45)}, ${Math.round(coreRgb.g * 0.45)}, ${Math.round(coreRgb.b * 0.58)}, 0.28)`
+  );
+  pocketGrad.addColorStop(
+    0.58,
+    `rgba(${Math.round(coreRgb.r * 0.45)}, ${Math.round(coreRgb.g * 0.45)}, ${Math.round(coreRgb.b * 0.58)}, 0.08)`
+  );
+  pocketGrad.addColorStop(1.0, "rgba(0, 0, 0, 0)");
+  ctx.save();
+  ctx.fillStyle = pocketGrad;
+  ctx.beginPath();
+  ctx.ellipse(cx + coreState.x, cy + coreState.y + 22, 88, 48, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // 4. Render Dominant Central Core (depth = 0)
   const coreDef = LOBE_DEFINITIONS.find((d) => d.id === "core");
   if (coreDef && coreState) {
     drawVolumetricLobe(ctx, cx, cy, coreDef, coreState, bodyRgb, edgeRgb, coreRgb, colour.translucency, 1.0, true, fluffiness * 0.8, lightAngle, idleTime);
   }
 
-  // 4. Inner Volume Core Glow (Luminous screen illumination)
+  // 5. Inner Volume Core Glow (Luminous screen illumination)
   drawInnerVolumeGlow(ctx, cx, cy, coreState, glowRgb, colour.glowIntensity, idleTime);
 
   // 5. Suspended Luminous Micro-Droplets

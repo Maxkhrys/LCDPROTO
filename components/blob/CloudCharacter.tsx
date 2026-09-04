@@ -122,7 +122,6 @@ export default function CloudCharacter({
   const idleTime = useRef(0);
   const lastFrame = useRef<number | null>(null);
   const previous = useRef({ x: 0, y: 0 });
-  const bufferRef = useRef<HTMLCanvasElement | null>(null);
 
   // Pointer bookkeeping, mirroring BlobCharacter so both characters feel the
   // same to handle.
@@ -228,7 +227,17 @@ export default function CloudCharacter({
     previous.current.x = offsetX;
     previous.current.y = offsetY;
 
-    stepLobePhysics(lobeStates.current, params, motion, vx, vy, idleTime.current, step);
+    stepLobePhysics(
+      lobeStates.current,
+      params,
+      motion,
+      vx,
+      vy,
+      idleTime.current,
+      step,
+      offsetX,
+      offsetY
+    );
 
     if (trails.enabled) {
       if (Math.hypot(vx, vy) > 50) {
@@ -246,28 +255,32 @@ export default function CloudCharacter({
       updateWisps(wisps.current, step, trails.driftAmount);
     }
 
-    // The cloud renderer owns its own transform and clears what it draws into,
-    // so it gets its own buffer. Compositing that buffer is what lets the
-    // character move as one piece without touching the experimental renderer.
-    let buffer = bufferRef.current;
-    const bufferWidth = Math.ceil(size * renderScale);
-    if (!buffer || buffer.width !== bufferWidth) {
-      buffer = document.createElement("canvas");
-      buffer.width = bufferWidth;
-      buffer.height = bufferWidth;
-      bufferRef.current = buffer;
-    }
-    const bufferCtx = buffer.getContext("2d");
-    if (!bufferCtx) return;
-    bufferCtx.setTransform(1, 0, 0, 1, 0, 0);
-    bufferCtx.clearRect(0, 0, buffer.width, buffer.height);
-    renderCloudBlob(bufferCtx, {
+    ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+    ctx.clearRect(0, 0, size, size);
+
+    // Circular AMOLED screen clipping (466x466 round screen, R=233):
+    // Eliminates any rectangular bounding box clipping so mist and lobes
+    // contour naturally against the bezel without straight cutoffs.
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(centre, centre, centre, 0, Math.PI * 2);
+    ctx.clip();
+
+    ctx.save();
+    ctx.translate(centre + offsetX, centre + offsetY);
+    ctx.rotate(((blob.rotation + body.rotation) * Math.PI) / 180);
+    ctx.scale(scaleX, scaleY);
+    ctx.translate(-centre, -centre);
+    ctx.globalAlpha = blob.opacity;
+
+    // Render cloud body directly onto the primary canvas: zero intermediate buffers,
+    // zero drawImage copies, full hardware framerate.
+    renderCloudBlob(ctx, {
       size,
       renderScale,
       lobeStates: lobeStates.current,
       colour: palette,
       wisps: wisps.current,
-      // The experimental face is a stale copy; the real one goes on below.
       showFace: false,
       colourName: colour,
       idleTime: idleTime.current,
@@ -276,17 +289,9 @@ export default function CloudCharacter({
       gazeX: params.gazeX,
       gazeY: params.gazeY,
       faceEmbedDepth: params.faceEmbedDepth,
+      clear: false,
+      skipTransform: true,
     });
-
-    ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
-    ctx.clearRect(0, 0, size, size);
-    ctx.save();
-    ctx.translate(centre + offsetX, centre + offsetY);
-    ctx.rotate(((blob.rotation + body.rotation) * Math.PI) / 180);
-    ctx.scale(scaleX, scaleY);
-    ctx.translate(-centre, -centre);
-    ctx.globalAlpha = blob.opacity;
-    ctx.drawImage(buffer, 0, 0, size, size);
 
     // The production face rides the visible mass, not the core alone. The
     // lobes lag by design, so during a fast drag the core leads the cheeks and
@@ -342,7 +347,8 @@ export default function CloudCharacter({
       showPupils,
       settingsOpen,
     });
-    ctx.restore();
+    ctx.restore(); // Restore character transform
+    ctx.restore(); // Restore circular AMOLED clip
   }, [
     size,
     renderScale,

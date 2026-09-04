@@ -137,6 +137,7 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
     breathPhase: 4.2,
     breathAmp: 0.048,
     depth: -2,
+    circPhase: 4.1, // Convective return along base
   },
   {
     id: "baseLeft",
@@ -153,6 +154,7 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
     breathPhase: 3.14,
     breathAmp: 0.042,
     depth: -1,
+    circPhase: 5.1, // Completes convective cycle back to left cheek
   },
   {
     id: "baseRight",
@@ -169,6 +171,7 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
     breathPhase: 3.8,
     breathAmp: 0.040,
     depth: -1,
+    circPhase: 3.2, // Receives downdraft from right cheek
   },
 
   // 2. CENTRAL CORE (depth = 0): Dominant mass, holds character anchor
@@ -187,6 +190,7 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
     breathPhase: 0.0,
     breathAmp: 0.030,
     depth: 0,
+    circPhase: 1.4, // Core swells as wave travels across
   },
 
   // 3. MID LOBES (depth = 1): Sculpted cheeks flanking eyes
@@ -205,6 +209,7 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
     breathPhase: 1.2,
     breathAmp: 0.044,
     depth: 1,
+    circPhase: 0.0, // Initial puff in sequence (left cheek puffs first)
   },
   {
     id: "rightCheek",
@@ -221,6 +226,7 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
     breathPhase: 1.8,
     breathAmp: 0.040,
     depth: 1,
+    circPhase: 2.2, // Right cheek puffs following core
   },
 
   // 4. TOP CROWN (depth = 2): Friendly dome silhouette
@@ -239,6 +245,7 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
     breathPhase: 0.7,
     breathAmp: 0.046,
     depth: 2,
+    circPhase: 0.7, // Crown catches ascending updraft
   },
 
   // 5. FRONT VEIL (depth = 10): Translucent mist over cheeks and lower socket edges
@@ -257,6 +264,7 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
     breathPhase: 0.4,
     breathAmp: 0.025,
     depth: 10,
+    circPhase: 1.6,
   },
 ];
 
@@ -360,7 +368,9 @@ export function computeLobeTarget(
   motion: CloudMotionConfig,
   characterVx: number,
   characterVy: number,
-  idleTime: number
+  idleTime: number,
+  characterOffsetX = 0,
+  characterOffsetY = 0
 ): {
   targetX: number;
   targetY: number;
@@ -377,11 +387,22 @@ export function computeLobeTarget(
   let tx = def.baseX;
   let ty = def.baseY;
 
-  // 1. Out-of-sync gentle idle breathing
-  const breathCycle = Math.sin(idleTime * 1.5 + def.breathPhase) * def.breathAmp;
-  const breathScale = 1 + breathCycle;
+  // 1. Procedural Traveling Wind Field & Shape Migration:
+  // Sequential wave circulating through lobes (leftCheek -> topCrown/core -> rightCheek -> base/belly)
+  const circPhase = def.circPhase ?? def.breathPhase;
+  const circWave = Math.sin(idleTime * 0.85 - circPhase);
+  const circScale = 1 + circWave * 0.045; // Subtle +4.5% puff as the atmospheric wave passes
+  const migX = Math.cos(idleTime * 0.85 - circPhase) * 2.2;
+  const migY = Math.sin(idleTime * 0.85 - circPhase) * 1.8;
+  const convection = Math.sin(idleTime * 0.42 + def.breathPhase) * 1.2;
+  tx += migX;
+  ty += migY - convection;
 
-  // 2. Squash & Stretch
+  // 2. Out-of-sync gentle idle breathing
+  const breathCycle = Math.sin(idleTime * 1.4 + def.breathPhase) * def.breathAmp;
+  const breathScale = circScale * (1 + breathCycle);
+
+  // 3. Squash & Stretch
   if (squash > 0) {
     if (def.id === "topCrown") {
       ty += squash * 24; // Dome compresses downwards
@@ -412,7 +433,7 @@ export function computeLobeTarget(
     }
   }
 
-  // 3. Lean effect: sheared displacement & asymmetric compression
+  // 4. Lean effect: sheared displacement & asymmetric compression
   if (Math.abs(lean) > 0.001) {
     const leanRatio = lean / 30;
     if (def.id === "topCrown") {
@@ -427,7 +448,7 @@ export function computeLobeTarget(
     }
   }
 
-  // 4. Local bulges & sag
+  // 5. Local bulges & sag
   if (def.id === "baseLeft" || def.id === "leftCheek") {
     tx -= params.leftBulge;
   }
@@ -441,14 +462,14 @@ export function computeLobeTarget(
     ty += params.bottomSag;
   }
 
-  // 5. Harmonic wobble
+  // 6. Harmonic wobble
   if (motion.wobbleAmount > 0) {
     const wobblePhase = idleTime * 5.0 + def.breathPhase;
     const wobbleDist = Math.sin(wobblePhase) * motion.wobbleAmount * 6;
     tx += wobbleDist;
   }
 
-  // 6. CRITICAL LOBE LAG HIERARCHY:
+  // 7. CRITICAL LOBE LAG HIERARCHY:
   // Face leads -> core follows (lag 0.08) -> crown & cheeks follow (0.42 - 0.56) -> base & belly lag (0.74 - 0.88)
   const lagStrength = def.lagFactor * motion.lobeLag * 0.09;
   const maxLobeOffset = def.radiusX * 0.48;
@@ -457,7 +478,7 @@ export function computeLobeTarget(
   tx -= Math.max(-maxLobeOffset, Math.min(maxLobeOffset, rawLagX));
   ty -= Math.max(-maxLobeOffset, Math.min(maxLobeOffset, rawLagY));
 
-  // 7. Scale computation
+  // 8. Scale computation
   let sx = breathScale * (1 + puff * 0.3);
   let sy = breathScale * (1 + puff * 0.3);
 
@@ -470,9 +491,48 @@ export function computeLobeTarget(
     sy *= 1 + stretch * 0.36;
   }
 
-  const rot = (lean * 0.38 * (1 - def.lagFactor * 0.45) * Math.PI) / 180;
+  let rot = (lean * 0.38 * (1 - def.lagFactor * 0.45) * Math.PI) / 180;
 
-  let opacity = def.baseOpacity * (1 - puff * 0.12);
+  // 9. CIRCULAR AMOLED BOUNDARY COLLISION & SOFT-BODY BUNCHING:
+  // Native AMOLED R=233. Safe boundary limit R=222 leaves outer mist feathering room.
+  const worldX = characterOffsetX + tx;
+  const worldY = characterOffsetY + ty;
+  const worldDist = Math.hypot(worldX, worldY);
+  if (worldDist > 1e-4) {
+    const normX = worldX / worldDist;
+    const normY = worldY / worldDist;
+    const relAngle = Math.atan2(worldY, worldX) - rot;
+    const cosA = Math.cos(relAngle);
+    const sinA = Math.sin(relAngle);
+    const effectiveRadius = Math.sqrt(
+      (def.radiusX * sx * cosA) ** 2 + (def.radiusY * sy * sinA) ** 2
+    );
+    const outerRadius = effectiveRadius * 1.15; // Include sub-puff perimeter billows
+    const boundaryLimit = 222;
+
+    if (worldDist + outerRadius > boundaryLimit) {
+      const penetration = worldDist + outerRadius - boundaryLimit;
+      const pushAmount = penetration * 0.76;
+      tx -= normX * pushAmount;
+      ty -= normY * pushAmount;
+
+      const compression = Math.min(0.65, Math.max(0, penetration / (outerRadius * 0.65)));
+      // Radial flattening normal & tangential volume bunching
+      const radialFactor = 1 - compression * 0.44;
+      const tangentialFactor = 1 + compression * 0.34;
+      const normX2 = normX * normX;
+      const normY2 = normY * normY;
+      sx *= (radialFactor * normX2 + tangentialFactor * normY2);
+      sy *= (radialFactor * normY2 + tangentialFactor * normX2);
+
+      // Subtle rim alignment torque along AMOLED circular glass curvature
+      const rimTangentAngle = Math.atan2(normY, normX) + Math.PI / 2;
+      rot += Math.sin(rimTangentAngle - rot) * compression * 0.28;
+    }
+  }
+
+  // Dynamic opacity modulation with circulation wave
+  let opacity = def.baseOpacity * (1 - puff * 0.12) * (1 + circWave * 0.028);
   if (def.id === "frontVeil") {
     opacity = def.baseOpacity * (params.faceEmbedDepth / 0.14);
   }
@@ -494,7 +554,9 @@ export function stepLobePhysics(
   characterVx: number,
   characterVy: number,
   idleTime: number,
-  dt: number
+  dt: number,
+  characterOffsetX = 0,
+  characterOffsetY = 0
 ): void {
   const clampedDt = Math.min(dt, 0.05);
 
@@ -515,7 +577,9 @@ export function stepLobePhysics(
       motion,
       characterVx,
       characterVy,
-      idleTime
+      idleTime,
+      characterOffsetX,
+      characterOffsetY
     );
 
     const stiffness = def.stiffness * (motion.springStiffness / 145);
@@ -532,7 +596,7 @@ export function stepLobePhysics(
     state.y += state.vy * clampedDt;
 
     // Smooth relaxation
-    const rate = 12 * clampedDt;
+    const rate = 14 * clampedDt;
     state.scaleX += (targetScaleX - state.scaleX) * rate;
     state.scaleY += (targetScaleY - state.scaleY) * rate;
     state.opacity += (targetOpacity - state.opacity) * rate;
