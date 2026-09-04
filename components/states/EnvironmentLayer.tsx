@@ -171,9 +171,9 @@ function drawStaticScene(
   }
   ctx.restore();
 
-  drawStone(ctx, 74, 371, 72, 48, palette.stoneLight, palette.stone, displayMode === "dark" ? 0.55 : 0.76);
-  drawStone(ctx, 386, 384, 56, 35, palette.stoneLight, palette.stone, displayMode === "dark" ? 0.45 : 0.7);
-  drawStone(ctx, 124, 403, 39, 24, palette.stoneLight, palette.stone, displayMode === "dark" ? 0.5 : 0.72);
+  drawStone(ctx, 92, 360, 68, 44, palette.stoneLight, palette.stone, displayMode === "dark" ? 0.55 : 0.76);
+  drawStone(ctx, 375, 370, 52, 33, palette.stoneLight, palette.stone, displayMode === "dark" ? 0.45 : 0.7);
+  drawStone(ctx, 132, 392, 37, 23, palette.stoneLight, palette.stone, displayMode === "dark" ? 0.5 : 0.72);
 }
 
 function drawMote(
