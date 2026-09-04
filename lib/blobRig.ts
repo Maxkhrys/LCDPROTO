@@ -269,6 +269,8 @@ export interface ElementTransform {
   /** Degrees of affine shear. Used by the body; neutral for face layers. */
   skewX: number;
   skewY: number;
+  /** Angle of local squash axes, without rotating the artwork itself. */
+  deformAngle: number;
   /** Transform pivot in local space: -1 left/top, +1 right/bottom. */
   originX: number;
   originY: number;
@@ -327,6 +329,7 @@ export const NEUTRAL_ELEMENT: ElementTransform = {
   rotation: 0,
   skewX: 0,
   skewY: 0,
+  deformAngle: 0,
   originX: 0,
   originY: 0,
   opacity: 1,

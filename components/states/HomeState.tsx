@@ -22,7 +22,7 @@ import type { StateViewProps } from "@/lib/deviceStates";
 
 /** Safety cap on total body deformation, whatever the layers add up to. */
 const MAX_DEFORM = 0.1;
-const MAX_BODY_DEFORM = 0.05;
+const MAX_BODY_DEFORM = 0.34;
 const clampDeform = (v: number) =>
   v < -MAX_DEFORM ? -MAX_DEFORM : v > MAX_DEFORM ? MAX_DEFORM : v;
 const clampBodyDeform = (v: number) =>
@@ -185,6 +185,7 @@ export default function HomeState({
       bodySkewY: 0,
       bodyOriginX: 0,
       bodyOriginY: 0.82,
+      bodyDeformAngle: 0,
       jellyAmount: 1,
       rippleAmount: 1,
     };
@@ -250,11 +251,17 @@ export default function HomeState({
       jellyTarget.rotation += dragPose.rotation;
       jellyTarget.scaleX = clampDeform(dsx + dragPose.scaleX);
       jellyTarget.scaleY = clampDeform(dsy + dragPose.scaleY);
+      // Keep wall squash on the shared body surface. The angle is local to
+      // the body, so every radial wall direction deforms correctly.
+      jellyTarget.bodyDeformAngle =
+        dragPose.wallPressure > 0.01
+          ? dragPose.deformAngle - d.bodyRotation
+          : 0;
       jellyTarget.bodyScaleX = clampBodyDeform(
-        d.bodyScaleX + dragPose.scaleX * 0.5
+        d.bodyScaleX + dragPose.bodyScaleX
       );
       jellyTarget.bodyScaleY = clampBodyDeform(
-        d.bodyScaleY + dragPose.scaleY * 0.5
+        d.bodyScaleY + dragPose.bodyScaleY
       );
       jellyTarget.bodySkewX = d.bodySkewX + dragPose.skewX;
       jellyTarget.bodySkewY = d.bodySkewY + dragPose.skewY;
@@ -301,6 +308,7 @@ export default function HomeState({
             skewY: physical.bodySkewY,
             originX: physical.bodyOriginX,
             originY: physical.bodyOriginY,
+            deformAngle: physical.bodyDeformAngle,
             scaleX: 1 + deformX + clampBodyDeform(physical.bodyScaleX),
             scaleY: 1 + deformY + clampBodyDeform(physical.bodyScaleY),
             rippleTop: physical.rippleTop,

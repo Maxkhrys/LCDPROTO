@@ -201,6 +201,7 @@ export default function SensedState({
       bodySkewY: 0,
       bodyOriginX: 0,
       bodyOriginY: 0.82,
+      bodyDeformAngle: 0,
       jellyAmount: 1,
       rippleAmount: 1,
     };
@@ -278,6 +279,7 @@ export default function SensedState({
             skewY: physical.bodySkewY,
             originX: physical.bodyOriginX,
             originY: physical.bodyOriginY,
+            deformAngle: physical.bodyDeformAngle,
             scaleX: 1 + bodyDeformX + clampBodyDeform(physical.bodyScaleX),
             scaleY: 1 + bodyDeformY + clampBodyDeform(physical.bodyScaleY),
             rippleTop: physical.rippleTop,

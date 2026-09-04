@@ -59,7 +59,6 @@ type Images = Record<LayerId, HTMLImageElement>;
  * their attachment points still move like skin.
  */
 const FACE_ART_SURFACE_INHERIT = 0.56;
-const SKIN_INTEGRATION_ALPHA = 0.055;
 
 const clamp = (value: number, min: number, max: number) =>
   value < min ? min : value > max ? max : value;
@@ -137,7 +136,13 @@ function applyBodySurface(
     0,
     0
   );
+  // Scale along an arbitrary local pair of axes. This lets a circular-edge
+  // contact compress into top, bottom, side and diagonal walls without
+  // rotating the artwork or relying on horizontal-only deformation.
+  const deformAngle = (transform.deformAngle * Math.PI) / 180;
+  ctx.rotate(deformAngle);
   ctx.scale(transform.scaleX, transform.scaleY);
+  ctx.rotate(-deformAngle);
   ctx.translate(-pivotX, -pivotY);
 }
 
@@ -371,46 +376,6 @@ function drawEyebrow(
   ctx.restore();
 }
 
-function drawRippleBody(
-  ctx: CanvasRenderingContext2D,
-  image: HTMLCanvasElement,
-  width: number,
-  height: number,
-  transform: ElementTransform
-) {
-  const bands = [
-    { top: -height / 2, height: height * 0.25, shift: transform.rippleTop },
-    { top: -height * 0.27, height: height * 0.27, shift: transform.rippleUpper },
-    { top: height * 0.0, height: height * 0.28, shift: transform.rippleLower },
-    { top: height * 0.25, height: height * 0.27, shift: transform.rippleBottom },
-  ];
-  const rippleEnergy = Math.max(
-    Math.abs(transform.rippleTop),
-    Math.abs(transform.rippleUpper),
-    Math.abs(transform.rippleLower),
-    Math.abs(transform.rippleBottom)
-  );
-  if (rippleEnergy < 0.06) return;
-
-  // The normal draw remains the crisp silhouette. These overlapping bands
-  // reuse the locked body pixels at low alpha to create a brief internal wave
-  // without mesh deformation, blur, or any new artwork.
-  ctx.save();
-  ctx.globalAlpha *= Math.min(0.4, rippleEnergy * 0.24);
-  ctx.globalCompositeOperation = "source-atop";
-  for (const band of bands) {
-    if (Math.abs(band.shift) < 0.06) continue;
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(-width / 2 - 2, band.top - 2, width + 4, band.height + 4);
-    ctx.clip();
-    ctx.translate(band.shift, 0);
-    ctx.drawImage(image, -width / 2, -height / 2, width, height);
-    ctx.restore();
-  }
-  ctx.restore();
-}
-
 /**
  * Renders the Blob as a locked body surface plus independent procedural facial
  * features. Each feature can be moved and shaped on its own, while its socket
@@ -556,7 +521,6 @@ export default function BlobCharacter({
     ctx.globalAlpha = bt.opacity;
     applyBodySurface(ctx, center, bw, bh, bt);
     ctx.drawImage(layers.body, -bw / 2, -bh / 2, bw, bh);
-    drawRippleBody(ctx, layers.body, bw, bh, bt);
     ctx.restore();
 
     // The surface carries the full body deformation. The face artwork gets a
@@ -622,17 +586,6 @@ export default function BlobCharacter({
     drawEye("leftEye", rig.leftEye);
     drawEye("rightEye", rig.rightEye);
     drawMouth(rig.mouth);
-
-    // A faint re-render of the same deformed body texture crosses the face.
-    // It preserves crisp artwork but removes the cut-out/decal edge.
-    ctx.save();
-    applyBodySurface(ctx, center, bw, bh, bt);
-    ctx.beginPath();
-    ctx.ellipse(0, 5, bw * 0.255, bh * 0.235, 0, 0, Math.PI * 2);
-    ctx.clip();
-    ctx.globalAlpha = SKIN_INTEGRATION_ALPHA * bt.opacity * (0.86 + faceVisibility * 0.14);
-    ctx.drawImage(layers.body, -bw / 2, -bh / 2, bw, bh);
-    ctx.restore();
 
     ctx.restore();
   }, [layers, size, renderScale, rig, colour, showPupils, settingsOpen]);

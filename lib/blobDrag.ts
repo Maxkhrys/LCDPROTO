@@ -1,7 +1,7 @@
 /**
  * Pointer grab, wall resistance and jelly shake.
  *
- * Everything here is scalar: five springs, a soft radial limit and a small set
+ * Everything here is scalar: four springs, a soft radial limit and a small set
  * of derived deformation values. No mesh, no filters, no per-frame allocation
  * and no Math.random — the same maths runs unchanged on the ESP32.
  *
@@ -13,12 +13,14 @@
 const clamp = (value: number, min: number, max: number) =>
   value < min ? min : value > max ? max : value;
 
-/** How far past the safe radius Blob can be pulled, in 466-space pixels. */
-const WALL_SLACK = 15;
-/** Fraction of the safe radius at which wall pressure starts building. */
-const WALL_ONSET = 0.8;
 /** Keeps the silhouette a little inside the glass. */
 const EDGE_MARGIN = 3;
+/** Maximum inward compression at hard wall pressure. */
+const MAX_NORMAL_COMPRESSION = 0.34;
+/** Matching tangent expansion, preserving a soft blob-like volume. */
+const MAX_TANGENT_EXPANSION = 0.38;
+/** Wall pressure travel in native pixels before it reaches full strength. */
+const PRESSURE_TRAVEL_RATIO = 0.28;
 /** Pointer jerk, in px/s^2-ish units, above which a shake registers. */
 const SHAKE_THRESHOLD = 900;
 const SHAKE_RANGE = 5200;
@@ -49,6 +51,11 @@ export interface DragPose {
   /** Whole-character squash and stretch from wall contact and shaking. */
   scaleX: number;
   scaleY: number;
+  /** Body-only squash in local tangent/normal axes. */
+  bodyScaleX: number;
+  bodyScaleY: number;
+  /** Local x-axis angle for the tangent/normal squash pair. */
+  deformAngle: number;
   /** Extra body-only deformation, degrees for rotation and skew. */
   rotation: number;
   skewX: number;
@@ -75,12 +82,17 @@ export class BlobDragController {
   private lastPointerAt = 0;
   private lastVelocityX = 0;
   private lastVelocityY = 0;
+  private lastNormalX = 1;
+  private lastNormalY = 0;
   private shakeEnergy = 0;
   private readonly pose: DragPose = {
     x: 0,
     y: 0,
     scaleX: 0,
     scaleY: 0,
+    bodyScaleX: 0,
+    bodyScaleY: 0,
+    deformAngle: 90,
     rotation: 0,
     skewX: 0,
     skewY: 0,
@@ -100,6 +112,8 @@ export class BlobDragController {
     this.grabOffsetY = 0;
     this.lastVelocityX = 0;
     this.lastVelocityY = 0;
+    this.lastNormalX = 1;
+    this.lastNormalY = 0;
     this.shakeEnergy = 0;
   }
 
@@ -173,31 +187,58 @@ export class BlobDragController {
     baseY = 0
   ): DragPose {
     const seconds = clamp(dtMs, 0, 100) / 1000;
-    // The soft limit is set back by the full slack, so even a hard pull only
-    // brings Blob's silhouette up against the glass, never through it.
-    const limit = Math.max(
+    const radiusOfBlob = Math.max(8, blobRadius);
+    // This is the centre position for an uncompressed Blob. Pressure then
+    // earns a little extra travel as the body flattens into the glass.
+    const contactLimit = Math.max(
       6,
-      screen * 0.5 - blobRadius - EDGE_MARGIN - WALL_SLACK
+      screen * 0.5 - radiusOfBlob - EDGE_MARGIN
     );
+    const pressureTravel = clamp(
+      radiusOfBlob * PRESSURE_TRAVEL_RATIO,
+      18,
+      42
+    );
+    const maxPressedLimit =
+      screen * 0.5 -
+      radiusOfBlob * (1 - MAX_NORMAL_COMPRESSION) -
+      EDGE_MARGIN;
 
-    // Resolve the pointer request against the wall. Past the safe radius the
-    // remaining travel decays exponentially, so the pull gets steadily harder
-    // and Blob can never be dragged off the panel.
+    // Resolve pointer request against a circular boundary. The direction is
+    // the radial wall normal, so left, right, top, bottom and every diagonal
+    // use the exact same collision path.
     let targetX = 0;
     let targetY = 0;
     let pullPressure = 0;
+    let requestedNormalX = this.lastNormalX;
+    let requestedNormalY = this.lastNormalY;
+    let pressedLimit = contactLimit;
     if (this.grabbed) {
-      const absoluteX = this.targetX + baseX;
-      const absoluteY = this.targetY + baseY;
-      const radius = Math.hypot(absoluteX, absoluteY);
+      const requestedX = this.targetX + baseX;
+      const requestedY = this.targetY + baseY;
+      const requestedRadius = Math.hypot(requestedX, requestedY);
+      if (requestedRadius > 1e-4) {
+        requestedNormalX = requestedX / requestedRadius;
+        requestedNormalY = requestedY / requestedRadius;
+        this.lastNormalX = requestedNormalX;
+        this.lastNormalY = requestedNormalY;
+      }
       targetX = this.targetX;
       targetY = this.targetY;
-      if (radius > limit && radius > 1e-4) {
-        const over = radius - limit;
-        const allowed = limit + WALL_SLACK * (1 - Math.exp(-over / WALL_SLACK));
-        targetX = (absoluteX / radius) * allowed - baseX;
-        targetY = (absoluteY / radius) * allowed - baseY;
-        pullPressure = clamp(over / (WALL_SLACK * 1.6), 0, 1);
+      if (requestedRadius > contactLimit) {
+        const over = requestedRadius - contactLimit;
+        pullPressure = clamp(over / pressureTravel, 0, 1);
+        const easedPressure = pullPressure * pullPressure * (3 - 2 * pullPressure);
+        pressedLimit =
+          contactLimit + (maxPressedLimit - contactLimit) * easedPressure;
+        const allowedRadius = Math.min(
+          requestedRadius,
+          contactLimit +
+            (maxPressedLimit - contactLimit) *
+              (1 - Math.exp(-over / pressureTravel))
+        );
+        targetX = requestedNormalX * allowedRadius - baseX;
+        targetY = requestedNormalY * allowedRadius - baseY;
       }
     }
 
@@ -215,6 +256,25 @@ export class BlobDragController {
           this.posX.step(0, dt, 1.55, 0.44);
           this.posY.step(0, dt, 1.55, 0.44);
         }
+
+        // A spring can overshoot a target. Resolve that overshoot every
+        // substep, otherwise a fast drag can put transparent image edges past
+        // the circular display before the next frame has a chance to recover.
+        const actualX = this.posX.value + baseX;
+        const actualY = this.posY.value + baseY;
+        const actualRadius = Math.hypot(actualX, actualY);
+        const boundary = this.grabbed ? pressedLimit : contactLimit;
+        if (actualRadius > boundary && actualRadius > 1e-4) {
+          const nx = actualX / actualRadius;
+          const ny = actualY / actualRadius;
+          this.posX.value = nx * boundary - baseX;
+          this.posY.value = ny * boundary - baseY;
+          const outwardVelocity = this.posX.velocity * nx + this.posY.velocity * ny;
+          if (outwardVelocity > 0) {
+            this.posX.velocity -= nx * outwardVelocity;
+            this.posY.velocity -= ny * outwardVelocity;
+          }
+        }
         this.wobbleX.step(0, dt, 3.4, 0.3);
         this.wobbleY.step(0, dt, 3.6, 0.32);
       }
@@ -225,30 +285,55 @@ export class BlobDragController {
     const x = this.posX.value;
     const y = this.posY.value;
     const radius = Math.hypot(x + baseX, y + baseY);
+    const nearWallStart = Math.max(0, contactLimit - pressureTravel * 0.72);
     const contact = clamp(
-      (radius - limit * WALL_ONSET) / (limit * (1 - WALL_ONSET) + WALL_SLACK),
+      (radius - nearWallStart) / Math.max(1, contactLimit - nearWallStart),
       0,
       1
     );
-    const pressure = Math.max(contact, pullPressure);
-    const angle = radius > 1e-4 ? Math.atan2(y + baseY, x + baseX) : 0;
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-    const cos2 = cos * cos;
-    const sin2 = sin * sin;
-    // Compression runs along the contact normal; the tangent axis expands, so
-    // the silhouette flattens against the glass instead of merely scaling.
-    const compression = pressure * 0.085 + this.shakeEnergy * 0.016;
-    this.pose.scaleX = -compression * cos2 + compression * 0.82 * sin2;
-    this.pose.scaleY = -compression * sin2 + compression * 0.82 * cos2;
-    // Rolling into the impact, plus the shake's own counter-rotation.
+    const rawPressure = Math.max(contact, pullPressure);
+    const pressure = rawPressure * rawPressure * (3 - 2 * rawPressure);
+    const normalX =
+      pullPressure > 0
+        ? requestedNormalX
+        : radius > 1e-4
+          ? (x + baseX) / radius
+          : this.lastNormalX;
+    const normalY =
+      pullPressure > 0
+        ? requestedNormalY
+        : radius > 1e-4
+          ? (y + baseY) / radius
+          : this.lastNormalY;
+    this.lastNormalX = normalX;
+    this.lastNormalY = normalY;
+
+    // Local x is tangent to the wall and local y points into its normal. This
+    // creates real directional squash instead of independent horizontal and
+    // vertical scaling that only looks correct on the side walls.
+    const tangentAngle = Math.atan2(normalY, normalX) + Math.PI / 2;
+    let deformAngle = (tangentAngle * 180) / Math.PI;
+    while (deformAngle > 90) deformAngle -= 180;
+    while (deformAngle < -90) deformAngle += 180;
+    const compression =
+      MAX_NORMAL_COMPRESSION * pressure + this.shakeEnergy * 0.035;
+    const expansion =
+      MAX_TANGENT_EXPANSION * pressure + this.shakeEnergy * 0.055;
+    // Whole-character deformation stays quiet; body deformation carries the
+    // visible contact. Face remains attached to that same surface transform.
+    this.pose.scaleX = 0;
+    this.pose.scaleY = 0;
+    this.pose.bodyScaleX = clamp(expansion, 0, 0.44);
+    this.pose.bodyScaleY = clamp(-compression, -0.38, 0);
+    this.pose.deformAngle = deformAngle;
+    // A diagonal impact leans a little, while cardinal impacts stay planted.
     this.pose.rotation = clamp(
-      pressure * 3.4 * Math.sin(2 * angle) + this.wobbleX.value * 0.05,
+      pressure * 5.2 * normalX * normalY + this.wobbleX.value * 0.04,
       -5,
       5
     );
-    this.pose.skewX = clamp(-compression * 52 * cos * sin - this.wobbleX.value * 0.05, -6, 6);
-    this.pose.skewY = clamp(compression * 20 * cos * sin + this.wobbleY.value * 0.02, -3, 3);
+    this.pose.skewX = clamp(-this.wobbleX.value * 0.06, -5, 5);
+    this.pose.skewY = clamp(this.wobbleY.value * 0.04, -3, 3);
     this.pose.x = x + this.wobbleX.value;
     this.pose.y = y + this.wobbleY.value;
     this.pose.wallPressure = pressure;

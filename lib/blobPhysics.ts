@@ -27,6 +27,8 @@ export interface JellyTarget {
   bodySkewY: number;
   bodyOriginX: number;
   bodyOriginY: number;
+  /** Local body squash-axis angle, in degrees. */
+  bodyDeformAngle: number;
   /** User-tunable multiplier for secondary mass follow-through. */
   jellyAmount: number;
   /** User-tunable multiplier for the internal ripple response. */
@@ -84,6 +86,7 @@ export class BlobJellyPhysics {
   private readonly bodySkewY = new DampedAxis();
   private readonly bodyOriginX = new DampedAxis();
   private readonly bodyOriginY = new DampedAxis(0.82);
+  private readonly bodyDeformAngle = new DampedAxis();
   private readonly rippleTop = new DampedAxis();
   private readonly rippleUpper = new DampedAxis();
   private readonly rippleLower = new DampedAxis();
@@ -108,6 +111,7 @@ export class BlobJellyPhysics {
     bodySkewY: 0,
     bodyOriginX: 0,
     bodyOriginY: 0.82,
+    bodyDeformAngle: 0,
     jellyAmount: 1,
     rippleAmount: 1,
     bodySpeed: 0,
@@ -135,6 +139,7 @@ export class BlobJellyPhysics {
     this.bodySkewY.reset();
     this.bodyOriginX.reset();
     this.bodyOriginY.reset(0.82);
+    this.bodyDeformAngle.reset();
     this.rippleTop.reset();
     this.rippleUpper.reset();
     this.rippleLower.reset();
@@ -159,6 +164,7 @@ export class BlobJellyPhysics {
       bodySkewY: 0,
       bodyOriginX: 0,
       bodyOriginY: 0.82,
+      bodyDeformAngle: 0,
       jellyAmount: 1,
       rippleAmount: 1,
       bodySpeed: 0,
@@ -262,6 +268,15 @@ export class BlobJellyPhysics {
         );
         this.bodyOriginX.step(target.bodyOriginX, dt, 4.2, 0.78);
         this.bodyOriginY.step(target.bodyOriginY, dt, 4.2, 0.78);
+        // Squash axes repeat every 180 degrees. Follow nearest equivalent so
+        // dragging around the circular edge never spins the body.
+        const deformTarget =
+          target.bodyDeformAngle +
+          Math.round(
+            (this.bodyDeformAngle.value - target.bodyDeformAngle) / 180
+          ) *
+            180;
+        this.bodyDeformAngle.step(deformTarget, dt, 3.4, 0.42);
       }
     }
 
@@ -348,6 +363,7 @@ export class BlobJellyPhysics {
     this.pose.bodySkewY = this.bodySkewY.value;
     this.pose.bodyOriginX = this.bodyOriginX.value;
     this.pose.bodyOriginY = this.bodyOriginY.value;
+    this.pose.bodyDeformAngle = this.bodyDeformAngle.value;
     this.pose.jellyAmount = target.jellyAmount;
     this.pose.rippleAmount = target.rippleAmount;
     this.pose.bodySpeed = Math.hypot(
