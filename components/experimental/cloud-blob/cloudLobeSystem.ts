@@ -18,6 +18,7 @@ import {
   type CloudMotionConfig,
   type CloudColourConfig,
   type SuspendedDroplet,
+  type TwinklingStar,
   type CloudPresetName,
 } from "./cloudTypes";
 
@@ -50,12 +51,12 @@ export const DEFAULT_DEFORMATION: CloudDeformationParams = {
 };
 
 export const DEFAULT_MOTION_CONFIG: CloudMotionConfig = {
-  floatAmount: 3.5,
-  driftAmount: 1.8,
+  floatAmount: 4.0,
+  driftAmount: 2.2,
   wobbleAmount: 0,
-  lobeLag: 0.95,
-  springStiffness: 145,
-  springDamping: 15.0,
+  lobeLag: 1.08,
+  springStiffness: 122,
+  springDamping: 11.2,
 };
 
 export const DEFAULT_COLOUR: CloudColourConfig = {
@@ -343,6 +344,39 @@ export const SUSPENDED_DROPLETS: readonly SuspendedDroplet[] = [
   { x: 14, y: 22, radius: 2.0, brightness: 0.16, driftPhase: 5.2, driftSpeed: 0.62 },
 ];
 
+/**
+ * 15 Whimsical twinkling stars & spark particles nestled across the cloud body.
+ * Attached to specific billow lobes so they ride naturally with the soft-body motion.
+ */
+export const TWINKLING_STARS: readonly TwinklingStar[] = [
+  // 1. Crown crest sparkles (sunlit cauliflower dome peaks)
+  { x: -38, y: -24, baseRadius: 3.2, rayLength: 10, speed: 2.2, phase: 0.2, attachedLobe: "topCrown" },
+  { x: 34, y: -20, baseRadius: 2.8, rayLength: 8, speed: 1.8, phase: 1.7, attachedLobe: "topCrown" },
+  { x: -2, y: -38, baseRadius: 3.6, rayLength: 12, speed: 2.6, phase: 3.1, attachedLobe: "topCrown" },
+  { x: -18, y: -14, baseRadius: 2.4, rayLength: 7, speed: 2.0, phase: 4.8, attachedLobe: "topCrown" },
+
+  // 2. Left cheek & shoulder billow sparkles
+  { x: -28, y: -12, baseRadius: 3.0, rayLength: 9, speed: 1.9, phase: 1.1, attachedLobe: "leftCheek" },
+  { x: -20, y: 16, baseRadius: 2.6, rayLength: 7.5, speed: 2.4, phase: 2.8, attachedLobe: "leftCheek" },
+  { x: -40, y: 4, baseRadius: 2.2, rayLength: 6.5, speed: 1.7, phase: 5.2, attachedLobe: "leftCheek" },
+
+  // 3. Right cheek & shoulder billow sparkles
+  { x: 26, y: -10, baseRadius: 3.0, rayLength: 9, speed: 2.1, phase: 0.8, attachedLobe: "rightCheek" },
+  { x: 22, y: 14, baseRadius: 2.5, rayLength: 7, speed: 1.9, phase: 3.6, attachedLobe: "rightCheek" },
+  { x: 36, y: 2, baseRadius: 2.2, rayLength: 6, speed: 2.5, phase: 2.1, attachedLobe: "rightCheek" },
+
+  // 4. Central forehead starlight (above eyes)
+  { x: -14, y: -26, baseRadius: 2.8, rayLength: 8.5, speed: 2.3, phase: 2.2, attachedLobe: "core" },
+  { x: 16, y: -24, baseRadius: 2.6, rayLength: 8, speed: 1.7, phase: 4.2, attachedLobe: "core" },
+
+  // 5. Trailing wind tuft sparkle
+  { x: 10, y: -4, baseRadius: 3.4, rayLength: 11, speed: 2.8, phase: 1.4, attachedLobe: "trailingTuft" },
+
+  // 6. Lower shelf floating sparkles
+  { x: -28, y: 12, baseRadius: 2.4, rayLength: 7, speed: 1.6, phase: 3.9, attachedLobe: "bottomBelly" },
+  { x: 26, y: 10, baseRadius: 2.4, rayLength: 7, speed: 2.0, phase: 5.5, attachedLobe: "bottomBelly" },
+];
+
 export function createLobeStates(): Record<string, LobeState> {
   const states: Record<string, LobeState> = {};
   for (const def of LOBE_DEFINITIONS) {
@@ -486,17 +520,43 @@ export function computeLobeTarget(
   tx -= Math.max(-maxLobeOffset, Math.min(maxLobeOffset, rawLagX));
   ty -= Math.max(-maxLobeOffset, Math.min(maxLobeOffset, rawLagY));
 
-  // 8. Scale computation
+  // 8. Scale & Rich Squish / Stretch Soft-Body Deformation
   let sx = breathScale * (1 + puff * 0.3);
   let sy = breathScale * (1 + puff * 0.3);
 
   if (squash > 0) {
-    sx *= 1 + squash * 0.30;
-    sy *= 1 - squash * 0.24;
+    // Rich, juicy squish physics:
+    sx *= 1 + squash * 0.58;
+    sy *= 1 - squash * 0.46;
+
+    // Physical displacement on squish:
+    // Crown pushes down into body, cheeks spread out wide, base spreads down
+    if (def.baseY < -10) {
+      ty += squash * Math.abs(def.baseY) * 0.42; // Crown compresses downward
+    } else if (def.baseY > 10) {
+      ty += squash * 14; // Base shelf expands down
+    }
+    if (def.baseX < -15) {
+      tx -= squash * 22; // Left cheek puffs out wide
+    } else if (def.baseX > 15) {
+      tx += squash * 22; // Right cheek puffs out wide
+    }
   }
+
   if (stretch > 0) {
-    sx *= 1 - stretch * 0.20;
-    sy *= 1 + stretch * 0.36;
+    // Dynamic vertical stretch:
+    sx *= 1 - stretch * 0.36;
+    sy *= 1 + stretch * 0.65;
+
+    // Physical displacement on stretch:
+    if (def.baseY < -10) {
+      ty -= stretch * 26; // Crown reaches high
+    }
+    if (def.baseX < -15) {
+      tx += stretch * 14; // Cheeks cinch inward
+    } else if (def.baseX > 15) {
+      tx -= stretch * 14;
+    }
   }
 
   let rot = (lean * 0.38 * (1 - def.lagFactor * 0.45) * Math.PI) / 180;
@@ -520,22 +580,22 @@ export function computeLobeTarget(
 
     if (worldDist + outerRadius > boundaryLimit) {
       const penetration = worldDist + outerRadius - boundaryLimit;
-      const pushAmount = penetration * 0.76;
+      const pushAmount = penetration * 0.80;
       tx -= normX * pushAmount;
       ty -= normY * pushAmount;
 
-      const compression = Math.min(0.65, Math.max(0, penetration / (outerRadius * 0.65)));
-      // Radial flattening normal & tangential volume bunching
-      const radialFactor = 1 - compression * 0.44;
-      const tangentialFactor = 1 + compression * 0.34;
+      const compression = Math.min(0.85, Math.max(0, penetration / (outerRadius * 0.60)));
+      // Enhanced radial flattening normal & tangential volume bunching
+      const radialFactor = 1 - compression * 0.55;
+      const tangentialFactor = 1 + compression * 0.45;
       const normX2 = normX * normX;
       const normY2 = normY * normY;
       sx *= (radialFactor * normX2 + tangentialFactor * normY2);
       sy *= (radialFactor * normY2 + tangentialFactor * normX2);
 
-      // Subtle rim alignment torque along AMOLED circular glass curvature
+      // Squeeze torque along AMOLED circular glass curvature
       const rimTangentAngle = Math.atan2(normY, normX) + Math.PI / 2;
-      rot += Math.sin(rimTangentAngle - rot) * compression * 0.28;
+      rot += Math.sin(rimTangentAngle - rot) * compression * 0.35;
     }
   }
 

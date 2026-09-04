@@ -114,6 +114,17 @@ export interface SuspendedDroplet {
   driftSpeed: number;
 }
 
+export interface TwinklingStar {
+  x: number;
+  y: number;
+  baseRadius: number;
+  rayLength: number;
+  speed: number;
+  phase: number;
+  hueShift?: string;
+  attachedLobe: string;
+}
+
 export interface CloudWisp {
   active: boolean;
   x: number;
@@ -128,6 +139,10 @@ export interface CloudWisp {
   maxLife: number;
   softness: number;
   color: string;
+  wobbleSpeed?: number;
+  wobbleAmp?: number;
+  wobblePhase?: number;
+  isMicroParticle?: boolean;
 }
 
 export type CloudPresetName =

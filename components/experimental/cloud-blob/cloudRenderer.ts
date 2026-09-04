@@ -16,6 +16,7 @@ import {
   LOBE_DEFINITIONS,
   LOBE_SUB_PUFFS,
   SUSPENDED_DROPLETS,
+  TWINKLING_STARS,
 } from "./cloudLobeSystem";
 import type {
   LobeDefinition,
@@ -57,8 +58,6 @@ interface RenderOptions {
   skipTransform?: boolean;
 }
 
-const clamp = (v: number, min: number, max: number) =>
-  v < min ? min : v > max ? max : v;
 
 export function parseHexColor(hex: string): { r: number; g: number; b: number } {
   const clean = hex.replace("#", "");
@@ -362,64 +361,114 @@ function drawFaceRestingCradle(
   ctx.restore();
 }
 
-function drawSuspendedDroplets(
+function drawTwinklingStarsAndParticles(
   ctx: CanvasRenderingContext2D,
   cx: number,
   cy: number,
-  coreState: LobeState,
+  lobeStates: Record<string, LobeState>,
   edgeRgb: { r: number; g: number; b: number },
   idleTime: number
 ) {
   ctx.save();
-  const dropletCount = SUSPENDED_DROPLETS.length;
 
+  // 1. Render 15 Whimsical Twinkling Stars across the Cloud
+  for (let i = 0; i < TWINKLING_STARS.length; i++) {
+    const star = TWINKLING_STARS[i];
+    const lobe = lobeStates[star.attachedLobe] || lobeStates.core;
+    if (!lobe) continue;
+
+    // Follow the lobe's position, scale, and subtle rotation
+    const cosR = Math.cos(lobe.rotation);
+    const sinR = Math.sin(lobe.rotation);
+    const scaledX = star.x * lobe.scaleX;
+    const scaledY = star.y * lobe.scaleY;
+    const rotX = scaledX * cosR - scaledY * sinR;
+    const rotY = scaledX * sinR + scaledY * cosR;
+
+    const px = cx + lobe.x + rotX;
+    const py = cy + lobe.y + rotY;
+
+    // Sparkle oscillation: power of 4 gives genuine astronomical twinkle
+    const sinVal = Math.sin(idleTime * star.speed + star.phase);
+    const twinkle = Math.pow(Math.max(0, sinVal), 4);
+    const ambient = 0.12 + 0.08 * Math.sin(idleTime * 1.2 + star.phase);
+    const alpha = (ambient + twinkle * 0.88) * lobe.opacity;
+
+    if (alpha <= 0.02) continue;
+
+    // A. Soft glowing starlight halo
+    const glowRadius = Math.max(3, star.baseRadius * (1.8 + twinkle * 2.2));
+    const haloGrad = ctx.createRadialGradient(px, py, 0, px, py, glowRadius);
+    haloGrad.addColorStop(0, `rgba(255, 255, 255, ${alpha * 0.95})`);
+    haloGrad.addColorStop(0.35, `rgba(215, 235, 255, ${alpha * 0.55})`);
+    haloGrad.addColorStop(1.0, "rgba(215, 235, 255, 0)");
+
+    ctx.fillStyle = haloGrad;
+    ctx.beginPath();
+    ctx.arc(px, py, glowRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // B. Bright sparkling star core
+    const coreR = star.baseRadius * (0.55 + twinkle * 0.55);
+    ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(1, alpha * 1.1)})`;
+    ctx.beginPath();
+    ctx.arc(px, py, coreR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // C. Crisp 4-point diamond star cross during peak twinkle flash
+    if (twinkle > 0.14) {
+      const rayLen = star.rayLength * (0.45 + twinkle * 0.85);
+      const rayWidth = 1.4 * (0.6 + twinkle * 0.6);
+      const starAlpha = Math.min(1, twinkle * 1.15);
+
+      ctx.fillStyle = `rgba(255, 255, 255, ${starAlpha})`;
+
+      // 4-point diamond star polygon
+      ctx.beginPath();
+      ctx.moveTo(px, py - rayLen); // North tip
+      ctx.quadraticCurveTo(px + rayWidth * 0.35, py - rayWidth * 0.35, px + rayLen, py); // East tip
+      ctx.quadraticCurveTo(px + rayWidth * 0.35, py + rayWidth * 0.35, px, py + rayLen); // South tip
+      ctx.quadraticCurveTo(px - rayWidth * 0.35, py + rayWidth * 0.35, px - rayLen, py); // West tip
+      ctx.quadraticCurveTo(px - rayWidth * 0.35, py - rayWidth * 0.35, px, py - rayLen);
+      ctx.closePath();
+      ctx.fill();
+
+      // Subtle diagonal micro-glint at top of flash
+      if (twinkle > 0.50) {
+        const diagLen = rayLen * 0.42;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${starAlpha * 0.70})`;
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(px - diagLen, py - diagLen);
+        ctx.lineTo(px + diagLen, py + diagLen);
+        ctx.moveTo(px + diagLen, py - diagLen);
+        ctx.lineTo(px - diagLen, py + diagLen);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // 2. Render drifting micro cloud motes
+  const coreState = lobeStates.core ?? { x: 0, y: 0 };
+  const dropletCount = SUSPENDED_DROPLETS.length;
   for (let i = 0; i < dropletCount; i++) {
     const d = SUSPENDED_DROPLETS[i];
-    let px: number;
-    let py: number;
-    let alpha: number;
+    const riseSpeed = 0.06 * d.driftSpeed;
+    const progress = ((idleTime * riseSpeed + d.driftPhase * 0.25) % 1 + 1) % 1;
+    const laneX = d.x * 0.75 + Math.sin(idleTime * 0.45 + d.driftPhase) * 10;
+    const spanY = 40 - progress * 90;
 
-    if (i % 3 === 0) {
-      // 1. Convection updraft motes rising through warm central core
-      const riseSpeed = 0.05 * d.driftSpeed;
-      const progress = ((idleTime * riseSpeed + d.driftPhase * 0.25) % 1 + 1) % 1;
-      const laneX = d.x * 0.65 + Math.sin(idleTime * 0.35 + d.driftPhase) * 8;
-      const spanY = 50 - progress * 105;
+    const px = cx + coreState.x + laneX;
+    const py = cy + coreState.y + spanY;
 
-      px = cx + coreState.x + laneX;
-      py = cy + coreState.y + spanY;
+    const verticalFade = Math.sin(progress * Math.PI);
+    const alpha = d.brightness * verticalFade * 0.75;
+    if (alpha <= 0.02) continue;
 
-      const verticalFade = Math.sin(progress * Math.PI);
-      alpha = d.brightness * verticalFade * 0.65;
-    } else {
-      // 2. Slow gentle circulation
-      const dir = i % 2 === 0 ? 1 : -1;
-      const angVel = (0.14 + (d.driftSpeed - 0.7) * 0.08) * dir;
-      const homeDist = Math.hypot(d.x, d.y) * 0.92;
-      const homeAngle = Math.atan2(d.y, d.x);
-      const currentAngle = homeAngle + idleTime * angVel;
-
-      const breathWobble = Math.sin(idleTime * 0.4 + d.driftPhase) * 4;
-      const orbRadius = homeDist + breathWobble;
-
-      const lx = Math.cos(currentAngle) * (orbRadius * 1.10);
-      const ly = Math.sin(currentAngle) * (orbRadius * 0.85);
-
-      px = cx + coreState.x + lx;
-      py = cy + coreState.y + ly;
-
-      const currentDist = Math.hypot(lx, ly);
-      const edgeFade = clamp((88 - currentDist) / 24, 0, 1);
-      alpha = d.brightness * edgeFade * 0.60;
-    }
-
-    if (alpha <= 0.015) continue;
-
-    // Soft, diffuse atmospheric vapor mote (NO pinpoint bright star core)
-    const moteRadius = Math.max(1.8, d.radius * 2.2);
+    const moteRadius = Math.max(1.6, d.radius * 1.8);
     const moteGrad = ctx.createRadialGradient(px, py, 0, px, py, moteRadius);
-    moteGrad.addColorStop(0, `rgba(245, 248, 255, ${alpha * 0.55})`);
-    moteGrad.addColorStop(0.55, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, ${alpha * 0.22})`);
+    moteGrad.addColorStop(0, `rgba(255, 255, 255, ${alpha * 0.85})`);
+    moteGrad.addColorStop(0.55, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, ${alpha * 0.35})`);
     moteGrad.addColorStop(1.0, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, 0)`);
 
     ctx.fillStyle = moteGrad;
@@ -427,6 +476,7 @@ function drawSuspendedDroplets(
     ctx.arc(px, py, moteRadius, 0, Math.PI * 2);
     ctx.fill();
   }
+
   ctx.restore();
 }
 
@@ -486,19 +536,19 @@ function drawMistWisps(
   edgeRgb: { r: number; g: number; b: number }
 ) {
   ctx.save();
-  ctx.globalCompositeOperation = "screen";
 
   for (const w of wisps) {
     if (!w.active || w.opacity <= 0.001) continue;
 
-    const grad = ctx.createRadialGradient(w.x, w.y, 0, w.x, w.y, w.radius * w.softness);
-    grad.addColorStop(0, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, ${w.opacity * 0.85})`);
-    grad.addColorStop(0.48, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, ${w.opacity * 0.32})`);
+    const r = w.radius * w.softness;
+    const grad = ctx.createRadialGradient(w.x, w.y, 0, w.x, w.y, r);
+    grad.addColorStop(0, `rgba(255, 255, 255, ${w.opacity * 0.92})`);
+    grad.addColorStop(0.45, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, ${w.opacity * 0.42})`);
     grad.addColorStop(1.0, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, 0)`);
 
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.arc(w.x, w.y, w.radius * w.softness, 0, Math.PI * 2);
+    ctx.arc(w.x, w.y, r, 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -619,8 +669,8 @@ export function renderCloudBlob(
   // 7. Subtle internal subsurface warmth (faint, atmospheric warmth deep inside)
   drawInnerVolumeGlow(ctx, cx, cy, coreState, glowRgb, colour.glowIntensity, idleTime);
 
-  // 8. Suspended Atmospheric Vapor Motes (sparse, soft, non-sparkling)
-  drawSuspendedDroplets(ctx, cx, cy, coreState, edgeRgb, idleTime);
+  // 8. Whimsical Twinkling Stars & Floating Cloud Particles
+  drawTwinklingStarsAndParticles(ctx, cx, cy, lobeStates, edgeRgb, idleTime);
 
   // 9. Soft Internal Cheek Blush (warm coral/peach vapor tint deep in cheek masses)
   drawCheekBlush(ctx, cx, cy, lobeStates.leftCheek, lobeStates.rightCheek, cheekBlush);

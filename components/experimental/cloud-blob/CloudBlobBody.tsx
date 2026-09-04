@@ -28,7 +28,8 @@ import {
 } from "./cloudLobeSystem";
 import {
   createWispPool,
-  spawnWisp,
+  spawnRandomIdleWisp,
+  spawnDirectionalTrailWisp,
   updateWisps,
 } from "./cloudMistTrails";
 import {
@@ -64,9 +65,11 @@ export default function CloudBlobBody({
 
   // Simulation persistent refs
   const lobeStatesRef = useRef(createLobeStates());
-  const wispPoolRef = useRef(createWispPool(8));
+  const wispPoolRef = useRef(createWispPool(24));
   const lastTimeRef = useRef<number | null>(null);
   const idleTimeRef = useRef(0);
+  const idleWispTimerRef = useRef(0.8);
+  const nextIdleIntervalRef = useRef(1.0);
   const prevPosRef = useRef({ x: 0, y: 0, lean: 0, squash: 0 });
   const velocityRef = useRef({ vx: 0, vy: 0 });
 
@@ -295,38 +298,59 @@ export default function CloudBlobBody({
       let dynamicSquash = params.squash;
       let dynamicLean = params.lean;
 
-      if (dragSpeed > 60) {
-        const stretchBonus = Math.min(dragSpeed * 0.0009, 0.28);
+      if (dragSpeed > 40) {
+        // High-velocity inertia stretch along direction of motion
+        const stretchBonus = Math.min(dragSpeed * 0.0016, 0.48);
         dynamicStretch += stretchBonus;
-        dynamicLean += clamp(vx * 0.035, -22, 22);
+        dynamicLean += clamp(vx * 0.045, -28, 28);
       }
 
-      // Release rebound jiggle creates subtle momentary squash on rebound
+      // Juicy spring rebound physics on drag release
       if (jiggleSpringRef.current.active) {
-        const jiggleSpeed = Math.hypot(jiggleSpringRef.current.vx, jiggleSpringRef.current.vy);
-        if (jiggleSpeed > 50) {
-          dynamicSquash += Math.min(jiggleSpeed * 0.0006, 0.18);
+        const js = jiggleSpringRef.current;
+        const jiggleSpeed = Math.hypot(js.vx, js.vy);
+        const jiggleDisp = Math.hypot(js.x, js.y);
+        if (jiggleSpeed > 25) {
+          const dot = (js.x * js.vx + js.y * js.vy) / (jiggleDisp * jiggleSpeed || 1);
+          if (dot > 0.1) {
+            // Moving away: stretch
+            dynamicStretch += Math.min(jiggleSpeed * 0.0015, 0.40);
+          } else {
+            // Braking / rebounding towards center: juicy squish!
+            dynamicSquash += Math.min(jiggleSpeed * 0.0018, 0.48);
+          }
         }
       }
 
-      // 4. Mist Wisp Emission (velocity-triggered or release-rebound)
+      // 4. Multi-Directional Mist Trails & Spontaneous Idle Billow Shedding
       if (trails.enabled) {
-        const leanDelta = Math.abs(params.lean - prevPosRef.current.lean);
-        const isRapid = dragSpeed > 75 || leanDelta > 4.5 || (jiggleSpringRef.current.active && dragSpeed > 45);
+        const isRapid = dragSpeed > 45 || Math.abs(params.lean - prevPosRef.current.lean) > 3.5;
 
-        if (isRapid && Math.random() < 0.25 * trails.spawnRate) {
-          const originX = size / 2 + currentPosX + (Math.random() - 0.5) * 32;
-          const originY = size / 2 + currentPosY + 22 + (Math.random() - 0.5) * 20;
-          spawnWisp(
+        // A. Dynamic Motion / Drag Trails (spawns from trailing perimeter with directional spread)
+        if (isRapid && Math.random() < 0.38 * trails.spawnRate) {
+          spawnDirectionalTrailWisp(
             wispPoolRef.current,
-            originX,
-            originY,
-            -vx * 0.18 + (Math.random() - 0.5) * 10,
-            -vy * 0.18 - 8 + (Math.random() - 0.5) * 8,
-            20 + Math.random() * 12,
+            size / 2 + currentPosX,
+            size / 2 + currentPosY,
+            vx,
+            vy,
             cloudColour.edge,
-            trails.lifetime,
-            0.32 * trails.trailStrength
+            trails.trailStrength,
+            trails.lifetime
+          );
+        }
+
+        // B. Spontaneous Multi-Directional Idle Billow Shedding & Micro Cloud Particles
+        idleWispTimerRef.current += dt;
+        if (idleWispTimerRef.current > nextIdleIntervalRef.current) {
+          idleWispTimerRef.current = 0;
+          nextIdleIntervalRef.current = 0.9 + Math.random() * 1.5; // Random interval between 0.9s and 2.4s
+          spawnRandomIdleWisp(
+            wispPoolRef.current,
+            size / 2 + currentPosX,
+            size / 2 + currentPosY,
+            cloudColour.edge,
+            trails.trailStrength
           );
         }
       }

@@ -12,7 +12,8 @@ import {
 } from "@/components/experimental/cloud-blob/cloudLobeSystem";
 import {
   createWispPool,
-  spawnWisp,
+  spawnRandomIdleWisp,
+  spawnDirectionalTrailWisp,
   updateWisps,
 } from "@/components/experimental/cloud-blob/cloudMistTrails";
 import { renderCloudBlob } from "@/components/experimental/cloud-blob/cloudRenderer";
@@ -118,8 +119,10 @@ export default function CloudCharacter({
 
   // Simulation state. Kept in refs so a slider change never restarts the sim.
   const lobeStates = useRef(createLobeStates());
-  const wisps = useRef(createWispPool(8));
+  const wisps = useRef(createWispPool(24));
   const idleTime = useRef(0);
+  const idleWispTimer = useRef(0.8);
+  const nextIdleInterval = useRef(1.0);
   const lastFrame = useRef<number | null>(null);
   const previous = useRef({ x: 0, y: 0 });
 
@@ -241,26 +244,33 @@ export default function CloudCharacter({
 
     if (trails.enabled) {
       const speed = Math.hypot(vx, vy);
-      if (speed > 50) {
-        // Spawn from the trailing perimeter edge (opposite to velocity vector)
-        const charX = centre + offsetX;
-        const charY = centre + offsetY;
-        const vAngle = Math.atan2(vy, vx);
-        const spawnDistance = 68 * Math.min(1.2, scaleX);
-        const spawnX = charX - Math.cos(vAngle) * spawnDistance + (Math.random() - 0.5) * 20;
-        const spawnY = charY - Math.sin(vAngle) * (spawnDistance * 0.75) + (Math.random() - 0.5) * 16;
-
-        spawnWisp(
+      if (speed > 35) {
+        spawnDirectionalTrailWisp(
           wisps.current,
-          spawnX,
-          spawnY,
-          vx * 0.4,
-          vy * 0.4,
-          24 * trails.trailStrength,
+          centre + offsetX,
+          centre + offsetY,
+          vx,
+          vy,
           palette.edge,
+          trails.trailStrength,
           trails.lifetime
         );
       }
+
+      // Multi-directional spontaneous idle billow shedding & micro cloud particles
+      idleWispTimer.current += step;
+      if (idleWispTimer.current > nextIdleInterval.current) {
+        idleWispTimer.current = 0;
+        nextIdleInterval.current = 0.9 + Math.random() * 1.5;
+        spawnRandomIdleWisp(
+          wisps.current,
+          centre + offsetX,
+          centre + offsetY,
+          palette.edge,
+          trails.trailStrength
+        );
+      }
+
       updateWisps(wisps.current, step, trails.driftAmount);
     }
 

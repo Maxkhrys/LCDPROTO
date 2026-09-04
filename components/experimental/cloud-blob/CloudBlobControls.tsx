@@ -124,7 +124,7 @@ export default function CloudBlobControls({
           <span className="text-white/20">|</span>
           <div className="flex items-center gap-1.5">
             <span className="text-white/40 uppercase tracking-wider">Visible Wisps:</span>
-            <span className="font-semibold text-purple-400">{telemetry.activeWisps} / 8</span>
+            <span className="font-semibold text-purple-400">{telemetry.activeWisps} / 24</span>
           </div>
           <span className="text-white/20">|</span>
           <div className="flex items-center gap-1.5">
