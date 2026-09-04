@@ -11,6 +11,7 @@ import {
 import { AmbientDrift, type IdleConfig } from "@/lib/blobIdle";
 import { BlobJellyPhysics, type JellyTarget } from "@/lib/blobPhysics";
 import { BlobDragController } from "@/lib/blobDrag";
+import EnvironmentLayer from "./EnvironmentLayer";
 import {
   BODY_FRACTION,
   NEUTRAL_BLOB,
@@ -66,6 +67,7 @@ export default function HomeState({
   autoBehaviourEnabled,
   triggerRequest,
   onBehaviourStatus,
+  displayMode,
   screenColour,
   onOpenBlobTools,
   onCloseBlobTools,
@@ -77,6 +79,8 @@ export default function HomeState({
   mindIntention,
   mindDestination,
   mindDepth,
+  environment,
+  onEnvironmentStatus,
 }: StateViewProps) {
   const [rig, setRig] = useState<BlobRig>(() =>
     applyCalibration(
@@ -392,20 +396,33 @@ export default function HomeState({
 
   return (
     <div
-      className="relative h-full w-full"
+      className="relative isolate h-full w-full"
       style={{ background: screenColour }}
     >
-      <BlobCharacter
+      <EnvironmentLayer
         size={size}
         renderScale={renderScale}
+        playing={playing}
+        speed={speed}
+        screenColour={screenColour}
+        displayMode={displayMode}
         rig={rig}
-        colour={blobColour}
-        onOpenTools={onOpenBlobTools}
-        onCloseTools={onCloseBlobTools}
-        settingsOpen={blobToolsOpen}
-        showPupils={showPupils}
-        drag={drag.current}
+        config={environment}
+        onStatus={onEnvironmentStatus}
       />
+      <div className="relative z-10 h-full w-full">
+        <BlobCharacter
+          size={size}
+          renderScale={renderScale}
+          rig={rig}
+          colour={blobColour}
+          onOpenTools={onOpenBlobTools}
+          onCloseTools={onCloseBlobTools}
+          settingsOpen={blobToolsOpen}
+          showPupils={showPupils}
+          drag={drag.current}
+        />
+      </div>
     </div>
   );
 }

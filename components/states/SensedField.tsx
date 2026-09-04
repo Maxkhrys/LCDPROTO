@@ -154,7 +154,7 @@ export default function SensedField({
       style={{
         width: size,
         height: size,
-        imageRendering: renderScale === 1 ? "pixelated" : "auto",
+        imageRendering: "auto",
       }}
     />
   );

@@ -4,6 +4,7 @@ import type { BehaviourId, HomeActivityStatus } from "./blobBehaviour";
 import type { HomeMood } from "./blobBehaviour";
 import type { BlobColour } from "./blobRig";
 import type { BlobDestination, BlobIntention } from "./blobMind";
+import type { EnvironmentConfig, EnvironmentStatus } from "./environmentConfig";
 
 export type DisplayMode = "dark" | "warm" | "brown";
 
@@ -104,4 +105,8 @@ export interface StateViewProps {
   mindDestination: BlobDestination | null;
   /** Optional normalised depth override; positive moves Blob closer. */
   mindDepth: number | null;
+  /** Prototype environment controls; character rigs do not read these. */
+  environment: EnvironmentConfig;
+  /** Live environment values for the developer readout. */
+  onEnvironmentStatus?: (status: EnvironmentStatus) => void;
 }

@@ -1,0 +1,420 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+import type { BlobRig } from "@/lib/blobRig";
+import type {
+  EnvironmentConfig,
+  EnvironmentStatus,
+} from "@/lib/environmentConfig";
+
+const TAU = Math.PI * 2;
+const CENTRE = 233;
+
+interface EnvironmentLayerProps {
+  size: number;
+  renderScale: number;
+  playing: boolean;
+  speed: number;
+  screenColour: string;
+  displayMode: "dark" | "warm" | "brown";
+  rig: BlobRig;
+  config: EnvironmentConfig;
+  onStatus?: (status: EnvironmentStatus) => void;
+}
+
+interface Mote {
+  x: number;
+  y: number;
+  radius: number;
+  phase: number;
+  drift: number;
+  depth: number;
+  foreground: boolean;
+}
+
+const MOTES: readonly Mote[] = [
+  { x: 76, y: 174, radius: 0.85, phase: 0.1, drift: 0.7, depth: 0.5, foreground: false },
+  { x: 122, y: 104, radius: 0.7, phase: 1.4, drift: 0.45, depth: 0.25, foreground: false },
+  { x: 352, y: 131, radius: 0.9, phase: 2.6, drift: 0.56, depth: 0.7, foreground: false },
+  { x: 392, y: 238, radius: 0.72, phase: 3.7, drift: 0.38, depth: 0.35, foreground: false },
+  { x: 91, y: 302, radius: 0.62, phase: 4.9, drift: 0.3, depth: 0.18, foreground: false },
+  { x: 373, y: 330, radius: 0.8, phase: 5.6, drift: 0.52, depth: 0.6, foreground: false },
+  { x: 176, y: 72, radius: 0.65, phase: 2.1, drift: 0.33, depth: 0.8, foreground: true },
+  { x: 309, y: 357, radius: 0.72, phase: 4.2, drift: 0.28, depth: 0.9, foreground: true },
+] as const;
+
+class ScalarSpring {
+  value = 0;
+  velocity = 0;
+
+  reset() {
+    this.value = 0;
+    this.velocity = 0;
+  }
+
+  step(target: number, dt: number, frequency: number, damping: number) {
+    const omega = Math.PI * 2 * frequency;
+    const acceleration =
+      (target - this.value) * omega * omega - this.velocity * 2 * damping * omega;
+    this.velocity += acceleration * dt;
+    this.value += this.velocity * dt;
+  }
+}
+
+const clamp = (value: number, min: number, max: number) =>
+  value < min ? min : value > max ? max : value;
+
+function rgba(hex: string, alpha: number) {
+  const value = hex.replace("#", "");
+  const r = Number.parseInt(value.slice(0, 2), 16) || 0;
+  const g = Number.parseInt(value.slice(2, 4), 16) || 0;
+  const b = Number.parseInt(value.slice(4, 6), 16) || 0;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function scenePalette(mode: EnvironmentLayerProps["displayMode"]) {
+  if (mode === "warm") {
+    return {
+      sandLight: "#ddcbb5",
+      sandMid: "#b99b7a",
+      sandDark: "#80684f",
+      ripple: "#76593d",
+      stone: "#79634e",
+      stoneLight: "#c0a487",
+      dust: "#ffe7bd",
+      bounce: "#e2a34e",
+    };
+  }
+  if (mode === "brown") {
+    return {
+      sandLight: "#b99e81",
+      sandMid: "#92765b",
+      sandDark: "#5d4735",
+      ripple: "#4f392a",
+      stone: "#544336",
+      stoneLight: "#9f8263",
+      dust: "#f3c98b",
+      bounce: "#c3833d",
+    };
+  }
+  return {
+    sandLight: "#1b120b",
+    sandMid: "#090705",
+    sandDark: "#000000",
+    ripple: "#6b4524",
+    stone: "#21150d",
+    stoneLight: "#624326",
+    dust: "#f1be72",
+    bounce: "#a86122",
+  };
+}
+
+function drawStone(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  light: string,
+  dark: string,
+  alpha: number
+) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  const gradient = ctx.createLinearGradient(x, y - height / 2, x, y + height / 2);
+  gradient.addColorStop(0, light);
+  gradient.addColorStop(0.62, dark);
+  gradient.addColorStop(1, "#130d09");
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.ellipse(x, y, width / 2, height / 2, -0.08, 0, TAU);
+  ctx.fill();
+  ctx.globalAlpha = alpha * 0.28;
+  ctx.fillStyle = light;
+  ctx.beginPath();
+  ctx.ellipse(x - width * 0.12, y - height * 0.16, width * 0.21, height * 0.1, -0.2, 0, TAU);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawStaticScene(
+  ctx: CanvasRenderingContext2D,
+  size: number,
+  displayMode: EnvironmentLayerProps["displayMode"],
+  screenColour: string
+) {
+  const palette = scenePalette(displayMode);
+  const base = displayMode === "dark" ? screenColour : palette.sandMid;
+  ctx.clearRect(0, 0, size, size);
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, size, size);
+
+  const atmosphere = ctx.createRadialGradient(CENTRE, 177, 32, CENTRE, 215, 285);
+  atmosphere.addColorStop(0, rgba(palette.sandLight, displayMode === "dark" ? 0.16 : 0.86));
+  atmosphere.addColorStop(0.55, rgba(palette.sandMid, displayMode === "dark" ? 0.08 : 0.5));
+  atmosphere.addColorStop(1, rgba(palette.sandDark, displayMode === "dark" ? 0.28 : 0.44));
+  ctx.fillStyle = atmosphere;
+  ctx.fillRect(0, 0, size, size);
+
+  // A few broad zen-garden ripples. They are static geometry, so the device
+  // only needs to redraw a cached bitmap during animation.
+  ctx.save();
+  ctx.translate(CENTRE, 393);
+  ctx.rotate(-0.035);
+  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = rgba(palette.ripple, displayMode === "dark" ? 0.22 : 0.26);
+  for (let i = 0; i < 8; i += 1) {
+    ctx.globalAlpha = 0.82 - i * 0.065;
+    ctx.beginPath();
+    ctx.ellipse(0, i * 7, 182 - i * 11, 28 - i * 1.8, 0, Math.PI * 0.08, Math.PI * 0.92);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  drawStone(ctx, 74, 371, 72, 48, palette.stoneLight, palette.stone, displayMode === "dark" ? 0.55 : 0.76);
+  drawStone(ctx, 386, 384, 56, 35, palette.stoneLight, palette.stone, displayMode === "dark" ? 0.45 : 0.7);
+  drawStone(ctx, 124, 403, 39, 24, palette.stoneLight, palette.stone, displayMode === "dark" ? 0.5 : 0.72);
+}
+
+function drawMote(
+  ctx: CanvasRenderingContext2D,
+  mote: Mote,
+  time: number,
+  speed: number,
+  palette: ReturnType<typeof scenePalette>,
+  alphaScale: number
+) {
+  const cycle = (time * mote.drift * speed + mote.phase * 33) % 420;
+  const y = mote.y - cycle * 0.08;
+  const x = mote.x + Math.sin(time * 0.34 + mote.phase) * (1.4 + mote.depth);
+  const twinkle = 0.35 + Math.pow((Math.sin(time * 0.7 + mote.phase) + 1) * 0.5, 7) * 0.65;
+  const radius = mote.radius * (0.82 + twinkle * 0.22);
+  ctx.globalAlpha = alphaScale * twinkle * (0.34 + mote.depth * 0.24);
+  ctx.fillStyle = palette.dust;
+  ctx.beginPath();
+  ctx.arc(x, y < 42 ? y + 330 : y, radius, 0, TAU);
+  ctx.fill();
+}
+
+function drawShadow(
+  ctx: CanvasRenderingContext2D,
+  scaleX: number,
+  scaleY: number,
+  opacity: number,
+  x: number,
+  y: number,
+  softness: number,
+  colour: string
+) {
+  const width = 76 * scaleX;
+  const height = 13 * scaleY;
+  const gradient = ctx.createRadialGradient(x, y, 0, x, y, width * 0.58);
+  const edge = clamp(softness, 0.35, 0.95);
+  gradient.addColorStop(0, rgba(colour, opacity));
+  gradient.addColorStop(edge, rgba(colour, opacity * 0.42));
+  gradient.addColorStop(1, rgba(colour, 0));
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(1, height / Math.max(width, 1));
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, width, width, 0, 0, TAU);
+  ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * Warm miniature-world layer. It deliberately stays separate from
+ * BlobCharacter: the rig remains the only source of character pixels.
+ */
+export default function EnvironmentLayer({
+  size,
+  renderScale,
+  playing,
+  speed,
+  screenColour,
+  displayMode,
+  rig,
+  config,
+  onStatus,
+}: EnvironmentLayerProps) {
+  const backgroundRef = useRef<HTMLCanvasElement>(null);
+  const foregroundRef = useRef<HTMLCanvasElement>(null);
+  const staticSceneRef = useRef<HTMLCanvasElement | null>(null);
+  const rigRef = useRef(rig);
+  const configRef = useRef(config);
+  const statusRef = useRef(onStatus);
+  const shadowX = useRef(new ScalarSpring());
+  const shadowY = useRef(new ScalarSpring());
+  const shadowHeight = useRef(new ScalarSpring());
+
+  rigRef.current = rig;
+  configRef.current = config;
+  statusRef.current = onStatus;
+
+  useEffect(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = size * renderScale;
+    canvas.height = size * renderScale;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+    drawStaticScene(ctx, size, displayMode, screenColour);
+    staticSceneRef.current = canvas;
+    shadowX.current.reset();
+    shadowY.current.reset();
+    shadowHeight.current.reset();
+  }, [size, renderScale, displayMode, screenColour]);
+
+  useEffect(() => {
+    const background = backgroundRef.current;
+    const foreground = foregroundRef.current;
+    const backgroundCtx = background?.getContext("2d");
+    const foregroundCtx = foreground?.getContext("2d");
+    if (!background || !foreground || !backgroundCtx || !foregroundCtx) return;
+
+    let frameId = 0;
+    let last = performance.now();
+    let elapsedSeconds = 0;
+    let statusAt = 0;
+    const render = (now: number) => {
+      const delta = Math.min(100, now - last);
+      last = now;
+      elapsedSeconds += (delta / 1000) * speed;
+      const active = configRef.current;
+      const currentRig = rigRef.current;
+      const dt = Math.min(delta, 100) / 1000;
+
+      backgroundCtx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+      foregroundCtx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+      backgroundCtx.clearRect(0, 0, size, size);
+      foregroundCtx.clearRect(0, 0, size, size);
+      const staticScene = staticSceneRef.current;
+      if (staticScene) {
+        const parallaxX = active.parallaxEnabled ? -currentRig.blob.x * active.parallax : 0;
+        backgroundCtx.drawImage(staticScene, parallaxX, 0, size, size);
+      }
+
+      if (!active.enabled) {
+        backgroundCtx.fillStyle = screenColour;
+        backgroundCtx.fillRect(0, 0, size, size);
+        if (playing) frameId = requestAnimationFrame(render);
+        return;
+      }
+
+      const palette = scenePalette(displayMode);
+      const bodyDeformY = currentRig.body.scaleY - 1;
+      const bodyDeformX = currentRig.body.scaleX - 1;
+      const verticalSignal = clamp(
+        0.68 - currentRig.blob.y / 145 - currentRig.body.y / 180 - bodyDeformY * 1.8,
+        0.24,
+        1.22
+      );
+      const targetShadowX = currentRig.blob.x * 0.46 + currentRig.body.x * 0.32;
+      const targetShadowY = currentRig.blob.y * 0.2 + currentRig.body.y * 0.22;
+      shadowX.current.step(targetShadowX, dt, 2.2 - active.shadowLag / 260, 0.72);
+      shadowY.current.step(targetShadowY, dt, 2.1 - active.shadowLag / 280, 0.75);
+      shadowHeight.current.step(verticalSignal, dt, 2.25 - active.shadowLag / 300, 0.76);
+      const height = clamp(shadowHeight.current.value, 0.2, 1.24);
+      const squash = Math.max(0, bodyDeformY) + Math.max(0, bodyDeformX) * 0.35;
+      const shadowScaleX = active.shadowWidth * (0.88 + (1 - height) * 0.2 + squash * 1.7);
+      const shadowScaleY = active.shadowHeight * (0.8 + height * 0.24);
+      const shadowOpacity = clamp(
+        active.shadowOpacity * (0.78 + (1 - height) * 0.32),
+        0,
+        0.9
+      );
+      const shadowYPosition = 364 + shadowY.current.value + active.shadowYOffset;
+
+      if (active.bounceEnabled) {
+        const bounce = backgroundCtx.createRadialGradient(
+          CENTRE + shadowX.current.value,
+          shadowYPosition - 2,
+          2,
+          CENTRE + shadowX.current.value,
+          shadowYPosition - 2,
+          68
+        );
+        bounce.addColorStop(0, rgba(palette.bounce, active.bounceLight * (0.075 + (1 - height) * 0.04)));
+        bounce.addColorStop(0.6, rgba(palette.bounce, active.bounceLight * 0.025));
+        bounce.addColorStop(1, rgba(palette.bounce, 0));
+        backgroundCtx.fillStyle = bounce;
+        backgroundCtx.fillRect(0, 0, size, size);
+      }
+
+      if (active.shadowEnabled) {
+        drawShadow(
+          backgroundCtx,
+          shadowScaleX,
+          shadowScaleY,
+          shadowOpacity,
+          CENTRE + shadowX.current.value,
+          shadowYPosition,
+          active.shadowSoftness,
+          displayMode === "dark" ? "#080604" : "#4b3729"
+        );
+      }
+
+      const lightPulse = 0.84 + Math.sin(elapsedSeconds / 10.5) * 0.16;
+      const ambient = backgroundCtx.createRadialGradient(CENTRE, 201, 26, CENTRE, 201, 212);
+      ambient.addColorStop(0, rgba(palette.bounce, active.ambientLight * 0.028 * lightPulse));
+      ambient.addColorStop(0.7, rgba(palette.bounce, active.ambientLight * 0.011 * lightPulse));
+      ambient.addColorStop(1, rgba(palette.bounce, 0));
+      backgroundCtx.fillStyle = ambient;
+      backgroundCtx.fillRect(0, 0, size, size);
+
+      const count = clamp(Math.round(active.particleCount), 0, MOTES.length);
+      if (active.particlesEnabled) {
+        backgroundCtx.globalAlpha = 1;
+        for (let i = 0; i < count; i += 1) {
+          const mote = MOTES[i];
+          if (!mote.foreground) drawMote(backgroundCtx, mote, elapsedSeconds, active.particleSpeed, palette, 1);
+        }
+        for (let i = 0; i < count; i += 1) {
+          const mote = MOTES[i];
+          if (mote.foreground) drawMote(foregroundCtx, mote, elapsedSeconds, active.particleSpeed, palette, 1);
+        }
+        backgroundCtx.globalAlpha = 1;
+        foregroundCtx.globalAlpha = 1;
+      }
+
+      if (now - statusAt > 120) {
+        statusAt = now;
+        statusRef.current?.({
+          blobHeight: height,
+          shadowScaleX,
+          shadowScaleY,
+          shadowOpacity,
+          shadowOffset: shadowX.current.value,
+          particleCount: active.particlesEnabled ? count : 0,
+        });
+      }
+
+      if (playing) frameId = requestAnimationFrame(render);
+    };
+
+    render(performance.now());
+    return () => cancelAnimationFrame(frameId);
+  }, [config, displayMode, playing, renderScale, screenColour, size, speed]);
+
+  return (
+    <>
+      <canvas
+        ref={backgroundRef}
+        width={size * renderScale}
+        height={size * renderScale}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-0 block"
+        style={{ width: size, height: size, imageRendering: "auto" }}
+      />
+      <canvas
+        ref={foregroundRef}
+        width={size * renderScale}
+        height={size * renderScale}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-20 block"
+        style={{ width: size, height: size, imageRendering: "auto" }}
+      />
+    </>
+  );
+}

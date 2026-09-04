@@ -721,7 +721,7 @@ export default function BlobCharacter({
       style={{
         width: size,
         height: size,
-        imageRendering: renderScale === 1 ? "pixelated" : "auto",
+        imageRendering: "auto",
         touchAction: drag ? "none" : undefined,
         cursor: drag ? (grabbing ? "grabbing" : "grab") : undefined,
       }}

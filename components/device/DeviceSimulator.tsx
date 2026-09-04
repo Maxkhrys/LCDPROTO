@@ -37,9 +37,14 @@ import {
   type DisplayMode,
   type DeviceState,
 } from "@/lib/deviceStates";
+import {
+  DEFAULT_ENVIRONMENT,
+  type EnvironmentConfig,
+  type EnvironmentStatus,
+} from "@/lib/environmentConfig";
 
 const BEZEL_FACTOR = 1 + DEVICE_CONFIG.bezelRatio * 2;
-const MAX_OUTER = Math.round(DEVICE_CONFIG.desktopScreenSize * BEZEL_FACTOR);
+const DEFAULT_OUTER = Math.round(DEVICE_CONFIG.desktopScreenSize * BEZEL_FACTOR);
 
 /**
  * Prototype shell: the virtual device plus the state selector and the
@@ -56,6 +61,9 @@ export default function DeviceSimulator() {
   const [screenColour, setScreenColour] = useState(DISPLAY_BACKGROUNDS.dark);
   const [blobColour, setBlobColour] = useState<BlobColour>("teal");
   const [characterScale, setCharacterScale] = useState(1);
+  const [screenScale, setScreenScale] = useState(1.2);
+  const [environment, setEnvironment] = useState<EnvironmentConfig>(DEFAULT_ENVIRONMENT);
+  const [environmentStatus, setEnvironmentStatus] = useState<EnvironmentStatus | null>(null);
   const [showPupils, setShowPupils] = useState(false);
   const [blobToolsOpen, setBlobToolsOpen] = useState(false);
   const [activeBlobTool, setActiveBlobTool] = useState<"colour" | "face" | "pupils" | null>(null);
@@ -99,6 +107,7 @@ export default function DeviceSimulator() {
 
   useEffect(() => {
     setStatus(null);
+    setEnvironmentStatus(null);
   }, [state]);
 
   useEffect(() => {
@@ -111,7 +120,7 @@ export default function DeviceSimulator() {
   // The outer size is decided by CSS so there is no layout shift; JS only
   // measures it to work out the 466 -> CSS pixel scale factor.
   const frameRef = useRef<HTMLDivElement>(null);
-  const [outerSize, setOuterSize] = useState(MAX_OUTER);
+  const [outerSize, setOuterSize] = useState(DEFAULT_OUTER);
 
   useEffect(() => {
     const el = frameRef.current;
@@ -133,6 +142,9 @@ export default function DeviceSimulator() {
     setScreenColour(DISPLAY_BACKGROUNDS.dark);
     setBlobColour("teal");
     setCharacterScale(1);
+    setScreenScale(1.2);
+    setEnvironment(DEFAULT_ENVIRONMENT);
+    setEnvironmentStatus(null);
     setShowPupils(false);
     setBlobToolsOpen(false);
     setActiveBlobTool(null);
@@ -165,23 +177,11 @@ export default function DeviceSimulator() {
       );
 
   return (
-    <div className="sim-ui relative flex w-full flex-col items-center gap-4 sm:gap-5">
-      <div className="w-full max-w-[1180px]">
-        <div className="mb-3 flex items-end justify-between px-1">
-          <div>
-            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/35">
-              Control surface
-            </p>
-            <h2 className="mt-1 text-sm font-medium tracking-tight text-white/80">
-              Blob simulator
-            </h2>
-          </div>
-          <DevButton onClick={reset}>Reset all</DevButton>
-        </div>
-
+    <div className="sim-ui relative flex min-h-[calc(100dvh-24px)] w-full flex-col items-center gap-3 sm:gap-4">
+      <div className="sticky top-0 z-50 w-full max-w-[1500px] pt-2">
         <nav
           aria-label="Simulator settings"
-          className="relative z-40 flex flex-wrap items-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.035] p-1.5 shadow-[0_12px_30px_rgba(0,0,0,0.14)]"
+          className="relative flex flex-wrap items-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.035] p-1.5 shadow-[0_12px_30px_rgba(0,0,0,0.14)] backdrop-blur-md"
         >
           <TopMenu label="State" summary={meta.label} open={openMenu === "state"} onToggle={() => setOpenMenu((v) => v === "state" ? null : "state")}>
             <p className="menu-kicker">Display state</p>
@@ -248,15 +248,52 @@ export default function DeviceSimulator() {
             </ChoiceGroup>
           </TopMenu>
 
-          <TopMenu label="Screen" summary={displayMode} open={openMenu === "screen"} onToggle={() => setOpenMenu((v) => v === "screen" ? null : "screen")}>
+          <TopMenu label="Screen" summary={`${displayMode} · ${screenScale.toFixed(2)}x`} open={openMenu === "screen"} onToggle={() => setOpenMenu((v) => v === "screen" ? null : "screen")}>
             <p className="menu-kicker">AMOLED screen</p>
-            <p className="menu-help">Black hardware mode, inspection colour and native pixel preview.</p>
+            <p className="menu-help">Set the editable viewport size and preview the native pixel surface.</p>
+            <ControlRange label="Viewport" value={screenScale} min={0.72} max={1.5} step={0.01} display={`${screenScale.toFixed(2)}x`} onChange={setScreenScale} />
             <label className="mt-3 flex items-center gap-2">
               <span className="w-14 shrink-0 font-mono text-[10px] uppercase tracking-[0.15em] text-white/30">Custom</span>
               <input aria-label="LCD screen background colour" type="color" value={screenColour} onChange={(event) => { setScreenColour(event.currentTarget.value); setDisplayMode("dark"); }} className="h-7 w-9 cursor-pointer rounded border border-white/[0.1] bg-transparent p-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50" />
               <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-white/40">{screenColour}</span>
             </label>
             <DevButton active={nativePixels} onClick={() => setNativePixels((v) => !v)}>Native pixels 1:1 {nativePixels ? "on" : "off"}</DevButton>
+          </TopMenu>
+
+          <TopMenu label="Environment" summary={environment.enabled ? "sand · live" : "off"} open={openMenu === "environment"} onToggle={() => setOpenMenu((v) => v === "environment" ? null : "environment")} wide>
+            <p className="menu-kicker">Miniature world</p>
+            <p className="menu-help">Tune the sand, contact shadow, warm light and sparse dust around Blob.</p>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <DevButton active={environment.enabled} onClick={() => setEnvironment((value) => ({ ...value, enabled: !value.enabled }))}>Environment {environment.enabled ? "on" : "off"}</DevButton>
+              <DevButton active={environment.shadowEnabled} onClick={() => setEnvironment((value) => ({ ...value, shadowEnabled: !value.shadowEnabled }))}>Shadow</DevButton>
+              <DevButton active={environment.particlesEnabled} onClick={() => setEnvironment((value) => ({ ...value, particlesEnabled: !value.particlesEnabled }))}>Dust</DevButton>
+              <DevButton active={environment.bounceEnabled} onClick={() => setEnvironment((value) => ({ ...value, bounceEnabled: !value.bounceEnabled }))}>Bounce light</DevButton>
+              <DevButton active={environment.parallaxEnabled} onClick={() => setEnvironment((value) => ({ ...value, parallaxEnabled: !value.parallaxEnabled }))}>Parallax</DevButton>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <ControlRange label="Shadow width" value={environment.shadowWidth} min={0.65} max={1.4} step={0.01} display={`${environment.shadowWidth.toFixed(2)}x`} onChange={(value) => setEnvironment((current) => ({ ...current, shadowWidth: value }))} />
+              <ControlRange label="Shadow height" value={environment.shadowHeight} min={0.55} max={1.5} step={0.01} display={`${environment.shadowHeight.toFixed(2)}x`} onChange={(value) => setEnvironment((current) => ({ ...current, shadowHeight: value }))} />
+              <ControlRange label="Shadow opacity" value={environment.shadowOpacity} min={0.1} max={0.9} step={0.01} display={environment.shadowOpacity.toFixed(2)} onChange={(value) => setEnvironment((current) => ({ ...current, shadowOpacity: value }))} />
+              <ControlRange label="Softness" value={environment.shadowSoftness} min={0.35} max={0.95} step={0.01} display={environment.shadowSoftness.toFixed(2)} onChange={(value) => setEnvironment((current) => ({ ...current, shadowSoftness: value }))} />
+              <ControlRange label="Shadow lag" value={environment.shadowLag} min={40} max={180} step={1} display={`${Math.round(environment.shadowLag)}ms`} onChange={(value) => setEnvironment((current) => ({ ...current, shadowLag: value }))} />
+              <ControlRange label="Shadow Y" value={environment.shadowYOffset} min={-12} max={18} step={1} display={`${Math.round(environment.shadowYOffset)}px`} onChange={(value) => setEnvironment((current) => ({ ...current, shadowYOffset: value }))} />
+              <ControlRange label="Dust count" value={environment.particleCount} min={0} max={8} step={1} display={`${Math.round(environment.particleCount)}`} onChange={(value) => setEnvironment((current) => ({ ...current, particleCount: value }))} />
+              <ControlRange label="Dust speed" value={environment.particleSpeed} min={0.25} max={2} step={0.01} display={`${environment.particleSpeed.toFixed(2)}x`} onChange={(value) => setEnvironment((current) => ({ ...current, particleSpeed: value }))} />
+              <ControlRange label="Ambient light" value={environment.ambientLight} min={0} max={1} step={0.01} display={environment.ambientLight.toFixed(2)} onChange={(value) => setEnvironment((current) => ({ ...current, ambientLight: value }))} />
+              <ControlRange label="Bounce light" value={environment.bounceLight} min={0} max={1} step={0.01} display={environment.bounceLight.toFixed(2)} onChange={(value) => setEnvironment((current) => ({ ...current, bounceLight: value }))} />
+              <ControlRange label="Parallax" value={environment.parallax} min={0} max={1} step={0.01} display={environment.parallax.toFixed(2)} onChange={(value) => setEnvironment((current) => ({ ...current, parallax: value }))} />
+            </div>
+            <div className="mt-4 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+              <p className="menu-kicker">Environment readout</p>
+              <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-white/45">
+                <span>Blob height <b className="font-normal text-white/75">{environmentStatus?.blobHeight.toFixed(2) ?? "—"}</b></span>
+                <span>Particles <b className="font-normal text-white/75">{environmentStatus?.particleCount ?? "—"}</b></span>
+                <span>Shadow X <b className="font-normal text-white/75">{environmentStatus?.shadowScaleX.toFixed(2) ?? "—"}</b></span>
+                <span>Shadow Y <b className="font-normal text-white/75">{environmentStatus?.shadowScaleY.toFixed(2) ?? "—"}</b></span>
+                <span>Shadow alpha <b className="font-normal text-white/75">{environmentStatus?.shadowOpacity.toFixed(2) ?? "—"}</b></span>
+                <span>Shadow offset <b className="font-normal text-white/75">{environmentStatus ? `${environmentStatus.shadowOffset.toFixed(1)}px` : "—"}</b></span>
+              </div>
+            </div>
           </TopMenu>
 
           <TopMenu label="Tools" summary={showExpressions ? "library open" : "tuning"} open={openMenu === "tools"} onToggle={() => setOpenMenu((v) => v === "tools" ? null : "tools")} wide>
@@ -278,11 +315,14 @@ export default function DeviceSimulator() {
             <p className="menu-help">Current intent, expression, body state and timing.</p>
             <div className="mt-3"><ActivityReadout status={status} playing={playing} autoEnabled={autoBehaviourEnabled} idleEnabled={idle.enabled} /></div>
           </TopMenu>
+          <div className="ml-auto">
+            <DevButton onClick={reset}>Reset</DevButton>
+          </div>
         </nav>
       </div>
 
-      <div className="flex w-full justify-center">
-        <div ref={frameRef} className="flex aspect-square w-full max-w-full items-center justify-center" style={{ width: `min(100%, ${MAX_OUTER}px, max(280px, calc(100dvh - 330px)))` }}>
+      <div className="flex min-h-0 w-full flex-1 items-center justify-center">
+        <div ref={frameRef} className="flex aspect-square w-full max-w-full items-center justify-center" style={{ width: `min(100%, ${Math.round(DEFAULT_OUTER * screenScale)}px, max(280px, calc(100dvh - 176px)))` }}>
           <DeviceBezel screenSize={screenSize}>
             <div className="relative">
               <DeviceScreen
@@ -310,6 +350,8 @@ export default function DeviceSimulator() {
                 mindIntention={mindIntention}
                 mindDestination={mindDestination}
                 mindDepth={mindDepth}
+                environment={environment}
+                onEnvironmentStatus={setEnvironmentStatus}
               />
               <BlobToolOrbs open={blobToolsOpen} active={activeBlobTool} screenSize={screenSize} blobColour={blobColour} showPupils={showPupils} onSelect={(tool) => { setActiveBlobTool(tool); if (tool === "face") setShowExpressions(true); if (tool === "pupils") setShowPupils((value) => !value); }} onColourChange={setBlobColour} />
             </div>
@@ -378,7 +420,7 @@ export default function DeviceSimulator() {
   );
 }
 
-type TopMenuId = "state" | "playback" | "blob" | "motion" | "screen" | "tools" | "activity";
+type TopMenuId = "state" | "playback" | "blob" | "motion" | "screen" | "environment" | "tools" | "activity";
 
 function TopMenu({
   label,
@@ -437,6 +479,45 @@ function ChoiceGroup({
       </span>
       <div className="flex min-w-0 flex-wrap items-center gap-1.5">{children}</div>
     </div>
+  );
+}
+
+function ControlRange({
+  label,
+  value,
+  min,
+  max,
+  step,
+  display,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  display: string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="flex min-w-0 items-center gap-2 rounded-md border border-white/[0.05] bg-white/[0.015] px-2.5 py-2">
+      <span className="w-20 shrink-0 font-mono text-[9px] uppercase tracking-[0.12em] text-white/35">
+        {label}
+      </span>
+      <input
+        aria-label={label}
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(event) => onChange(Number(event.currentTarget.value))}
+        className="h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-white/10 accent-[#8A60E8]"
+      />
+      <output className="w-12 shrink-0 text-right font-mono text-[10px] tabular-nums text-white/55">
+        {display}
+      </output>
+    </label>
   );
 }
 
