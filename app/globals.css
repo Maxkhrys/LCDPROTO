@@ -1964,3 +1964,11 @@ canvas {
     right: 8px;
   }
 }
+
+/* Description under the character picker. */
+.control-card-note {
+  margin: 8px 0 0;
+  color: var(--console-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}

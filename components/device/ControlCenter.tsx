@@ -4,6 +4,7 @@ import { useEffect } from "react";
 
 export type ControlSectionId =
   | "screens"
+  | "character"
   | "activity"
   | "state"
   | "playback"

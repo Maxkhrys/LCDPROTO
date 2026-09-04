@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import BlobCharacter from "@/components/blob/BlobCharacter";
+import CloudCharacter from "@/components/blob/CloudCharacter";
 import { applyCalibration } from "@/lib/blobCalibration";
 import {
   BehaviourController,
@@ -76,6 +77,8 @@ export default function HomeState({
   mood,
   showPupils,
   blobColour,
+  character,
+  cloudSettings,
   characterScale,
   mindIntention,
   mindDestination,
@@ -434,7 +437,25 @@ export default function HomeState({
         onStatus={onEnvironmentStatus}
       />
       <div className="relative z-10 h-full w-full">
-        <BlobCharacter
+        {character === "cloud" ? (
+          <CloudCharacter
+          size={size}
+          renderScale={renderScale}
+          rig={rig}
+          colour={blobColour}
+          onOpenTools={onOpenBlobTools}
+          onCloseTools={onCloseBlobTools}
+          settingsOpen={blobToolsOpen}
+          showPupils={showPupils}
+          drag={drag.current}
+            cloudParams={cloudSettings.params}
+            cloudMotion={cloudSettings.motion}
+            cloudTrails={cloudSettings.trails}
+            cloudColour={cloudSettings.colour}
+    cloudFace={cloudSettings.face}
+          />
+        ) : (
+          <BlobCharacter
           size={size}
           viewportSize={cssSize}
           renderScale={renderScale}
@@ -445,7 +466,8 @@ export default function HomeState({
           settingsOpen={blobToolsOpen}
           showPupils={showPupils}
           drag={drag.current}
-        />
+          />
+        )}
       </div>
     </div>
   );

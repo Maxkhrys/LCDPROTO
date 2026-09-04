@@ -439,6 +439,128 @@ function drawEyebrow(
  *
  * Drawing order is body -> brows/eyes -> mouth -> subtle skin integration.
  */
+
+/**
+ * Everything the face renderer needs, independent of what the body is.
+ *
+ * The body is whatever drew before it — Blob's cached artwork, or the cloud's
+ * volumetric lobes. The face only needs the surface transform it should ride
+ * on and the box that transform pivots about.
+ */
+export interface BlobFaceOptions {
+  /** Native screen size in pixels (466). */
+  size: number;
+  centre: number;
+  colour: BlobColour;
+  rig: BlobRig;
+  /** Surface transform the facial anchors are welded to. */
+  body: ElementTransform;
+  /** Box the surface transform pivots about, in 466-space pixels. */
+  bodyWidth: number;
+  bodyHeight: number;
+  /** Fades the face out as the character turns toward profile. */
+  faceVisibility: number;
+  showPupils: boolean;
+  settingsOpen: boolean;
+}
+
+/**
+ * Draws the production face: brows, both eyes and the mouth.
+ *
+ * Exported so a second character body can wear the same face rather than
+ * carrying a copy of it. A copy is exactly how the experimental cloud ended up
+ * with eyes that predated the current lid and mouth work — one face renderer
+ * means an expression improvement lands on every character at once.
+ */
+export function drawBlobFace(
+  ctx: CanvasRenderingContext2D,
+  {
+    size,
+    centre: center,
+    colour,
+    rig,
+    body: bt,
+    bodyWidth: bw,
+    bodyHeight: bh,
+    faceVisibility,
+    showPupils,
+    settingsOpen,
+  }: BlobFaceOptions
+) {
+    // The surface carries the full body deformation. The face artwork gets a
+    // smaller share of scale deformation so eyes and mouth remain legible.
+    const faceSurfaceScaleX =
+      1 + (bt.scaleX - 1) * FACE_ART_SURFACE_INHERIT;
+    const faceSurfaceScaleY =
+      1 + (bt.scaleY - 1) * FACE_ART_SURFACE_INHERIT;
+    const faceCompensationX = faceSurfaceScaleX / Math.max(0.1, bt.scaleX);
+    const faceCompensationY = faceSurfaceScaleY / Math.max(0.1, bt.scaleY);
+
+    // Eyes are sockets in body space. Gaze offsets move the texture inside a
+    // fixed aperture; blink and squint clip from the top while the lower edge
+    // stays planted.
+    const browClearance = size * BROW_CLEARANCE_RATIO;
+    const drawEye = (id: FaceLayerId, t: ElementTransform) => {
+      const a = faceAnchor(id, size, colour);
+      const socketX = a.x - center + t.socketX;
+      const socketY = a.y - center + t.socketY;
+      // One geometry drives the eye, both lids and the brow. Nothing else may
+      // compute an eye size, so they cannot drift apart again.
+      const eye = eyeGeometry(a.width, a.height, t, settingsOpen);
+
+      // Brows are part of the facial surface, not a separate floating asset.
+      // They rise with curiosity, lean with gaze, and are held clear of the
+      // eye by drawEyebrow's own geometric clearance rule.
+      ctx.save();
+      ctx.globalAlpha = t.opacity * faceVisibility * 0.88;
+      applyBodySurface(ctx, center, bw, bh, bt);
+      ctx.translate(socketX, socketY);
+      drawEyebrow(ctx, eye, t.browLift, t.browRotation, browClearance);
+      ctx.restore();
+
+      ctx.save();
+      ctx.globalAlpha = t.opacity * faceVisibility;
+      applyBodySurface(ctx, center, bw, bh, bt);
+      ctx.translate(socketX, socketY);
+      ctx.rotate((t.rotation * Math.PI) / 180);
+      drawProceduralEye(
+        ctx,
+        eye,
+        showPupils,
+        t.pupilX,
+        t.pupilY,
+        t.pupilScale,
+        t.lidBias
+      );
+      ctx.restore();
+    };
+
+    const drawMouth = (t: ElementTransform) => {
+      const a = faceAnchor("mouth", size, colour);
+      ctx.save();
+      ctx.globalAlpha = t.opacity * faceVisibility;
+      applyBodySurface(ctx, center, bw, bh, bt);
+      ctx.translate(a.x - center + t.x, a.y - center + t.y);
+      // Mouth orientation stays upright. Smile, frown and O are all shape
+      // changes on one path, so expression changes never spin the mouth.
+      ctx.scale(faceCompensationX, faceCompensationY);
+      drawMouthShape(
+        ctx,
+        a.width * 0.95 * clamp(t.scaleX, 0.62, 1.18),
+        a.height * 1.08 * clamp(t.scaleY, 0.7, 1.24),
+        clamp(t.mouthCurve, -1, 1),
+        clamp(t.mouthO, 0, 1),
+        clamp(t.mouthD, 0, 1),
+        colour
+      );
+      ctx.restore();
+    };
+
+    drawEye("leftEye", rig.leftEye);
+    drawEye("rightEye", rig.rightEye);
+    drawMouth(rig.mouth);
+}
+
 export default function BlobCharacter({
   size,
   viewportSize,
@@ -579,78 +701,18 @@ export default function BlobCharacter({
     ctx.drawImage(layers.body, -bw / 2, -bh / 2, bw, bh);
     ctx.restore();
 
-    // The surface carries the full body deformation. The face artwork gets a
-    // smaller share of scale deformation so eyes and mouth remain legible.
-    const faceSurfaceScaleX =
-      1 + (bt.scaleX - 1) * FACE_ART_SURFACE_INHERIT;
-    const faceSurfaceScaleY =
-      1 + (bt.scaleY - 1) * FACE_ART_SURFACE_INHERIT;
-    const faceCompensationX = faceSurfaceScaleX / Math.max(0.1, bt.scaleX);
-    const faceCompensationY = faceSurfaceScaleY / Math.max(0.1, bt.scaleY);
-
-    // Eyes are sockets in body space. Gaze offsets move the texture inside a
-    // fixed aperture; blink and squint clip from the top while the lower edge
-    // stays planted.
-    const browClearance = size * BROW_CLEARANCE_RATIO;
-    const drawEye = (id: FaceLayerId, t: ElementTransform) => {
-      const a = faceAnchor(id, size, colour);
-      const socketX = a.x - center + t.socketX;
-      const socketY = a.y - center + t.socketY;
-      // One geometry drives the eye, both lids and the brow. Nothing else may
-      // compute an eye size, so they cannot drift apart again.
-      const eye = eyeGeometry(a.width, a.height, t, settingsOpen);
-
-      // Brows are part of the facial surface, not a separate floating asset.
-      // They rise with curiosity, lean with gaze, and are held clear of the
-      // eye by drawEyebrow's own geometric clearance rule.
-      ctx.save();
-      ctx.globalAlpha = t.opacity * faceVisibility * 0.88;
-      applyBodySurface(ctx, center, bw, bh, bt);
-      ctx.translate(socketX, socketY);
-      drawEyebrow(ctx, eye, t.browLift, t.browRotation, browClearance);
-      ctx.restore();
-
-      ctx.save();
-      ctx.globalAlpha = t.opacity * faceVisibility;
-      applyBodySurface(ctx, center, bw, bh, bt);
-      ctx.translate(socketX, socketY);
-      ctx.rotate((t.rotation * Math.PI) / 180);
-      drawProceduralEye(
-        ctx,
-        eye,
-        showPupils,
-        t.pupilX,
-        t.pupilY,
-        t.pupilScale,
-        t.lidBias
-      );
-      ctx.restore();
-    };
-
-    const drawMouth = (t: ElementTransform) => {
-      const a = faceAnchor("mouth", size, colour);
-      ctx.save();
-      ctx.globalAlpha = t.opacity * faceVisibility;
-      applyBodySurface(ctx, center, bw, bh, bt);
-      ctx.translate(a.x - center + t.x, a.y - center + t.y);
-      // Mouth orientation stays upright. Smile, frown and O are all shape
-      // changes on one path, so expression changes never spin the mouth.
-      ctx.scale(faceCompensationX, faceCompensationY);
-      drawMouthShape(
-        ctx,
-        a.width * 0.95 * clamp(t.scaleX, 0.62, 1.18),
-        a.height * 1.08 * clamp(t.scaleY, 0.7, 1.24),
-        clamp(t.mouthCurve, -1, 1),
-        clamp(t.mouthO, 0, 1),
-        clamp(t.mouthD, 0, 1),
-        colour
-      );
-      ctx.restore();
-    };
-
-    drawEye("leftEye", rig.leftEye);
-    drawEye("rightEye", rig.rightEye);
-    drawMouth(rig.mouth);
+    drawBlobFace(ctx, {
+      size,
+      centre: center,
+      colour,
+      rig,
+      body: bt,
+      bodyWidth: bw,
+      bodyHeight: bh,
+      faceVisibility,
+      showPupils,
+      settingsOpen,
+    });
 
     ctx.restore();
   }, [layers, size, renderScale, rig, colour, showPupils, settingsOpen]);
