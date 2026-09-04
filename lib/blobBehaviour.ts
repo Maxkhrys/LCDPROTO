@@ -1,4 +1,11 @@
 import {
+  BlobDrives,
+  moodFromDrives,
+  utilityFromDrives,
+  type DriveSignals,
+  type DriveState,
+} from "./blobDrives";
+import {
   BlobMind,
   type BlobDestination,
   type BlobIntention,
@@ -421,6 +428,11 @@ export interface HomeActivityStatus extends BehaviourStatus {
   pitch: number;
   energy: number;
   curiosity: number;
+  /** Live drive state, so the readout shows what he actually wants. */
+  social: number;
+  comfort: number;
+  boredom: number;
+  habituation: number;
   memory: string;
   gaze: string;
   lids: string;
@@ -551,6 +563,16 @@ export class BehaviourController {
 
   private readonly delta: PoseDelta = { ...NEUTRAL_DELTA };
   private readonly mind = new BlobMind();
+  /**
+   * What Blob currently wants. Behaviour is chosen against this rather than
+   * shuffled, and mood is read off it rather than set on a timer.
+   */
+  private readonly drives = new BlobDrives();
+  private driveState: Readonly<DriveState> = this.drives.snapshot;
+  /** Blocks reaction spam while one is already playing. */
+  private reactionUntil = 0;
+  /** Set from the dev controls; null lets the drives choose the mood. */
+  private moodOverride: HomeMood | null = null;
   private mindIntentionOverride: BlobIntention | null = null;
   private mindDestinationOverride: BlobDestination | null = null;
   private mindDepthOverride: number | null = null;
@@ -622,6 +644,8 @@ export class BehaviourController {
     this.impactDirection = 0;
     this.specialAction = null;
     this.lastIdleGaze = null;
+    this.reactionUntil = 0;
+    this.drives.reset();
     this.specialStartedAt = -1;
     this.specialEmoteStarted = false;
     this.specialScale = 0;
@@ -667,9 +691,51 @@ export class BehaviourController {
     Object.assign(this.delta, NEUTRAL_DELTA);
   }
 
+  /**
+   * Feed the world in. Without this the drives could only ever drift toward
+   * their resting levels, which is exactly the disconnected behaviour this
+   * replaces.
+   */
+  senses(dtMs: number, signals: DriveSignals) {
+    const previous = this.driveState.comfort;
+    this.driveState = this.drives.update(dtMs, signals);
+
+    // React in the moment, not just at the next scheduled beat. A character
+    // that only changes expression on its own timetable reads as indifferent
+    // to what is being done to it.
+    const jolt = previous - this.driveState.comfort;
+    // A worse thing happening pre-empts the reaction already playing; anything
+    // milder waits its turn. Without the override, being grabbed and then
+    // immediately shaken left him wearing the polite "picked up" face
+    // throughout, because the first reaction held the channel.
+    const severe = jolt > 0.006 && this.driveState.comfort < 0.3;
+    if (this.clock < this.reactionUntil && !severe) return;
+    if (signals.touched) {
+      // Picked up: a quick alert widening, softened once he is used to it.
+      this.startExpression(
+        this.driveState.habituation > 0.6 ? "CURIOUS_WIDE" : "SOFT_SQUINT"
+      );
+      this.reactionUntil = this.clock + 500;
+    } else if (jolt > 0.006 && this.driveState.comfort < 0.55) {
+      // Being shaken or ground into a wall. Squint against it, and once he is
+      // genuinely uncomfortable, scowl.
+      this.startExpression(
+        this.driveState.comfort < 0.3 ? "ANGRY_BROWS" : "SOFT_SQUINT"
+      );
+      this.reactionUntil = this.clock + 1100;
+    }
+  }
+
+  /** Current drive state, for the developer readout. */
+  get drivesSnapshot(): Readonly<DriveState> {
+    return this.driveState;
+  }
+
   setMood(mood: HomeMood | null) {
+    this.moodOverride = mood;
     if (!mood) {
-      this.nextMoodAt = this.clock + 7000;
+      // Back to drive-led moods, re-evaluated shortly.
+      this.nextMoodAt = this.clock + 1200;
       return;
     }
     this.mood = mood;
@@ -1045,7 +1111,8 @@ export class BehaviourController {
       this.mood,
       this.mindIntentionOverride,
       this.mindDestinationOverride,
-      this.mindDepthOverride
+      this.mindDepthOverride,
+      utilityFromDrives(this.driveState)
     );
     this.currentStory = next;
     this.lastStoryId = next.id;
@@ -1094,9 +1161,16 @@ export class BehaviourController {
   }
 
   private pickMood(cfg: BehaviourConfig) {
-    let next = this.lastMood;
-    while (next === this.lastMood) {
-      next = MOOD_ORDER[Math.floor(this.rand() * MOOD_ORDER.length)];
+    // Mood is what his drives add up to. It used to be a random pick on a
+    // 6-11 second timer, which is why it never appeared to relate to anything
+    // that had just happened to him.
+    let next = moodFromDrives(this.driveState) as HomeMood;
+    if (this.moodOverride) {
+      next = this.moodOverride;
+    } else if (next === this.lastMood && this.driveState.boredom > 0.5) {
+      // Only shake him out of a repeated mood when he is actually bored of it.
+      const index = MOOD_ORDER.indexOf(next);
+      next = MOOD_ORDER[(index + 1) % MOOD_ORDER.length];
     }
     this.mood = next;
     this.lastMood = next;
@@ -2046,6 +2120,10 @@ export class BehaviourController {
       | "pitch"
       | "energy"
       | "curiosity"
+      | "social"
+      | "comfort"
+      | "boredom"
+      | "habituation"
       | "memory"
       | "gaze"
       | "lids"
@@ -2086,8 +2164,12 @@ export class BehaviourController {
       depth: this.delta.blobDepth,
       yaw: this.delta.blobYaw,
       pitch: this.delta.blobPitch,
-      energy: mindState.energy,
-      curiosity: mindState.curiosity,
+      energy: this.driveState.energy,
+      social: this.driveState.social,
+      comfort: this.driveState.comfort,
+      boredom: this.driveState.boredom,
+      habituation: this.driveState.habituation,
+      curiosity: this.driveState.curiosity,
       memory: mindState.memory,
       nextGazeMs: Math.max(0, this.nextGazeAt - this.clock),
       nextBlinkMs: Math.max(0, this.nextBlinkAt - this.clock),

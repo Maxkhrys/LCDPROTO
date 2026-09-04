@@ -176,6 +176,9 @@ export default function HomeState({
     let contactX = 0;
     let contactY = 0;
     let contactPressure = 0;
+    let heldLastFrame = false;
+    let lastWallPressure = 0;
+    let lastShake = 0;
     let latestDepth = 0;
     let latestYaw = 0;
     let latestPitch = 0;
@@ -209,6 +212,18 @@ export default function HomeState({
         autoBehaviourEnabled,
       } = cfg.current;
       const bc = behaviourConfig(cfgIdle);
+
+      // What the world just did to him. Without this the drives can only
+      // drift toward their resting levels and he stops being reactive.
+      const wasHeld = heldLastFrame;
+      heldLastFrame = drag.current.isGrabbed;
+      controller.current.senses(dt, {
+        held: drag.current.isGrabbed,
+        wallPressure: lastWallPressure,
+        shake: lastShake,
+        speed: latestBodySpeed,
+        touched: drag.current.isGrabbed && !wasHeld,
+      });
 
       controller.current.setMindOverrides(
         cfg.current.mindIntention,
@@ -273,6 +288,8 @@ export default function HomeState({
       contactX = dragPose.contactX;
       contactY = dragPose.contactY;
       contactPressure = dragPose.wallPressure;
+      lastWallPressure = dragPose.wallPressure;
+      lastShake = Math.min(1, Math.abs(dragPose.rotation) / 4);
 
       const physical = physics.current.update(dt, jellyTarget);
 

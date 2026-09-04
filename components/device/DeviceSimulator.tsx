@@ -1632,6 +1632,14 @@ function ActivityReadout({
         label="Energy / curiosity"
         value={`${((status?.energy ?? 0.62) * 100).toFixed(0)}% / ${((status?.curiosity ?? 0.58) * 100).toFixed(0)}%`}
       />
+      <ActivityValue
+        label="Social / comfort"
+        value={`${((status?.social ?? 0.5) * 100).toFixed(0)}% / ${((status?.comfort ?? 0.8) * 100).toFixed(0)}%`}
+      />
+      <ActivityValue
+        label="Bored / habituated"
+        value={`${((status?.boredom ?? 0) * 100).toFixed(0)}% / ${((status?.habituation ?? 1) * 100).toFixed(0)}%`}
+      />
       <ActivityValue label="Memory" value={status?.memory ?? "new"} />
       <ActivityValue label="Gaze" value={status?.gaze ?? "RESTING"} />
       <ActivityValue label="Lids" value={status?.lids ?? "OPEN"} />

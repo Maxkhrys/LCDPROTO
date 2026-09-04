@@ -39,6 +39,7 @@ lib/deviceConfig.ts      resolution, bezel, fps/speed options
 lib/deviceStates.ts      DeviceState type, state table, StateViewProps
 lib/blobMind.ts          deterministic intention, mood, story and destination director
 lib/blobPhysics.ts       lightweight soft-body spring follow-through
+lib/blobDrives.ts        what Blob wants: drives, mood and behaviour utility
 components/screens/      ScreenStage, SystemScreenLayer, ScreenBrowser
 lib/screenCatalogue.ts   every screen, its timing and its flows (data only)
 lib/screenLifecycle.ts   which screen is up and how far through it is
@@ -319,3 +320,40 @@ screen, plus HOME and SENSED.
 Placeholder: APPROACHING, VERY_CLOSE, TOGETHER, SYNC, CONNECTED and RECOGNIZED
 still render their existing `StatePlaceholder` bodies. They are marked `wip` in
 the browser and carry `status: "placeholder"` in the catalogue.
+
+## Drives
+
+Blob chooses what to do from what he currently wants, rather than from a
+shuffled playlist.
+
+`lib/blobDrives.ts` holds five drives — curiosity, energy, social, comfort and
+boredom — plus a habituation term. They rise and fall from real events fed in
+each frame by HomeState: being grabbed, how hard he is pressed against the
+edge, how much he is being shaken, how fast he is moving, and how long it has
+been since anyone touched him. Each drive decays back toward its own resting
+level when nothing is happening.
+
+Before this the behaviour system had an energy and a curiosity number, but
+both came from a mood lookup table plus noise. Nothing that happened to Blob
+ever reached them, so being shaken for ten seconds and being left alone for
+two minutes produced exactly the same internal state.
+
+Two things read off the drives:
+
+- **Mood** is now their output rather than a 6-11 second timer. Rough handling
+  drops comfort and he becomes DISTRACTED; a long quiet spell drops energy and
+  raises boredom and he becomes SLEEPY. The dev Mood control still overrides.
+- **Behaviour choice** scores every candidate story against the drives instead
+  of filtering and picking at random, so he investigates because curiosity is
+  high and settles because comfort or energy is low.
+
+Habituation falls as the same treatment repeats and recovers slowly, so the
+tenth shake lands far more weakly than the first.
+
+He also reacts in the moment: being picked up widens his eyes, and a jolt that
+knocks comfort down makes him squint or scowl. A more severe event pre-empts a
+milder reaction already playing.
+
+The whole model is about a dozen scalars with no allocation and no
+`Math.random`, so it ports to the ESP32 unchanged. The Activity readout shows
+all five drives live.

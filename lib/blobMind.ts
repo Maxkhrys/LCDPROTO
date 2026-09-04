@@ -7,6 +7,7 @@
  * separate stops the idle animation from reading like unrelated random cues.
  */
 
+import type { UtilityWeights } from "./blobDrives";
 import type { BehaviourId, HomeMood } from "./blobBehaviour";
 
 export type BlobIntention =
@@ -349,7 +350,9 @@ export class BlobMind {
     mood: HomeMood,
     intentionOverride: BlobIntention | null = null,
     destinationOverride: BlobDestination | null = null,
-    depthOverride: number | null = null
+    depthOverride: number | null = null,
+    /** What Blob currently wants. Scores the candidates when supplied. */
+    utility: UtilityWeights | null = null
   ): MindStory {
     const bias = MOOD_BIAS[mood];
     this.energy = clamp(
@@ -393,7 +396,38 @@ export class BlobMind {
         : fresh.length > 0
           ? fresh
           : candidates;
-    const selected = STORIES[pool[Math.floor(this.rand() * pool.length)]];
+
+    // Score against what he currently wants rather than picking at random.
+    // A small deterministic jitter keeps him from being mechanical, but the
+    // drives decide: he investigates because he is curious, and settles
+    // because he is uncomfortable or spent.
+    let best = pool[0];
+    if (utility && !intentionOverride) {
+      let bestScore = -Infinity;
+      for (const id of pool) {
+        const intention = STORIES[id].intention;
+        const want =
+          intention === "EXPLORE"
+            ? utility.explore
+            : intention === "INSPECT"
+              ? utility.inspect
+              : intention === "PLAY"
+                ? utility.play
+                : intention === "WATCH"
+                  ? utility.watch
+                  : intention === "THINK"
+                    ? utility.think
+                    : utility.recover;
+        const score = want + (this.rand() - 0.5) * 0.35;
+        if (score > bestScore) {
+          bestScore = score;
+          best = id;
+        }
+      }
+    } else {
+      best = pool[Math.floor(this.rand() * pool.length)];
+    }
+    const selected = STORIES[best];
     this.recent = [...this.recent.slice(-2), selected.id];
 
     const destination = destinationOverride ?? selected.destination;
