@@ -296,7 +296,6 @@ export default function HomeState({
             rotation: latestRotation + d.blobSpin,
             opacity: d.blobOpacity,
             faceStyle: d.faceStyle,
-            faceAccent: d.faceAccent,
           },
           // The body is the actual deforming surface. Facial anchors inherit
           // this full transform in BlobCharacter; the face artwork itself is
@@ -366,6 +365,7 @@ export default function HomeState({
             opacity: d.mouthOpacity,
             mouthCurve: d.mouthCurve,
             mouthO: d.mouthO,
+            mouthD: d.mouthD,
           },
         },
         cal

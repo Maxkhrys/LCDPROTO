@@ -8,6 +8,7 @@ import ControlCenter, {
 } from "./ControlCenter";
 import ScreenStage from "@/components/screens/ScreenStage";
 import ScreenBrowser from "@/components/screens/ScreenBrowser";
+import EmojiMakerPanel from "./EmojiMakerPanel";
 import { ScreenLifecycle, type LifecycleSnapshot } from "@/lib/screenLifecycle";
 import { isDeviceState, type FlowId, type ScreenId } from "@/lib/screenCatalogue";
 import { DEVICE_CONFIG, type Fps, type Speed } from "@/lib/deviceConfig";
@@ -266,6 +267,13 @@ export default function DeviceSimulator() {
       label: "Expressions",
       description: "Search the authored cue library and fire expressions directly.",
       summary: meta.label.toLowerCase(),
+      group: "Character",
+    },
+    {
+      id: "emoji",
+      label: "Emoji Maker",
+      description: "Build a face recipe, preview it on Blob, and export a native PNG.",
+      summary: "face editor",
       group: "Character",
     },
     {
@@ -668,6 +676,8 @@ export default function DeviceSimulator() {
             onTrigger={fire}
           />
         );
+      case "emoji":
+        return <EmojiMakerPanel colour={blobColour} />;
     }
   })();
 

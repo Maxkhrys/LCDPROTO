@@ -271,7 +271,6 @@ export default function SensedState({
             rotation: latestRotation + d.blobSpin,
             opacity: d.blobOpacity,
             faceStyle: d.faceStyle,
-            faceAccent: d.faceAccent,
           },
           body: {
             ...NEUTRAL_ELEMENT,
@@ -336,6 +335,7 @@ export default function SensedState({
             opacity: d.mouthOpacity,
             mouthCurve: SENSED_FACE.mouthCurve + d.mouthCurve - 0.82,
             mouthO: Math.max(SENSED_FACE.mouthO, d.mouthO),
+            mouthD: Math.max(0, d.mouthD),
           },
         },
         cal

@@ -173,9 +173,8 @@ export interface PoseDelta {
   /** Temporary whole-Blob scale and opacity for entrance/exit beats. */
   blobScale: number;
   blobOpacity: number;
-  /** Procedural face style and anime mark strength. */
+  /** Procedural face style retained for expression scheduling. */
   faceStyle: number;
-  faceAccent: number;
   /** Normalised distance from the panel: positive is closer to the viewer. */
   blobDepth: number;
   /** Yaw and pitch are presentation-space degrees for the simple 3D turn. */
@@ -229,6 +228,7 @@ export interface PoseDelta {
   mouthOpacity: number;
   mouthCurve: number;
   mouthO: number;
+  mouthD: number;
 }
 
 export const NEUTRAL_DELTA: PoseDelta = {
@@ -237,7 +237,6 @@ export const NEUTRAL_DELTA: PoseDelta = {
   blobScale: 0,
   blobOpacity: 1,
   faceStyle: FACE_STYLE.CONTENT,
-  faceAccent: 0,
   blobDepth: 0,
   blobYaw: 0,
   blobPitch: 0,
@@ -288,6 +287,7 @@ export const NEUTRAL_DELTA: PoseDelta = {
   mouthOpacity: 1,
   mouthCurve: 0.82,
   mouthO: 0,
+  mouthD: 0,
 };
 
 const clamp = (v: number, min: number, max: number) =>
@@ -352,6 +352,7 @@ interface MoodPose {
   mouthScaleY: number;
   mouthRotation: number;
   mouthCurve: number;
+  mouthD: number;
 }
 
 const MOODS: Record<HomeMood, MoodPose> = {
@@ -366,6 +367,7 @@ const MOODS: Record<HomeMood, MoodPose> = {
     mouthScaleY: 0,
     mouthRotation: 0,
     mouthCurve: 0.84,
+    mouthD: 0,
   },
   CURIOUS: {
     leftTension: 1.06,
@@ -378,6 +380,7 @@ const MOODS: Record<HomeMood, MoodPose> = {
     mouthScaleY: 0.09,
     mouthRotation: 2,
     mouthCurve: 0.45,
+    mouthD: 0.18,
   },
   SLEEPY: {
     leftTension: 0.84,
@@ -390,6 +393,7 @@ const MOODS: Record<HomeMood, MoodPose> = {
     mouthScaleY: -0.05,
     mouthRotation: -1.5,
     mouthCurve: 0.18,
+    mouthD: 0.05,
   },
   AMUSED: {
     leftTension: 0.9,
@@ -402,6 +406,7 @@ const MOODS: Record<HomeMood, MoodPose> = {
     mouthScaleY: 0.025,
     mouthRotation: 1.5,
     mouthCurve: 0.96,
+    mouthD: 0.78,
   },
   DISTRACTED: {
     leftTension: 0.97,
@@ -414,6 +419,7 @@ const MOODS: Record<HomeMood, MoodPose> = {
     mouthScaleY: 0.02,
     mouthRotation: 3,
     mouthCurve: 0.25,
+    mouthD: 0.22,
   },
   THOUGHTFUL: {
     leftTension: 0.9,
@@ -426,6 +432,7 @@ const MOODS: Record<HomeMood, MoodPose> = {
     mouthScaleY: 0.015,
     mouthRotation: -4,
     mouthCurve: -0.12,
+    mouthD: 0.1,
   },
 };
 
@@ -440,14 +447,14 @@ const MOOD_ORDER: readonly HomeMood[] = [
 
 const MOOD_FACE: Record<
   HomeMood,
-  { style: number; accent: number; pupilScale: number }
+  { style: number; pupilScale: number }
 > = {
-  CONTENT: { style: FACE_STYLE.CONTENT, accent: 0.08, pupilScale: 0.96 },
-  CURIOUS: { style: FACE_STYLE.SURPRISED, accent: 0.22, pupilScale: 1.08 },
-  SLEEPY: { style: FACE_STYLE.SLEEPY, accent: 0.12, pupilScale: 0.78 },
-  AMUSED: { style: FACE_STYLE.HAPPY, accent: 0.42, pupilScale: 1.12 },
-  DISTRACTED: { style: FACE_STYLE.CONFUSED, accent: 0.28, pupilScale: 0.9 },
-  THOUGHTFUL: { style: FACE_STYLE.DEADPAN, accent: 0.16, pupilScale: 0.84 },
+  CONTENT: { style: FACE_STYLE.CONTENT, pupilScale: 0.96 },
+  CURIOUS: { style: FACE_STYLE.SURPRISED, pupilScale: 1.08 },
+  SLEEPY: { style: FACE_STYLE.SLEEPY, pupilScale: 0.78 },
+  AMUSED: { style: FACE_STYLE.HAPPY, pupilScale: 1.12 },
+  DISTRACTED: { style: FACE_STYLE.CONFUSED, pupilScale: 0.9 },
+  THOUGHTFUL: { style: FACE_STYLE.DEADPAN, pupilScale: 0.84 },
 };
 
 export interface BehaviourStatus {
@@ -482,7 +489,6 @@ export interface HomeActivityStatus extends BehaviourStatus {
   bodyRotation: number;
   bodySpeed: number;
   faceStyle: number;
-  faceAccent: number;
 }
 
 /** Independent-channel director with current-presentation retargeting. */
@@ -572,6 +578,7 @@ export class BehaviourController {
   private readonly mouthRotation = new SpringAxis();
   private readonly mouthCurve = new SpringAxis(0.82);
   private readonly mouthO = new SpringAxis();
+  private readonly mouthD = new SpringAxis();
   private mouthOpacityValue = 1;
   private mouthTurnStartedAt = -1;
   private mouthTurnTarget = 0;
@@ -588,7 +595,6 @@ export class BehaviourController {
   private faceStyle: number = FACE_STYLE.CONTENT;
   private leftEyeStyle: number = -1;
   private rightEyeStyle: number = -1;
-  private readonly faceAccent = new SpringAxis();
 
   private massXTarget = 0;
   private massYTarget = 0;
@@ -714,6 +720,7 @@ export class BehaviourController {
     this.mouthRotation.reset();
     this.mouthCurve.reset(0.82);
     this.mouthO.reset();
+    this.mouthD.reset();
     this.mouthOpacityValue = 1;
     this.mouthTurnStartedAt = -1;
     this.mouthTurnTarget = 0;
@@ -728,7 +735,6 @@ export class BehaviourController {
     this.faceStyle = FACE_STYLE.CONTENT;
     this.leftEyeStyle = -1;
     this.rightEyeStyle = -1;
-    this.faceAccent.reset();
     this.bodyStartedAt = 0;
     this.bodyBaseTravelX = 0;
     this.bodyBaseTravelY = 0;
@@ -1308,7 +1314,6 @@ export class BehaviourController {
     const moodFace = MOOD_FACE[this.mood];
     let duration = 850;
     let style = moodFace.style;
-    let accent = moodFace.accent;
     let pupilScale = moodFace.pupilScale;
     let leftLidBias = 0;
     let rightLidBias = 0;
@@ -1341,7 +1346,6 @@ export class BehaviourController {
       duration = 850 + this.rand() * 650;
     } else if (id === "ANGRY_BROWS" || id === "ANGRY_EYES") {
       style = FACE_STYLE.ANGRY;
-      accent = 0.95;
       pupilScale = 0.68;
       this.leftTension.target = id === "ANGRY_EYES" ? 0.22 : 0.32;
       this.rightTension.target = id === "ANGRY_EYES" ? 0.25 : 0.35;
@@ -1358,7 +1362,6 @@ export class BehaviourController {
       duration = id === "ANGRY_EYES" ? 1080 : 900 + this.rand() * 520;
     } else if (id === "ONE_EYE_SQUINT_LEFT") {
       style = FACE_STYLE.HAPPY;
-      accent = 0.28;
       this.leftTension.target = 0.58;
       this.rightTension.target = mood.rightTension * 0.98;
       this.leftRotation.target = -2.2;
@@ -1367,7 +1370,6 @@ export class BehaviourController {
       duration = 680 + this.rand() * 500;
     } else if (id === "ONE_EYE_SQUINT_RIGHT") {
       style = FACE_STYLE.HAPPY;
-      accent = 0.28;
       this.rightTension.target = 0.58;
       this.leftTension.target = mood.leftTension * 0.98;
       this.rightRotation.target = 2.2;
@@ -1376,7 +1378,6 @@ export class BehaviourController {
       duration = 680 + this.rand() * 500;
     } else if (id === "CURIOUS_WIDE") {
       style = FACE_STYLE.SURPRISED;
-      accent = 0.26;
       pupilScale = 1.12;
       this.leftTension.target = 1.1;
       this.rightTension.target = 1.12;
@@ -1387,7 +1388,6 @@ export class BehaviourController {
       duration = 760 + this.rand() * 520;
     } else if (id === "HAPPY_EYES") {
       style = FACE_STYLE.HAPPY;
-      accent = 0.56;
       pupilScale = 1.18;
       this.leftTension.target = 1.06;
       this.rightTension.target = 1.08;
@@ -1395,10 +1395,11 @@ export class BehaviourController {
       this.rightScaleX.target = mood.eyeScaleX + 0.03;
       this.leftScaleY.target = mood.eyeScaleY + 0.055;
       this.rightScaleY.target = mood.eyeScaleY + 0.05;
+      this.leftBrowRotation.target = -2.2;
+      this.rightBrowRotation.target = 2.2;
       duration = 980;
     } else if (id === "EXCITED_EYES") {
       style = FACE_STYLE.EXCITED;
-      accent = 0.9;
       pupilScale = 1.32;
       this.leftTension.target = 1.18;
       this.rightTension.target = 1.2;
@@ -1406,10 +1407,11 @@ export class BehaviourController {
       this.rightScaleX.target = mood.eyeScaleX + 0.065;
       this.leftScaleY.target = mood.eyeScaleY + 0.14;
       this.rightScaleY.target = mood.eyeScaleY + 0.135;
+      this.leftBrowRotation.target = -1.6;
+      this.rightBrowRotation.target = 1.6;
       duration = 920;
     } else if (id === "SHY_EYES") {
       style = FACE_STYLE.SHY;
-      accent = 0.82;
       pupilScale = 0.9;
       this.leftTension.target = 0.72;
       this.rightTension.target = 0.76;
@@ -1422,7 +1424,6 @@ export class BehaviourController {
       duration = 1200;
     } else if (id === "SLEEPY_EYES") {
       style = FACE_STYLE.SLEEPY;
-      accent = 0.22;
       pupilScale = 0.74;
       this.leftTension.target = 0.23;
       this.rightTension.target = 0.27;
@@ -1435,7 +1436,6 @@ export class BehaviourController {
       duration = 1350;
     } else if (id === "SAD_EYES") {
       style = FACE_STYLE.SAD;
-      accent = 0.76;
       pupilScale = 0.76;
       this.leftTension.target = 0.66;
       this.rightTension.target = 0.7;
@@ -1450,7 +1450,6 @@ export class BehaviourController {
       duration = 1280;
     } else if (id === "CONFUSED_EYES") {
       style = FACE_STYLE.CONFUSED;
-      accent = 0.58;
       pupilScale = 0.9;
       this.leftTension.target = 0.88;
       this.rightTension.target = 0.76;
@@ -1463,7 +1462,6 @@ export class BehaviourController {
       duration = 1180;
     } else if (id === "LOVE_EYES") {
       style = FACE_STYLE.LOVE;
-      accent = 0.95;
       pupilScale = 1.05;
       this.leftTension.target = 1.02;
       this.rightTension.target = 1.04;
@@ -1472,7 +1470,6 @@ export class BehaviourController {
       duration = 1300;
     } else if (id === "PANIC_EYES") {
       style = FACE_STYLE.PANIC;
-      accent = 0.92;
       pupilScale = 0.62;
       this.leftTension.target = 1.16;
       this.rightTension.target = 1.18;
@@ -1483,7 +1480,6 @@ export class BehaviourController {
       duration = 860;
     } else if (id === "DEADPAN_EYES") {
       style = FACE_STYLE.DEADPAN;
-      accent = 0.24;
       pupilScale = 0.82;
       this.leftTension.target = 0.58;
       this.rightTension.target = 0.62;
@@ -1493,7 +1489,6 @@ export class BehaviourController {
     }
 
     this.faceStyle = style;
-    this.faceAccent.target = accent;
     this.pupilScale.target = pupilScale;
     this.leftLidBias.target = leftLidBias;
     this.rightLidBias.target = rightLidBias;
@@ -1513,6 +1508,14 @@ export class BehaviourController {
       this.mouthScaleY.target = -0.1;
       this.mouthCurve.target = 0.5;
       this.mouthO.target = 0;
+      this.mouthD.target =
+        this.faceStyle === FACE_STYLE.HAPPY || this.faceStyle === FACE_STYLE.EXCITED
+          ? 0.82
+          : this.faceStyle === FACE_STYLE.ANGRY
+            ? 0.68
+            : this.faceStyle === FACE_STYLE.SAD
+              ? 0.12
+              : 0;
       this.setMouthRotationTarget(0);
       duration = 900 + this.rand() * 500;
     } else if (id === "MOUTH_TWITCH") {
@@ -1523,6 +1526,12 @@ export class BehaviourController {
       this.mouthScaleY.target = -0.02;
       this.mouthCurve.target = 0.62 + dir * 0.18;
       this.mouthO.target = 0;
+      this.mouthD.target =
+        this.faceStyle === FACE_STYLE.ANGRY
+          ? 0.62
+          : this.faceStyle === FACE_STYLE.HAPPY
+            ? 0.34
+            : 0;
       this.setMouthRotationTarget(dir * 4.5);
       duration = 380 + this.rand() * 260;
     } else if (id === "MOUTH_O") {
@@ -1532,6 +1541,7 @@ export class BehaviourController {
       this.mouthScaleY.target = 0.08;
       this.mouthCurve.target = 0;
       this.mouthO.target = 1;
+      this.mouthD.target = 0;
       this.setMouthRotationTarget(0);
       duration = 820 + this.rand() * 520;
     } else {
@@ -1541,6 +1551,12 @@ export class BehaviourController {
       this.mouthScaleY.target = 0.06;
       this.mouthCurve.target = -1;
       this.mouthO.target = 0;
+      this.mouthD.target =
+        this.faceStyle === FACE_STYLE.ANGRY
+          ? 0.76
+          : this.faceStyle === FACE_STYLE.HAPPY || this.faceStyle === FACE_STYLE.EXCITED
+            ? 0.56
+            : 0.1;
       this.setMouthRotationTarget(0);
       duration = 1100 + this.rand() * 650;
     }
@@ -2513,7 +2529,6 @@ export class BehaviourController {
   private applyMoodFace() {
     const mood = MOOD_FACE[this.mood];
     this.faceStyle = mood.style;
-    this.faceAccent.target = mood.accent;
     this.pupilScale.target = mood.pupilScale;
   }
 
@@ -2525,6 +2540,7 @@ export class BehaviourController {
     this.mouthScaleY.target = mood.mouthScaleY;
     this.mouthCurve.target = mood.mouthCurve;
     this.mouthO.target = 0;
+    this.mouthD.target = mood.mouthD;
     this.setMouthRotationTarget(mood.mouthRotation);
   }
 
@@ -2569,7 +2585,6 @@ export class BehaviourController {
       this.pupilScale.step(dt, 5.2, 0.78);
       this.leftLidBias.step(dt, 6.4, 0.72);
       this.rightLidBias.step(dt, 6.1, 0.74);
-      this.faceAccent.step(dt, 5.8, 0.78);
       this.mouthX.step(dt, 6.4, 0.7);
       this.mouthY.step(dt, 6.2, 0.7);
       this.mouthScaleX.step(dt, 6.8, 0.69);
@@ -2577,6 +2592,7 @@ export class BehaviourController {
       this.mouthRotation.step(dt, 5.5, 0.72);
       this.mouthCurve.step(dt, 5.8, 0.72);
       this.mouthO.step(dt, 6.2, 0.7);
+      this.mouthD.step(dt, 5.8, 0.72);
     }
   }
 
@@ -2612,7 +2628,6 @@ export class BehaviourController {
     this.delta.blobScale = this.specialScale;
     this.delta.blobOpacity = this.specialOpacity;
     this.delta.faceStyle = this.faceStyle;
-    this.delta.faceAccent = clamp(this.faceAccent.value, 0, 1);
     this.delta.blobScaleY = scaleY;
     this.delta.blobScaleX = preserveAreaX(scaleY);
     this.delta.bodyX = this.massXTarget;
@@ -2658,6 +2673,7 @@ export class BehaviourController {
     this.delta.mouthOpacity = this.mouthOpacityValue;
     this.delta.mouthCurve = this.mouthCurve.value;
     this.delta.mouthO = this.mouthO.value;
+    this.delta.mouthD = clamp(this.mouthD.value, 0, 1);
     return this.delta;
   }
 
@@ -2683,7 +2699,6 @@ export class BehaviourController {
       | "nextMouthMs"
       | "nextBodyMs"
       | "faceStyle"
-      | "faceAccent"
     > {
     const active = this.clock < this.activityUntil;
     const mindState = this.mind.state();
@@ -2723,7 +2738,6 @@ export class BehaviourController {
       nextMouthMs: Math.max(0, this.nextMouthAt - this.clock),
       nextBodyMs: Math.max(0, this.nextBodyAt - this.clock),
       faceStyle: this.delta.faceStyle,
-      faceAccent: this.delta.faceAccent,
     };
   }
 }

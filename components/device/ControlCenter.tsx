@@ -12,7 +12,8 @@ export type ControlSectionId =
   | "display"
   | "environment"
   | "tools"
-  | "expressions";
+  | "expressions"
+  | "emoji";
 
 export interface ControlSectionDefinition {
   id: ControlSectionId;

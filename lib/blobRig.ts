@@ -307,7 +307,7 @@ export interface ElementTransform {
   /** Pupil travel is independent from the eye socket travel. */
   pupilX: number;
   pupilY: number;
-  /** Relative iris/pupil dilation. */
+  /** Relative gaze-highlight dilation for the optional dev preview. */
   pupilScale: number;
   /** Tilts the upper/lower lid aperture without moving the socket. */
   lidBias: number;
@@ -316,6 +316,8 @@ export interface ElementTransform {
   /** Procedural mouth shape controls. */
   mouthCurve: number;
   mouthO: number;
+  /** Amount of the flat-top, rounded-bottom D mouth. */
+  mouthD: number;
   /** Body-only surface ripple offsets, in 466-space pixels. */
   rippleTop: number;
   rippleUpper: number;
@@ -338,9 +340,8 @@ export interface BlobTransform {
   scaleY: number;
   rotation: number;
   opacity: number;
-  /** Procedural face style and mark strength; the body asset stays unchanged. */
+  /** Procedural face style metadata; the body asset stays unchanged. */
   faceStyle: number;
-  faceAccent: number;
 }
 
 export interface BlobRig {
@@ -377,6 +378,7 @@ export const NEUTRAL_ELEMENT: ElementTransform = {
   eyeStyle: -1,
   mouthCurve: 0,
   mouthO: 0,
+  mouthD: 0,
   rippleTop: 0,
   rippleUpper: 0,
   rippleLower: 0,
@@ -395,7 +397,6 @@ export const NEUTRAL_BLOB: BlobTransform = {
   rotation: 0,
   opacity: 1,
   faceStyle: FACE_STYLE.CONTENT,
-  faceAccent: 0,
 };
 
 /** All-neutral rig — the calibrated HOME pose. */
