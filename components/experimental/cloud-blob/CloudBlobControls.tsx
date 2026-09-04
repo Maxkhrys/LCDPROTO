@@ -21,8 +21,6 @@ import type { BehaviourId } from "@/lib/blobBehaviour";
 export type ViewMode = "cloud" | "production" | "compare";
 
 interface CloudBlobControlsProps {
-  viewMode: ViewMode;
-  onChangeViewMode: (mode: ViewMode) => void;
   blobColour: BlobColour;
   onChangeColour: (colour: BlobColour) => void;
   showFace: boolean;
@@ -34,7 +32,7 @@ interface CloudBlobControlsProps {
   trails: CloudTrailConfig;
   onChangeTrails: (patch: Partial<CloudTrailConfig>) => void;
   params: CloudDeformationParams;
-  onChangeParam: (key: keyof CloudDeformationParams, val: number) => void;
+  onChangeParam: (key: keyof CloudDeformationParams, val: number | boolean) => void;
   motion: CloudMotionConfig;
   onChangeMotion: (key: keyof CloudMotionConfig, val: number) => void;
   activePreset: CloudPresetName | null;
@@ -61,8 +59,6 @@ interface CloudBlobControlsProps {
 }
 
 export default function CloudBlobControls({
-  viewMode,
-  onChangeViewMode,
   blobColour,
   onChangeColour,
   showFace,
@@ -151,43 +147,34 @@ export default function CloudBlobControls({
 
       {/* 2. Primary Modes, Toggles & Colour Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-5">
-        {/* Character View Mode */}
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-[10px] uppercase tracking-wider text-white/50">View:</span>
-          <div className="flex rounded-lg border border-white/10 bg-white/5 p-0.5">
-            <button
-              type="button"
-              onClick={() => onChangeViewMode("cloud")}
-              className={`rounded px-3 py-1 font-mono text-[11px] uppercase transition ${
-                viewMode === "cloud"
-                  ? "bg-cyan-500 text-black font-semibold shadow-sm"
-                  : "text-white/60 hover:text-white"
-              }`}
-            >
-              Cloud Character
-            </button>
-            <button
-              type="button"
-              onClick={() => onChangeViewMode("production")}
-              className={`rounded px-3 py-1 font-mono text-[11px] uppercase transition ${
-                viewMode === "production"
-                  ? "bg-purple-500 text-white font-semibold shadow-sm"
-                  : "text-white/60 hover:text-white"
-              }`}
-            >
-              Production Blob
-            </button>
-            <button
-              type="button"
-              onClick={() => onChangeViewMode("compare")}
-              className={`rounded px-3 py-1 font-mono text-[11px] uppercase transition ${
-                viewMode === "compare"
-                  ? "bg-emerald-500 text-black font-semibold shadow-sm"
-                  : "text-white/60 hover:text-white"
-              }`}
-            >
-              Side-by-Side Compare
-            </button>
+        {/* Character Badge & Fluffiness Quick-Selector */}
+        <div className="flex items-center gap-3">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 font-mono text-[11px] font-semibold text-cyan-300 shadow-sm">
+            <span className="size-2 rounded-full bg-cyan-400 animate-pulse" />
+            LIVING CLOUD BLOB
+          </span>
+          <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 p-0.5">
+            {[
+              { label: "Soft", val: 0.7 },
+              { label: "Fluffy", val: 1.25 },
+              { label: "Ultra Fluffy", val: 1.85 },
+            ].map((f) => {
+              const active = Math.abs(params.fluffiness - f.val) < 0.25;
+              return (
+                <button
+                  key={f.label}
+                  type="button"
+                  onClick={() => onChangeParam("fluffiness", f.val)}
+                  className={`rounded px-2.5 py-1 font-mono text-[10px] uppercase transition ${
+                    active
+                      ? "bg-cyan-400 text-black font-semibold shadow-sm"
+                      : "text-white/60 hover:text-white"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -234,6 +221,26 @@ export default function CloudBlobControls({
               className="size-3.5 rounded border-white/20 bg-white/5 text-cyan-500 focus:ring-0"
             />
             <span>Face ON</span>
+          </label>
+
+          <label className="flex items-center gap-1.5 cursor-pointer font-mono text-[11px] text-white/70 hover:text-white select-none">
+            <input
+              type="checkbox"
+              checked={params.cloudBrows}
+              onChange={(e) => onChangeParam("cloudBrows", e.target.checked)}
+              className="size-3.5 rounded border-white/20 bg-white/5 text-cyan-500 focus:ring-0"
+            />
+            <span className={params.cloudBrows ? "text-cyan-300 font-medium" : ""}>Brows ON</span>
+          </label>
+
+          <label className="flex items-center gap-1.5 cursor-pointer font-mono text-[11px] text-white/70 hover:text-white select-none">
+            <input
+              type="checkbox"
+              checked={params.cheekBlush > 0.05}
+              onChange={(e) => onChangeParam("cheekBlush", e.target.checked ? 0.85 : 0)}
+              className="size-3.5 rounded border-white/20 bg-white/5 text-pink-500 focus:ring-0"
+            />
+            <span className={params.cheekBlush > 0.05 ? "text-pink-400 font-medium" : ""}>Blush ON</span>
           </label>
 
           <label className="flex items-center gap-1.5 cursor-pointer font-mono text-[11px] text-white/70 hover:text-white select-none">
@@ -633,6 +640,57 @@ export default function CloudBlobControls({
                 onChange={(e) => onChangeParam("puff", parseFloat(e.target.value))}
                 className="accent-cyan-400"
               />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <div className="flex justify-between font-mono text-xs">
+                <span className="text-white/70">Fluffiness (Cumulus Billows)</span>
+                <span className="text-cyan-300 font-semibold">{params.fluffiness.toFixed(2)}x</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={2.0}
+                step={0.05}
+                value={params.fluffiness}
+                onChange={(e) => onChangeParam("fluffiness", parseFloat(e.target.value))}
+                className="accent-cyan-400"
+              />
+              <span className="font-mono text-[9px] text-white/30">Multi-octave billow puff clusters</span>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <div className="flex justify-between font-mono text-xs">
+                <span className="text-white/70">Sunlight Angle</span>
+                <span className="text-amber-300 font-semibold">{params.lightAngle.toFixed(0)}&deg;</span>
+              </div>
+              <input
+                type="range"
+                min={-180}
+                max={180}
+                step={5}
+                value={params.lightAngle}
+                onChange={(e) => onChangeParam("lightAngle", parseFloat(e.target.value))}
+                className="accent-amber-400"
+              />
+              <span className="font-mono text-[9px] text-white/30">Directional volumetric key lighting</span>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <div className="flex justify-between font-mono text-xs">
+                <span className="text-white/70">Cheek Blush Warmth</span>
+                <span className="text-pink-400 font-semibold">{(params.cheekBlush * 100).toFixed(0)}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={1.0}
+                step={0.05}
+                value={params.cheekBlush}
+                onChange={(e) => onChangeParam("cheekBlush", parseFloat(e.target.value))}
+                className="accent-pink-400"
+              />
+              <span className="font-mono text-[9px] text-white/30">Internal bioluminescent blush radiance</span>
             </div>
 
             <div className="flex flex-col gap-2">

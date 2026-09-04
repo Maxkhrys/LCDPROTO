@@ -14,6 +14,7 @@
 
 import {
   LOBE_DEFINITIONS,
+  LOBE_SUB_PUFFS,
   SUSPENDED_DROPLETS,
 } from "./cloudLobeSystem";
 import type {
@@ -48,6 +49,10 @@ interface RenderOptions {
   gazeX?: number;
   gazeY?: number;
   faceEmbedDepth?: number;
+  fluffiness?: number;
+  lightAngle?: number;
+  cheekBlush?: number;
+  cloudBrows?: boolean;
 }
 
 const clamp = (v: number, min: number, max: number) =>
@@ -328,7 +333,7 @@ function drawProceduralEye(
   ctx.fill();
 }
 
-// --- High-Quality Seamless Volumetric Lobe Drawing ---------------------------
+// --- High-Quality Fluffy Volumetric Cumulus Lobe Drawing --------------------
 
 function drawVolumetricLobe(
   ctx: CanvasRenderingContext2D,
@@ -341,7 +346,10 @@ function drawVolumetricLobe(
   coreRgb: { r: number; g: number; b: number },
   translucency: number,
   softnessMult: number,
-  isCore: boolean
+  isCore: boolean,
+  fluffiness = 1.2,
+  lightAngle = -45,
+  idleTime = 0
 ) {
   const lx = cx + state.x;
   const ly = cy + state.y;
@@ -351,40 +359,105 @@ function drawVolumetricLobe(
 
   if (opacity <= 0.001 || rx <= 1 || ry <= 1) return;
 
-  ctx.save();
-  ctx.translate(lx, ly);
-  ctx.rotate(state.rotation);
-  ctx.scale(rx, ry);
+  const lightRad = (lightAngle * Math.PI) / 180;
+  const lightDirX = Math.cos(lightRad);
+  const lightDirY = Math.sin(lightRad);
 
-  const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, 1.0 * def.baseSoftness * softnessMult);
+  // Helper to draw a single volumetric puff stamp with directional key lighting
+  const drawPuffStamp = (
+    px: number,
+    py: number,
+    prx: number,
+    pry: number,
+    rot: number,
+    opac: number,
+    softness: number,
+    coreBlend: boolean,
+    isSubPuff: boolean
+  ) => {
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(rot);
+    ctx.scale(prx, pry);
 
-  if (isCore) {
-    const cAlpha = Math.min(1.0, opacity * 1.05);
-    const mAlpha = opacity * 0.75 * translucency;
-    const eAlpha = opacity * 0.28 * translucency;
+    // Shift gradient focal center toward light source for realistic 3D volume
+    const focalShift = isSubPuff ? 0.30 : 0.22;
+    const fx = lightDirX * focalShift;
+    const fy = lightDirY * focalShift;
+    const outerRadius = 1.0 * softness;
 
-    grad.addColorStop(0, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, ${cAlpha})`);
-    grad.addColorStop(0.38, `rgba(${bodyRgb.r}, ${bodyRgb.g}, ${bodyRgb.b}, ${mAlpha})`);
-    grad.addColorStop(0.74, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, ${eAlpha})`);
-    grad.addColorStop(1.0, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, 0)`);
-  } else {
-    // Outer lobes blend seamlessly with translucent feathered falloff
-    const cAlpha = Math.min(0.95, opacity * 0.90);
-    const mAlpha = opacity * 0.52 * translucency;
-    const eAlpha = opacity * 0.20 * translucency;
+    const grad = ctx.createRadialGradient(fx, fy, 0.04, 0, 0, outerRadius);
 
-    grad.addColorStop(0, `rgba(${bodyRgb.r}, ${bodyRgb.g}, ${bodyRgb.b}, ${cAlpha})`);
-    grad.addColorStop(0.44, `rgba(${bodyRgb.r}, ${bodyRgb.g}, ${bodyRgb.b}, ${mAlpha})`);
-    grad.addColorStop(0.76, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, ${eAlpha})`);
-    grad.addColorStop(1.0, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, 0)`);
+    if (coreBlend) {
+      const cAlpha = Math.min(1.0, opac * 1.06);
+      const mAlpha = opac * 0.74 * translucency;
+      const eAlpha = opac * 0.26 * translucency;
+
+      grad.addColorStop(0, `rgba(${Math.min(255, coreRgb.r + 30)}, ${Math.min(255, coreRgb.g + 30)}, ${Math.min(255, coreRgb.b + 35)}, ${cAlpha})`);
+      grad.addColorStop(0.38, `rgba(${bodyRgb.r}, ${bodyRgb.g}, ${bodyRgb.b}, ${mAlpha})`);
+      grad.addColorStop(0.74, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, ${eAlpha})`);
+      grad.addColorStop(1.0, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, 0)`);
+    } else {
+      // Outer billowy lobes: bright sunlit crest with translucent feathered falloff
+      const cAlpha = Math.min(0.96, opac * (isSubPuff ? 0.84 : 0.90));
+      const mAlpha = opac * (isSubPuff ? 0.46 : 0.52) * translucency;
+      const eAlpha = opac * (isSubPuff ? 0.16 : 0.20) * translucency;
+
+      const crestR = Math.min(255, edgeRgb.r + (isSubPuff ? 18 : 12));
+      const crestG = Math.min(255, edgeRgb.g + (isSubPuff ? 18 : 12));
+      const crestB = Math.min(255, edgeRgb.b + (isSubPuff ? 18 : 12));
+
+      grad.addColorStop(0, `rgba(${crestR}, ${crestG}, ${crestB}, ${cAlpha})`);
+      grad.addColorStop(0.42, `rgba(${bodyRgb.r}, ${bodyRgb.g}, ${bodyRgb.b}, ${mAlpha})`);
+      grad.addColorStop(0.76, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, ${eAlpha})`);
+      grad.addColorStop(1.0, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, 0)`);
+    }
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, outerRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  };
+
+  // 1. Draw sub-puffs around perimeter to create rich, fluffy cumulus billows
+  const subPuffs = LOBE_SUB_PUFFS[def.id];
+  if (subPuffs && fluffiness > 0.05) {
+    for (const sub of subPuffs) {
+      const breathWobble = Math.sin(idleTime * 2.2 + (sub.phaseOffset ?? 0)) * 2.0 * fluffiness;
+      const spx = lx + (sub.offsetX * fluffiness + breathWobble * lightDirX) * state.scaleX;
+      const spy = ly + (sub.offsetY * fluffiness + breathWobble * lightDirY) * state.scaleY;
+      const sprx = rx * sub.radiusRatio * (1 + breathWobble * 0.015);
+      const spry = ry * sub.radiusRatio * (1 + breathWobble * 0.015);
+      const subOpacity = opacity * (0.86 + Math.min(0.14, fluffiness * 0.08));
+
+      drawPuffStamp(
+        spx,
+        spy,
+        sprx,
+        spry,
+        state.rotation + (sub.phaseOffset ?? 0) * 0.08,
+        subOpacity,
+        (sub.softnessMult ?? def.baseSoftness) * softnessMult,
+        false,
+        true
+      );
+    }
   }
 
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.arc(0, 0, 1.0 * def.baseSoftness * softnessMult, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.restore();
+  // 2. Draw Primary Lobe Mass
+  drawPuffStamp(
+    lx,
+    ly,
+    rx,
+    ry,
+    state.rotation,
+    opacity,
+    def.baseSoftness * softnessMult,
+    isCore,
+    false
+  );
 }
 
 function drawInnerVolumeGlow(
@@ -399,7 +472,7 @@ function drawInnerVolumeGlow(
   const pulse = 1 + Math.sin(idleTime * 1.8) * 0.05;
   const lx = cx + coreState.x;
   const ly = cy + coreState.y - 2;
-  const radius = 105 * pulse;
+  const radius = 108 * pulse;
 
   ctx.save();
   ctx.globalCompositeOperation = "screen";
@@ -425,29 +498,157 @@ function drawRimAccent(
   cx: number,
   cy: number,
   topState: LobeState,
-  edgeRgb: { r: number; g: number; b: number }
+  edgeRgb: { r: number; g: number; b: number },
+  lightAngle = -45
 ) {
-  const rx = 68 * topState.scaleX;
-  const ry = 48 * topState.scaleY;
-  const lx = cx + topState.x;
-  const ly = cy + topState.y - 4;
+  const lightRad = (lightAngle * Math.PI) / 180;
+  const rx = 72 * topState.scaleX;
+  const ry = 50 * topState.scaleY;
+  const lx = cx + topState.x + Math.cos(lightRad) * 6;
+  const ly = cy + topState.y + Math.sin(lightRad) * 6;
 
   ctx.save();
   ctx.globalCompositeOperation = "screen";
   ctx.translate(lx, ly);
-  ctx.rotate(topState.rotation - 0.15);
+  ctx.rotate(topState.rotation + (lightAngle + 90) * 0.005);
 
-  const grad = ctx.createRadialGradient(0, -ry * 0.55, 4, 0, 0, rx);
-  grad.addColorStop(0, `rgba(255, 255, 255, 0.35)`);
-  grad.addColorStop(0.35, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, 0.18)`);
+  const grad = ctx.createRadialGradient(0, -ry * 0.52, 3, 0, 0, rx);
+  grad.addColorStop(0, `rgba(255, 255, 255, 0.45)`);
+  grad.addColorStop(0.35, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, 0.22)`);
   grad.addColorStop(0.8, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, 0)`);
 
   ctx.fillStyle = grad;
   ctx.beginPath();
-  ctx.ellipse(0, -ry * 0.3, rx * 0.85, ry * 0.45, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, -ry * 0.28, rx * 0.88, ry * 0.46, 0, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.restore();
+}
+
+function drawCheekBlush(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  leftCheek: LobeState | undefined,
+  rightCheek: LobeState | undefined,
+  intensity: number
+) {
+  if (intensity <= 0.01) return;
+
+  const alpha = Math.min(0.48, 0.40 * intensity);
+  const drawBlushSpot = (x: number, y: number, rot: number) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rot);
+    const grad = ctx.createRadialGradient(0, 0, 2, 0, 0, 38);
+    grad.addColorStop(0, `rgba(255, 145, 175, ${alpha})`);
+    grad.addColorStop(0.48, `rgba(255, 170, 195, ${alpha * 0.42})`);
+    grad.addColorStop(1.0, "rgba(255, 190, 210, 0)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 36, 24, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  };
+
+  if (leftCheek) {
+    drawBlushSpot(cx + leftCheek.x + 8, cy + leftCheek.y + 12, leftCheek.rotation);
+  }
+  if (rightCheek) {
+    drawBlushSpot(cx + rightCheek.x - 8, cy + rightCheek.y + 12, rightCheek.rotation);
+  }
+}
+
+function drawEyePillows(
+  ctx: CanvasRenderingContext2D,
+  center: number,
+  leftA: { x: number; y: number; width: number; height: number },
+  rightA: { x: number; y: number; width: number; height: number },
+  activeRig: BlobRig,
+  edgeRgb: { r: number; g: number; b: number }
+) {
+  const drawPillow = (
+    anchor: { x: number; y: number; width: number; height: number },
+    t: ElementTransform
+  ) => {
+    const socketX = anchor.x - center + t.socketX;
+    const socketY = anchor.y - center + t.socketY;
+    const sw = anchor.width * clamp(t.eyeSocketScaleX, 0.8, 1.25);
+    const sh = anchor.height * clamp(t.eyeSocketScaleY, 0.8, 1.25);
+
+    ctx.save();
+    ctx.translate(socketX, socketY + 4);
+    const grad = ctx.createRadialGradient(0, sh * 0.32, 2, 0, 0, sw * 0.82);
+    grad.addColorStop(0, `rgba(255, 255, 255, 0.32)`);
+    grad.addColorStop(0.48, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, 0.16)`);
+    grad.addColorStop(1.0, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, 0)`);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(0, sh * 0.20, sw * 0.76, sh * 0.50, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  };
+
+  drawPillow(leftA, activeRig.leftEye);
+  drawPillow(rightA, activeRig.rightEye);
+}
+
+function drawCloudBrows(
+  ctx: CanvasRenderingContext2D,
+  center: number,
+  leftA: { x: number; y: number; width: number; height: number },
+  rightA: { x: number; y: number; width: number; height: number },
+  activeRig: BlobRig,
+  edgeRgb: { r: number; g: number; b: number },
+  bodyRgb: { r: number; g: number; b: number }
+) {
+  const { leftEye: lt, rightEye: rt } = activeRig;
+
+  const drawBrow = (
+    anchor: { x: number; y: number; width: number; height: number },
+    t: ElementTransform,
+    isLeft: boolean
+  ) => {
+    const browLift = t.browLift * anchor.height * 0.35;
+    const browRot = (t.browRotation * Math.PI) / 180 + (isLeft ? -0.06 : 0.06);
+    const browX = anchor.x - center + t.socketX + (isLeft ? -anchor.width * 0.04 : anchor.width * 0.04);
+    const browY = anchor.y - center + t.socketY - anchor.height * 0.56 - browLift;
+    const bw = anchor.width * 0.44 * clamp(t.eyeSocketScaleX, 0.8, 1.25);
+    const bh = anchor.height * 0.22 * clamp(t.eyeSocketScaleY, 0.8, 1.25);
+
+    ctx.save();
+    ctx.translate(browX, browY);
+    ctx.rotate(browRot);
+
+    // Main wispy brow puff
+    const grad = ctx.createRadialGradient(-bw * 0.15, -bh * 0.2, 0, 0, 0, bw * 0.95);
+    grad.addColorStop(0, `rgba(255, 255, 255, 0.88)`);
+    grad.addColorStop(0.45, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, 0.55)`);
+    grad.addColorStop(0.8, `rgba(${bodyRgb.r}, ${bodyRgb.g}, ${bodyRgb.b}, 0.20)`);
+    grad.addColorStop(1.0, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, 0)`);
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, bw, bh, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Outer corner micro-tuft
+    const tuftX = isLeft ? -bw * 0.62 : bw * 0.62;
+    const tuftY = -bh * 0.12;
+    const tGrad = ctx.createRadialGradient(tuftX, tuftY, 0, tuftX, tuftY, bw * 0.5);
+    tGrad.addColorStop(0, "rgba(255, 255, 255, 0.75)");
+    tGrad.addColorStop(0.5, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, 0.35)`);
+    tGrad.addColorStop(1.0, "rgba(255, 255, 255, 0)");
+    ctx.fillStyle = tGrad;
+    ctx.beginPath();
+    ctx.ellipse(tuftX, tuftY, bw * 0.42, bh * 0.72, isLeft ? -0.2 : 0.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  };
+
+  drawBrow(leftA, lt, true);
+  drawBrow(rightA, rt, false);
 }
 
 function drawSuspendedDroplets(
@@ -491,8 +692,10 @@ function drawSandwichedFace(
   activeRig: BlobRig,
   colour: BlobColour,
   bodyRgb: { r: number; g: number; b: number },
+  edgeRgb: { r: number; g: number; b: number },
   userGazeX = 0,
-  userGazeY = 0
+  userGazeY = 0,
+  cloudBrows = true
 ) {
   const center = size / 2;
   const leftA = faceAnchor("leftEye", size, colour);
@@ -536,6 +739,14 @@ function drawSandwichedFace(
   ctx.arc(rightA.x - center, rightA.y - center, rightA.width * 0.52, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
+
+  // Soft fluffy cloud pillows nestling the eye sockets into the volume
+  drawEyePillows(ctx, center, leftA, rightA, activeRig, edgeRgb);
+
+  // Wispy cloud brows floating above sockets
+  if (cloudBrows) {
+    drawCloudBrows(ctx, center, leftA, rightA, activeRig, edgeRgb, bodyRgb);
+  }
 
   // 2. Eyes
   const drawEyeComponent = (
@@ -698,6 +909,10 @@ export function renderCloudBlob(
     gazeX = 0,
     gazeY = 0,
     faceEmbedDepth = 0.12,
+    fluffiness = 1.25,
+    lightAngle = -45,
+    cheekBlush = 0,
+    cloudBrows = true,
   } = options;
 
   ctx.save();
@@ -736,14 +951,14 @@ export function renderCloudBlob(
   for (const def of rearLobes) {
     const state = lobeStates[def.id];
     if (state) {
-      drawVolumetricLobe(ctx, cx, cy, def, state, bodyRgb, edgeRgb, coreRgb, colour.translucency, 1.0, false);
+      drawVolumetricLobe(ctx, cx, cy, def, state, bodyRgb, edgeRgb, coreRgb, colour.translucency, 1.0, false, fluffiness, lightAngle, idleTime);
     }
   }
 
   // 3. Render Dominant Central Core (depth = 0)
   const coreDef = LOBE_DEFINITIONS.find((d) => d.id === "core");
   if (coreDef && coreState) {
-    drawVolumetricLobe(ctx, cx, cy, coreDef, coreState, bodyRgb, edgeRgb, coreRgb, colour.translucency, 1.0, true);
+    drawVolumetricLobe(ctx, cx, cy, coreDef, coreState, bodyRgb, edgeRgb, coreRgb, colour.translucency, 1.0, true, fluffiness * 0.8, lightAngle, idleTime);
   }
 
   // 4. Inner Volume Core Glow (Luminous screen illumination)
@@ -757,14 +972,17 @@ export function renderCloudBlob(
   for (const def of midLobes) {
     const state = lobeStates[def.id];
     if (state) {
-      drawVolumetricLobe(ctx, cx, cy, def, state, bodyRgb, edgeRgb, coreRgb, colour.translucency, 1.0, false);
+      drawVolumetricLobe(ctx, cx, cy, def, state, bodyRgb, edgeRgb, coreRgb, colour.translucency, 1.0, false, fluffiness, lightAngle, idleTime);
     }
   }
 
-  // 7. Selective Crest Rim Light Accent along Dome Crown
-  drawRimAccent(ctx, cx, cy, topState, edgeRgb);
+  // 7. Soft Bioluminescent Cheek Blush
+  drawCheekBlush(ctx, cx, cy, lobeStates.leftCheek, lobeStates.rightCheek, cheekBlush);
 
-  // 8. Crisp Production Face Layer
+  // 8. Selective Crest Rim Light Accent along Dome Crown
+  drawRimAccent(ctx, cx, cy, topState, edgeRgb, lightAngle);
+
+  // 9. Crisp Production Face Layer
   const activeRig = rig || faceRig || NEUTRAL_RIG;
   if (showFace) {
     drawSandwichedFace(
@@ -776,12 +994,14 @@ export function renderCloudBlob(
       activeRig,
       activeColour,
       bodyRgb,
+      edgeRgb,
       gazeX,
-      gazeY
+      gazeY,
+      cloudBrows
     );
   }
 
-  // 9. Front Translucent Mist Veil (depth = 10)
+  // 10. Front Translucent Mist Veil (depth = 10)
   const veilDef = LOBE_DEFINITIONS.find((d) => d.id === "frontVeil");
   const veilState = lobeStates.frontVeil;
   if (veilDef && veilState && faceEmbedDepth > 0.01) {
@@ -789,10 +1009,10 @@ export function renderCloudBlob(
       ...veilState,
       opacity: veilState.opacity * (faceEmbedDepth / 0.12),
     };
-    drawVolumetricLobe(ctx, cx, cy, veilDef, adjustedVeil, bodyRgb, edgeRgb, coreRgb, 1.0, 1.0, false);
+    drawVolumetricLobe(ctx, cx, cy, veilDef, adjustedVeil, bodyRgb, edgeRgb, coreRgb, 1.0, 1.0, false, fluffiness * 0.6, lightAngle, idleTime);
   }
 
-  // 10. Trailing Mist Wisps
+  // 11. Trailing Mist Wisps
   drawMistWisps(ctx, wisps, edgeRgb);
 
   ctx.restore();

@@ -38,7 +38,11 @@ export const DEFAULT_DEFORMATION: CloudDeformationParams = {
   bottomSag: 0,
   coreDensity: 1.15,
   lobeSoftness: 1.0,
-  faceEmbedDepth: 0.14,
+  faceEmbedDepth: 0.12,
+  fluffiness: 1.25,
+  lightAngle: -45,
+  cheekBlush: 0,
+  cloudBrows: true,
   gazeX: 0,
   gazeY: 0,
 };
@@ -256,6 +260,63 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
   },
 ];
 
+export interface LobeSubPuff {
+  offsetX: number;
+  offsetY: number;
+  radiusRatio: number;
+  softnessMult?: number;
+  phaseOffset?: number;
+}
+
+/**
+ * Organic cumulus sub-puff billow clusters for each lobe.
+ * Generates natural fluffy cauliflower-like cloud ridges along each lobe perimeter.
+ */
+export const LOBE_SUB_PUFFS: Partial<Record<string, readonly LobeSubPuff[]>> = {
+  topCrown: [
+    { offsetX: 0, offsetY: -20, radiusRatio: 0.64, phaseOffset: 0.2 },
+    { offsetX: -36, offsetY: -10, radiusRatio: 0.55, phaseOffset: 0.7 },
+    { offsetX: 35, offsetY: -8, radiusRatio: 0.52, phaseOffset: 1.1 },
+    { offsetX: -16, offsetY: -26, radiusRatio: 0.42, phaseOffset: 1.6 },
+    { offsetX: 18, offsetY: -24, radiusRatio: 0.44, phaseOffset: 2.0 },
+  ],
+  leftCheek: [
+    { offsetX: -32, offsetY: 2, radiusRatio: 0.58, phaseOffset: 0.4 },
+    { offsetX: -22, offsetY: -22, radiusRatio: 0.50, phaseOffset: 1.2 },
+    { offsetX: -20, offsetY: 26, radiusRatio: 0.52, phaseOffset: 1.9 },
+    { offsetX: -40, offsetY: 14, radiusRatio: 0.40, phaseOffset: 2.7 },
+  ],
+  rightCheek: [
+    { offsetX: 30, offsetY: 0, radiusRatio: 0.56, phaseOffset: 0.6 },
+    { offsetX: 22, offsetY: -20, radiusRatio: 0.48, phaseOffset: 1.4 },
+    { offsetX: 18, offsetY: 24, radiusRatio: 0.50, phaseOffset: 2.1 },
+    { offsetX: 38, offsetY: 12, radiusRatio: 0.38, phaseOffset: 2.9 },
+  ],
+  baseLeft: [
+    { offsetX: -34, offsetY: 16, radiusRatio: 0.54, phaseOffset: 0.8 },
+    { offsetX: -14, offsetY: 28, radiusRatio: 0.50, phaseOffset: 1.7 },
+    { offsetX: -44, offsetY: -2, radiusRatio: 0.44, phaseOffset: 2.5 },
+  ],
+  baseRight: [
+    { offsetX: 32, offsetY: 14, radiusRatio: 0.52, phaseOffset: 1.0 },
+    { offsetX: 12, offsetY: 28, radiusRatio: 0.48, phaseOffset: 1.9 },
+    { offsetX: 42, offsetY: -4, radiusRatio: 0.42, phaseOffset: 2.8 },
+  ],
+  bottomBelly: [
+    { offsetX: 0, offsetY: 22, radiusRatio: 0.58, phaseOffset: 0.3 },
+    { offsetX: -38, offsetY: 16, radiusRatio: 0.52, phaseOffset: 1.1 },
+    { offsetX: 38, offsetY: 16, radiusRatio: 0.50, phaseOffset: 1.8 },
+    { offsetX: -18, offsetY: 30, radiusRatio: 0.44, phaseOffset: 2.4 },
+    { offsetX: 18, offsetY: 30, radiusRatio: 0.44, phaseOffset: 3.1 },
+  ],
+  core: [
+    { offsetX: -28, offsetY: -32, radiusRatio: 0.48, phaseOffset: 0.5 },
+    { offsetX: 28, offsetY: -32, radiusRatio: 0.48, phaseOffset: 1.3 },
+    { offsetX: -44, offsetY: 8, radiusRatio: 0.45, phaseOffset: 2.2 },
+    { offsetX: 44, offsetY: 8, radiusRatio: 0.45, phaseOffset: 2.8 },
+  ],
+};
+
 /**
  * Deterministic suspended light droplets inside the cloud body.
  */
@@ -268,6 +329,12 @@ export const SUSPENDED_DROPLETS: readonly SuspendedDroplet[] = [
   { x: 22, y: 54, radius: 1.9, brightness: 0.72, driftPhase: 5.1, driftSpeed: 0.95 },
   { x: -6, y: -52, radius: 2.5, brightness: 0.92, driftPhase: 0.8, driftSpeed: 1.3 },
   { x: 28, y: -12, radius: 1.5, brightness: 0.60, driftPhase: 3.9, driftSpeed: 0.70 },
+  { x: -24, y: -8, radius: 2.0, brightness: 0.78, driftPhase: 2.8, driftSpeed: 0.90 },
+  { x: 12, y: 2, radius: 1.7, brightness: 0.82, driftPhase: 4.1, driftSpeed: 1.05 },
+  { x: -55, y: -6, radius: 1.4, brightness: 0.55, driftPhase: 1.2, driftSpeed: 0.75 },
+  { x: 55, y: -4, radius: 1.4, brightness: 0.55, driftPhase: 5.4, driftSpeed: 0.75 },
+  { x: 0, y: -38, radius: 2.6, brightness: 0.95, driftPhase: 0.0, driftSpeed: 1.15 },
+  { x: 0, y: 65, radius: 1.8, brightness: 0.60, driftPhase: 3.5, driftSpeed: 0.85 },
 ];
 
 export function createLobeStates(): Record<string, LobeState> {

@@ -388,6 +388,10 @@ export default function CloudBlobBody({
             gazeX: params.gazeX,
             gazeY: params.gazeY,
             faceEmbedDepth: params.faceEmbedDepth,
+            fluffiness: params.fluffiness,
+            lightAngle: params.lightAngle,
+            cheekBlush: params.cheekBlush,
+            cloudBrows: params.cloudBrows,
           });
         }
       }

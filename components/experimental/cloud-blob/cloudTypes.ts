@@ -65,6 +65,10 @@ export interface CloudDeformationParams {
   coreDensity: number;
   lobeSoftness: number;
   faceEmbedDepth: number; // 0 (crisp floating) to 0.35 (submerged in mist), default 0.12
+  fluffiness: number; // 0 (smooth) to 2.0 (ultra-billowy cumulus fluff), default 1.2
+  lightAngle: number; // Key light angle in degrees, default -45 (top-left sunlight)
+  cheekBlush: number; // 0 to 1 warm bioluminescent blush intensity
+  cloudBrows: boolean; // Render floating wispy cloud brows
   gazeX: number; // -1 to 1 iris glance
   gazeY: number; // -1 to 1 iris glance
 }

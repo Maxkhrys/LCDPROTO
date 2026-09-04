@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import CloudBlobBody from "./CloudBlobBody";
-import CloudBlobControls, { type ViewMode } from "./CloudBlobControls";
-import BlobCharacter from "@/components/blob/BlobCharacter";
+import CloudBlobControls from "./CloudBlobControls";
 import {
   type CloudDeformationParams,
   type CloudMotionConfig,
@@ -40,7 +39,6 @@ const BC_CONFIG: BehaviourConfig = {
 };
 
 export default function CloudBlobTest() {
-  const [viewMode, setViewMode] = useState<ViewMode>("cloud");
   const [blobColour, setBlobColour] = useState<BlobColour>("teal");
   const [showFace, setShowFace] = useState(true);
   const [dragEnabled, setDragEnabled] = useState(true);
@@ -108,7 +106,7 @@ export default function CloudBlobTest() {
   );
 
   const handleChangeParam = useCallback(
-    (key: keyof CloudDeformationParams, val: number) => {
+    (key: keyof CloudDeformationParams, val: number | boolean) => {
       setActivePreset(null);
       setParams((prev) => ({ ...prev, [key]: val }));
     },
@@ -165,30 +163,30 @@ export default function CloudBlobTest() {
   const handleTriggerCurious = useCallback(() => {
     setActiveBehaviour("CURIOUS_TILT_LEFT");
     controller.current.trigger("CURIOUS_TILT_LEFT", BC_CONFIG);
-    setParams((prev) => ({ ...prev, lean: -12, stretch: 0.12 }));
+    setParams((prev) => ({ ...prev, lean: -12, stretch: 0.12, cheekBlush: 0.5 }));
     setTimeout(() => {
-      setParams((prev) => ({ ...prev, lean: 0, stretch: 0 }));
+      setParams((prev) => ({ ...prev, lean: 0, stretch: 0, cheekBlush: 0 }));
     }, 1800);
   }, []);
 
   const handleTriggerHappy = useCallback(() => {
     setActiveBehaviour("CURIOUS_WIDE");
     controller.current.trigger("CURIOUS_WIDE", BC_CONFIG);
-    setParams((prev) => ({ ...prev, squash: 0.22, puff: 0.15 }));
+    setParams((prev) => ({ ...prev, squash: 0.22, puff: 0.15, cheekBlush: 0.85 }));
     setTimeout(() => {
       setParams((prev) => ({ ...prev, squash: -0.1, stretch: 0.18 }));
       setTimeout(() => {
-        setParams((prev) => ({ ...prev, squash: 0, stretch: 0, puff: 0 }));
-      }, 350);
+        setParams((prev) => ({ ...prev, squash: 0, stretch: 0, puff: 0, cheekBlush: 0 }));
+      }, 450);
     }, 280);
   }, []);
 
   const handleTriggerSleepy = useCallback(() => {
     setActiveBehaviour("SOFT_SQUINT");
     controller.current.trigger("SOFT_SQUINT", BC_CONFIG);
-    setParams((prev) => ({ ...prev, squash: 0.18, puff: 0.2 }));
+    setParams((prev) => ({ ...prev, squash: 0.18, puff: 0.2, cheekBlush: 0.3 }));
     setTimeout(() => {
-      setParams((prev) => ({ ...prev, squash: 0, puff: 0 }));
+      setParams((prev) => ({ ...prev, squash: 0, puff: 0, cheekBlush: 0 }));
     }, 2500);
   }, []);
 
@@ -228,11 +226,6 @@ export default function CloudBlobTest() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const urlParams = new URLSearchParams(window.location.search);
-
-    const v = urlParams.get("view") as ViewMode | null;
-    if (v === "cloud" || v === "production" || v === "compare") {
-      setViewMode(v);
-    }
 
     const c = urlParams.get("colour") as BlobColour | null;
     if (c === "teal" || c === "purple" || c === "yellow" || c === "green") {
@@ -478,104 +471,51 @@ export default function CloudBlobTest() {
 
       {/* Simulator Bezel Workspace */}
       <section className="flex flex-col items-center justify-center gap-6">
-        <div className="flex flex-wrap items-center justify-center gap-8">
-          {/* Main Cloud Body View */}
-          {(viewMode === "cloud" || viewMode === "compare") && (
-            <div className="flex flex-col items-center gap-3">
-              <span className="font-mono text-[11px] uppercase tracking-wider text-cyan-400 font-semibold">
-                {viewMode === "compare" ? "1. Cloud Mist Body (Alternate)" : "Cloud Blob Character"}
-              </span>
+        <div className="flex flex-col items-center gap-3">
+          <div
+            className="relative flex items-center justify-center rounded-full p-4 shadow-2xl transition-all duration-300"
+            style={{
+              background:
+                "radial-gradient(circle at 35% 35%, #2a2c35 0%, #16171d 65%, #0d0e12 100%)",
+              boxShadow:
+                "0 25px 60px -15px rgba(0, 0, 0, 0.9), inset 0 2px 4px rgba(255, 255, 255, 0.15), inset 0 -4px 8px rgba(0, 0, 0, 0.8)",
+              width: displaySize + 32,
+              height: displaySize + 32,
+            }}
+          >
+            {/* 466 Round AMOLED Display Canvas */}
+            <div
+              className="relative overflow-hidden rounded-full shadow-inner"
+              style={{
+                width: displaySize,
+                height: displaySize,
+                background: displayMode === "dark" ? "#000000" : "#cfc3b4",
+              }}
+            >
               <div
-                className="relative flex items-center justify-center rounded-full p-4 shadow-2xl transition-all duration-300"
                 style={{
-                  background:
-                    "radial-gradient(circle at 35% 35%, #2a2c35 0%, #16171d 65%, #0d0e12 100%)",
-                  boxShadow:
-                    "0 25px 60px -15px rgba(0, 0, 0, 0.9), inset 0 2px 4px rgba(255, 255, 255, 0.15), inset 0 -4px 8px rgba(0, 0, 0, 0.8)",
-                  width: displaySize + 32,
-                  height: displaySize + 32,
+                  transform: `scale(${zoom})`,
+                  transformOrigin: "top left",
+                  width: targetSize,
+                  height: targetSize,
                 }}
               >
-                {/* 466 Round Display Canvas */}
-                <div
-                  className="relative overflow-hidden rounded-full shadow-inner"
-                  style={{
-                    width: displaySize,
-                    height: displaySize,
-                    background: displayMode === "dark" ? "#000000" : "#cfc3b4",
-                  }}
-                >
-                  <div
-                    style={{
-                      transform: `scale(${zoom})`,
-                      transformOrigin: "top left",
-                      width: targetSize,
-                      height: targetSize,
-                    }}
-                  >
-                    <CloudBlobBody
-                      size={targetSize}
-                      renderScale={1}
-                      rig={currentRig}
-                      colour={blobColour}
-                      params={params}
-                      motionConfig={motion}
-                      trailConfig={trails}
-                      showFace={showFace}
-                      dragEnabled={dragEnabled}
-                      onDragChange={setDragState}
-                      onTelemetry={handleTelemetry}
-                    />
-                  </div>
-                </div>
+                <CloudBlobBody
+                  size={targetSize}
+                  renderScale={1}
+                  rig={currentRig}
+                  colour={blobColour}
+                  params={params}
+                  motionConfig={motion}
+                  trailConfig={trails}
+                  showFace={showFace}
+                  dragEnabled={dragEnabled}
+                  onDragChange={setDragState}
+                  onTelemetry={handleTelemetry}
+                />
               </div>
             </div>
-          )}
-
-          {/* Production Blob Comparison View */}
-          {(viewMode === "production" || viewMode === "compare") && (
-            <div className="flex flex-col items-center gap-3">
-              <span className="font-mono text-[11px] uppercase tracking-wider text-purple-400 font-semibold">
-                {viewMode === "compare" ? "2. Production Blob (Master)" : "Production Blob Character"}
-              </span>
-              <div
-                className="relative flex items-center justify-center rounded-full p-4 shadow-2xl transition-all duration-300"
-                style={{
-                  background:
-                    "radial-gradient(circle at 35% 35%, #2a2c35 0%, #16171d 65%, #0d0e12 100%)",
-                  boxShadow:
-                    "0 25px 60px -15px rgba(0, 0, 0, 0.9), inset 0 2px 4px rgba(255, 255, 255, 0.15), inset 0 -4px 8px rgba(0, 0, 0, 0.8)",
-                  width: displaySize + 32,
-                  height: displaySize + 32,
-                }}
-              >
-                <div
-                  className="relative overflow-hidden rounded-full shadow-inner"
-                  style={{
-                    width: displaySize,
-                    height: displaySize,
-                    background: displayMode === "dark" ? "#000000" : "#cfc3b4",
-                  }}
-                >
-                  <div
-                    style={{
-                      transform: `scale(${zoom})`,
-                      transformOrigin: "top left",
-                      width: targetSize,
-                      height: targetSize,
-                    }}
-                  >
-                    <BlobCharacter
-                      size={targetSize}
-                      renderScale={1}
-                      rig={currentRig}
-                      colour={blobColour}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
 
         {/* Drag Interaction Guidance Hint */}
@@ -592,8 +532,6 @@ export default function CloudBlobTest() {
       {/* Developer Controls Panel */}
       <section>
         <CloudBlobControls
-          viewMode={viewMode}
-          onChangeViewMode={setViewMode}
           blobColour={blobColour}
           onChangeColour={setBlobColour}
           showFace={showFace}
