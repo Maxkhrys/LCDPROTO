@@ -162,12 +162,12 @@ export default function DeviceSimulator() {
 
   return (
     <div className="sim-ui relative flex w-full flex-col items-center gap-7 sm:gap-8">
-      <div className="flex w-full max-w-[920px] flex-col items-center gap-7 lg:flex-row lg:items-start lg:justify-center lg:gap-8">
-        <div className="flex shrink-0 flex-col items-center">
+      <div className="grid w-full max-w-[1180px] items-start gap-8 lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-10">
+        <div className="flex min-w-0 justify-center">
           <div
             ref={frameRef}
-            className="aspect-square w-full"
-            style={{ width: `min(100%, ${MAX_OUTER}px, 50vh)` }}
+            className="flex aspect-square w-full max-w-full items-center justify-center"
+            style={{ width: `min(100%, ${MAX_OUTER}px, 72vh)` }}
           >
             <DeviceBezel screenSize={screenSize}>
               <div className="relative">
@@ -223,34 +223,66 @@ export default function DeviceSimulator() {
 
         </div>
 
-        {/* The tuning rail stays beside Blob on desktop so edits are visible. */}
-        <aside className="flex w-full max-w-md shrink-0 flex-col gap-4 lg:max-h-[min(80vh,720px)] lg:overflow-y-auto lg:pr-1">
-          {/* Developer controls — deliberately secondary */}
-          <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border border-white/[0.06] bg-white/[0.015] p-4">
-            <div className="flex items-center gap-1.5">
+        <aside className="flex w-full min-w-0 flex-col gap-3 lg:max-h-[min(86vh,920px)] lg:overflow-y-auto lg:pr-1">
+          <div className="flex items-start justify-between px-1 pb-1">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/35">
+                Right rail
+              </p>
+              <h2 className="mt-1 text-base font-medium tracking-tight text-white/80">
+                Simulator controls
+              </h2>
+            </div>
+            <DevButton onClick={reset}>Reset all</DevButton>
+          </div>
+
+          <ControlSection
+            title="Display state"
+            description="Choose device state to preview."
+          >
+            <div className="flex flex-wrap gap-1.5">
+              {DEVICE_STATES.map((item) => (
+                <DevButton
+                  key={item.id}
+                  active={item.id === state}
+                  onClick={() => setState(item.id)}
+                >
+                  {item.label}
+                </DevButton>
+              ))}
+            </div>
+          </ControlSection>
+
+          <ControlSection
+            title="Playback"
+            description="Control time and preview frame rate."
+          >
+            <div className="flex flex-wrap items-center gap-1.5">
               <DevButton onClick={() => setPlaying((p) => !p)}>
                 {playing ? "Pause" : "Play"}
               </DevButton>
-              <DevButton onClick={reset}>Reset</DevButton>
+              <ChoiceGroup label="FPS">
+                {DEVICE_CONFIG.fpsOptions.map((f) => (
+                  <DevButton key={f} active={f === fps} onClick={() => setFps(f)}>
+                    {f}
+                  </DevButton>
+                ))}
+              </ChoiceGroup>
+              <ChoiceGroup label="Speed">
+                {DEVICE_CONFIG.speedOptions.map((s) => (
+                  <DevButton key={s} active={s === speed} onClick={() => setSpeed(s)}>
+                    {s}x
+                  </DevButton>
+                ))}
+              </ChoiceGroup>
             </div>
+          </ControlSection>
 
-            <DevGroup label="FPS">
-              {DEVICE_CONFIG.fpsOptions.map((f) => (
-                <DevButton key={f} active={f === fps} onClick={() => setFps(f)}>
-                  {f}
-                </DevButton>
-              ))}
-            </DevGroup>
-
-            <DevGroup label="Speed">
-              {DEVICE_CONFIG.speedOptions.map((s) => (
-                <DevButton key={s} active={s === speed} onClick={() => setSpeed(s)}>
-                  {s}x
-                </DevButton>
-              ))}
-            </DevGroup>
-
-            <DevGroup label="Blob">
+          <ControlSection
+            title="Blob character"
+            description="Colour, idle life, mood and automatic behaviour."
+          >
+            <ChoiceGroup label="Colour">
               {BLOB_COLOURS.map((colour) => (
                 <DevButton
                   key={colour.id}
@@ -260,77 +292,61 @@ export default function DeviceSimulator() {
                   {colour.label}
                 </DevButton>
               ))}
-            </DevGroup>
-
-            <DevButton
-              active={idle.enabled}
-              onClick={() => setIdle((v) => ({ ...v, enabled: !v.enabled }))}
-            >
-              Idle
-            </DevButton>
-
-            <DevButton
-              active={autoBehaviourEnabled}
-              onClick={() => setAutoBehaviourEnabled((v) => !v)}
-            >
-              Auto
-            </DevButton>
-
-            <DevGroup label="Mood">
+            </ChoiceGroup>
+            <div className="flex flex-wrap gap-1.5">
+              <DevButton
+                active={idle.enabled}
+                onClick={() => setIdle((v) => ({ ...v, enabled: !v.enabled }))}
+              >
+                Idle motion {idle.enabled ? "on" : "off"}
+              </DevButton>
+              <DevButton
+                active={autoBehaviourEnabled}
+                onClick={() => setAutoBehaviourEnabled((v) => !v)}
+              >
+                Auto behaviours {autoBehaviourEnabled ? "on" : "off"}
+              </DevButton>
+            </div>
+            <ChoiceGroup label="Mood">
               <DevButton active={mood === null} onClick={() => setMood(null)}>
                 Auto
               </DevButton>
               {(["CONTENT", "CURIOUS", "SLEEPY", "AMUSED", "DISTRACTED", "THOUGHTFUL"] as const).map(
                 (option) => (
-                  <DevButton
-                    key={option}
-                    active={mood === option}
-                    onClick={() => setMood(option)}
-                  >
+                  <DevButton key={option} active={mood === option} onClick={() => setMood(option)}>
                     {option.toLowerCase()}
                   </DevButton>
                 )
               )}
-            </DevGroup>
+            </ChoiceGroup>
+          </ControlSection>
 
-            <DevGroup label="Mind">
-              <DevButton
-                active={mindIntention === null}
-                onClick={() => setMindIntention(null)}
-              >
+          <ControlSection
+            title="Motion and depth"
+            description="Direct Blob’s attention, destination and 3D preview."
+          >
+            <ChoiceGroup label="Mind">
+              <DevButton active={mindIntention === null} onClick={() => setMindIntention(null)}>
                 Auto
               </DevButton>
               {INTENTIONS.filter((option) => option !== "REST").map((option) => (
-                <DevButton
-                  key={option}
-                  active={mindIntention === option}
-                  onClick={() => setMindIntention(option)}
-                >
+                <DevButton key={option} active={mindIntention === option} onClick={() => setMindIntention(option)}>
                   {option.toLowerCase()}
                 </DevButton>
               ))}
-            </DevGroup>
-
-            <DevGroup label="Target">
-              <DevButton
-                active={mindDestination === null}
-                onClick={() => setMindDestination(null)}
-              >
+            </ChoiceGroup>
+            <ChoiceGroup label="Target">
+              <DevButton active={mindDestination === null} onClick={() => setMindDestination(null)}>
                 Auto
               </DevButton>
               {DESTINATIONS.filter((option) => option !== "CENTER").map((option) => (
-                <DevButton
-                  key={option}
-                  active={mindDestination === option}
-                  onClick={() => setMindDestination(option)}
-                >
+                <DevButton key={option} active={mindDestination === option} onClick={() => setMindDestination(option)}>
                   {option.replace("_", " ").toLowerCase()}
                 </DevButton>
               ))}
-            </DevGroup>
-
-            <div className="flex min-w-[220px] flex-1 items-center gap-2">
-              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/25">
+            </ChoiceGroup>
+            <div className="flex items-center gap-3">
+              <span className="w-14 shrink-0 font-mono text-[10px] uppercase tracking-[0.15em] text-white/30">
                 Depth
               </span>
               <input
@@ -350,21 +366,18 @@ export default function DeviceSimulator() {
                 Auto
               </DevButton>
             </div>
-
-            <DevGroup label="3D">
+            <ChoiceGroup label="3D tests">
               <DevButton onClick={() => fire("SPIN_360")}>Spin</DevButton>
-              <DevButton onClick={() => fire("WALL_IMPACT_LEFT")}>Impact L</DevButton>
-              <DevButton onClick={() => fire("WALL_IMPACT_RIGHT")}>Impact R</DevButton>
-            </DevGroup>
+              <DevButton onClick={() => fire("WALL_IMPACT_LEFT")}>Impact left</DevButton>
+              <DevButton onClick={() => fire("WALL_IMPACT_RIGHT")}>Impact right</DevButton>
+            </ChoiceGroup>
+          </ControlSection>
 
-            <DevButton
-              active={nativePixels}
-              onClick={() => setNativePixels((v) => !v)}
-            >
-              1:1
-            </DevButton>
-
-            <DevGroup label="Screen">
+          <ControlSection
+            title="AMOLED screen"
+            description="Preview black hardware mode or softer inspection colours."
+          >
+            <ChoiceGroup label="Preset">
               {(["dark", "warm", "brown"] as const).map((mode) => (
                 <DevButton
                   key={mode}
@@ -377,11 +390,10 @@ export default function DeviceSimulator() {
                   {mode}
                 </DevButton>
               ))}
-            </DevGroup>
-
+            </ChoiceGroup>
             <label className="flex items-center gap-2">
-              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/25">
-                LCD colour
+              <span className="w-14 shrink-0 font-mono text-[10px] uppercase tracking-[0.15em] text-white/30">
+                Custom
               </span>
               <input
                 aria-label="LCD screen background colour"
@@ -390,18 +402,28 @@ export default function DeviceSimulator() {
                 onChange={(event) => setScreenColour(event.currentTarget.value)}
                 className="h-7 w-9 cursor-pointer rounded border border-white/[0.1] bg-transparent p-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
               />
-              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-white/35">
+              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-white/40">
                 {screenColour}
               </span>
             </label>
-
-            <DevButton
-              active={showCalibration}
-              onClick={() => setShowCalibration((v) => !v)}
-            >
-              Tune
+            <DevButton active={nativePixels} onClick={() => setNativePixels((v) => !v)}>
+              Native pixels 1:1 {nativePixels ? "on" : "off"}
             </DevButton>
-          </div>
+          </ControlSection>
+
+          <ControlSection
+            title="Animation tools"
+            description="Open detailed controls and expression previews."
+          >
+            <div className="flex flex-wrap gap-1.5">
+              <DevButton active={showCalibration} onClick={() => setShowCalibration((v) => !v)}>
+                {showCalibration ? "Hide tuning" : "Show tuning"}
+              </DevButton>
+              <DevButton active={showExpressions} onClick={() => setShowExpressions((v) => !v)}>
+                {showExpressions ? "Hide expression library" : "Open expression library"}
+              </DevButton>
+            </div>
+          </ControlSection>
 
           <ActivityReadout
             status={status}
@@ -440,28 +462,6 @@ export default function DeviceSimulator() {
             />
           )}
         </aside>
-      </div>
-
-      {/* State selector stays below activity and tuning controls on mobile. */}
-      <div className="flex w-full max-w-2xl flex-wrap justify-center gap-1.5">
-        {DEVICE_STATES.map((s) => {
-          const active = s.id === state;
-          return (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => setState(s.id)}
-              aria-pressed={active}
-              className={`rounded-full border px-3.5 py-1.5 text-[11px] uppercase tracking-[0.14em] transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50 ${
-                active
-                  ? "border-white/20 bg-white/[0.07] text-white"
-                  : "border-white/[0.07] text-white/40 hover:border-white/15 hover:text-white/70"
-              }`}
-            >
-              {s.label}
-            </button>
-          );
-        })}
       </div>
 
       {/* Dev readout — outside the device, never inside the panel */}
@@ -523,7 +523,31 @@ export default function DeviceSimulator() {
   );
 }
 
-function DevGroup({
+function ControlSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-4">
+      <div className="mb-3">
+        <h3 className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/65">
+          {title}
+        </h3>
+        <p className="mt-1 text-[11px] leading-relaxed text-white/35">
+          {description}
+        </p>
+      </div>
+      <div className="flex flex-col gap-3">{children}</div>
+    </section>
+  );
+}
+
+function ChoiceGroup({
   label,
   children,
 }: {
@@ -531,11 +555,11 @@ function DevGroup({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/25">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+      <span className="w-14 shrink-0 font-mono text-[10px] uppercase tracking-[0.15em] text-white/30">
         {label}
       </span>
-      <div className="flex items-center gap-1.5">{children}</div>
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5">{children}</div>
     </div>
   );
 }
