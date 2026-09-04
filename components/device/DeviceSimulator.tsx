@@ -56,6 +56,7 @@ export default function DeviceSimulator() {
   const [screenColour, setScreenColour] = useState(DISPLAY_BACKGROUNDS.dark);
   const [blobColour, setBlobColour] = useState<BlobColour>("teal");
   const [showPupils, setShowPupils] = useState(false);
+  const [debugShadow, setDebugShadow] = useState(false);
   const [blobToolsOpen, setBlobToolsOpen] = useState(false);
   const [activeBlobTool, setActiveBlobTool] = useState<"colour" | "face" | "pupils" | null>(null);
   const [mood, setMood] = useState<HomeMood | null>(null);
@@ -199,6 +200,7 @@ export default function DeviceSimulator() {
                   blobToolsOpen={blobToolsOpen}
                   mood={mood}
                   showPupils={showPupils}
+                  debugShadow={debugShadow}
                   blobColour={blobColour}
                   mindIntention={mindIntention}
                   mindDestination={mindDestination}
@@ -362,6 +364,13 @@ export default function DeviceSimulator() {
               onClick={() => setNativePixels((v) => !v)}
             >
               1:1
+            </DevButton>
+
+            <DevButton
+              active={debugShadow}
+              onClick={() => setDebugShadow((v) => !v)}
+            >
+              Shadow
             </DevButton>
 
             <DevGroup label="Screen">

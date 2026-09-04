@@ -12,6 +12,15 @@ import { AmbientDrift, type IdleConfig } from "@/lib/blobIdle";
 import { BlobJellyPhysics, type JellyTarget } from "@/lib/blobPhysics";
 import { BlobDragController } from "@/lib/blobDrag";
 import {
+  EnvironmentController,
+  blobGround,
+  type EnvironmentPose,
+} from "@/lib/blobEnvironment";
+import {
+  EnvironmentBack,
+  EnvironmentFront,
+} from "@/components/blob/EnvironmentLayer";
+import {
   BODY_FRACTION,
   NEUTRAL_BLOB,
   NEUTRAL_ELEMENT,
@@ -67,6 +76,8 @@ export default function HomeState({
   triggerRequest,
   onBehaviourStatus,
   screenColour,
+  displayMode,
+  debugShadow,
   onOpenBlobTools,
   onCloseBlobTools,
   blobToolsOpen,
@@ -98,11 +109,20 @@ export default function HomeState({
   if (physics.current === null) physics.current = new BlobJellyPhysics();
   const drag = useRef<BlobDragController>(null as never);
   if (drag.current === null) drag.current = new BlobDragController();
+  const environment = useRef<EnvironmentController>(null as never);
+  if (environment.current === null)
+    environment.current = new EnvironmentController(size);
+  // Mutated in place by the loop below; the layers read it on each repaint, so
+  // the world never allocates a new pose object per frame.
+  const envPose = useRef<EnvironmentPose | null>(null);
+  const [frame, setFrame] = useState(0);
 
   // Live config is read through a ref so changing a slider never restarts the
   // animation loop (which would visibly reset the character).
   const cfg = useRef({
     size,
+    displayMode,
+    blobColour,
     calibration,
     idle,
     autoBehaviourEnabled,
@@ -113,6 +133,8 @@ export default function HomeState({
   });
   cfg.current = {
     size,
+    displayMode,
+    blobColour,
     calibration,
     idle,
     autoBehaviourEnabled,
@@ -122,11 +144,15 @@ export default function HomeState({
     mindDepth,
   };
 
+  const blobToolsOpenRef = useRef(false);
+  blobToolsOpenRef.current = Boolean(blobToolsOpen);
+
   const reset = useCallback(() => {
     controller.current.reset();
     ambient.current.reset();
     physics.current.reset();
     drag.current.reset();
+    environment.current.reset();
   }, []);
 
   useEffect(() => {
@@ -263,7 +289,7 @@ export default function HomeState({
       const deformX = clampDeform(physical.scaleX);
       const deformY = clampDeform(physical.scaleY);
 
-      return applyCalibration(
+      const built = applyCalibration(
         {
           blob: {
             x: physical.x,
@@ -341,6 +367,23 @@ export default function HomeState({
         },
         cal
       );
+
+      // The shadow is derived from the pose that was just built, so it can
+      // never be a screen position disconnected from Blob's real geometry.
+      const ground = blobGround(
+        built,
+        cfg.current.size,
+        cfg.current.blobColour,
+        blobToolsOpenRef.current ? cfg.current.size * 0.075 : 0
+      );
+      envPose.current = environment.current.update(
+        dt,
+        ground,
+        cfg.current.displayMode,
+        cfg.current.size
+      );
+      environment.current.stepDust(dt, cfg.current.size);
+      return built;
     };
 
     const report = (now: number) => {
@@ -376,12 +419,14 @@ export default function HomeState({
       const elapsed = Math.floor(accumulator / frameInterval) * frameInterval;
       accumulator -= elapsed;
       setRig(build(elapsed * speed));
+      setFrame((value) => value + 1);
       report(now);
     };
 
     // Paint the current pose immediately so a paused screen is never blank and
     // slider changes take effect without waiting for a frame.
     setRig(build(0));
+    setFrame((value) => value + 1);
     report(performance.now());
     if (playing) frameId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(frameId);
@@ -392,17 +437,43 @@ export default function HomeState({
       className="relative h-full w-full"
       style={{ background: screenColour }}
     >
-      <BlobCharacter
-        size={size}
-        renderScale={renderScale}
-        rig={rig}
-        colour={blobColour}
-        onOpenTools={onOpenBlobTools}
-        onCloseTools={onCloseBlobTools}
-        settingsOpen={blobToolsOpen}
-        showPupils={showPupils}
-        drag={drag.current}
-      />
+      {envPose.current && (
+        <EnvironmentBack
+          size={size}
+          renderScale={renderScale}
+          mode={displayMode}
+          controller={environment.current}
+          pose={envPose.current}
+          frame={frame}
+          z={0}
+          debugShadow={debugShadow}
+        />
+      )}
+      {/* Blob paints between the two world layers, never inside them. */}
+      <div className="relative" style={{ zIndex: 1 }}>
+        <BlobCharacter
+          size={size}
+          renderScale={renderScale}
+          rig={rig}
+          colour={blobColour}
+          onOpenTools={onOpenBlobTools}
+          onCloseTools={onCloseBlobTools}
+          settingsOpen={blobToolsOpen}
+          showPupils={showPupils}
+          drag={drag.current}
+        />
+      </div>
+      {envPose.current && (
+        <EnvironmentFront
+          size={size}
+          renderScale={renderScale}
+          mode={displayMode}
+          controller={environment.current}
+          pose={envPose.current}
+          frame={frame}
+          z={2}
+        />
+      )}
     </div>
   );
 }

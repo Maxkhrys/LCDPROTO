@@ -94,6 +94,8 @@ export interface StateViewProps {
   mood: HomeMood | null;
   /** Shows a small light pupil inside each procedural eye. */
   showPupils: boolean;
+  /** Dev-only: draws the contact shadow hot and outlined to verify placement. */
+  debugShadow: boolean;
   /** Dev-only rig colour preview; every colour uses identical transforms. */
   blobColour: BlobColour;
   /** Optional director override for the current Blob intention. */
