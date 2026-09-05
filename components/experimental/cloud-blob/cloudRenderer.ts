@@ -102,18 +102,17 @@ function getStamps(
   const makeMass = (dense: boolean) =>
     sprite((s) => {
       const volume = s.createRadialGradient(
-        lx * 0.32,
-        ly * 0.32,
-        0.04,
+        lx * 0.28,
+        ly * 0.28,
+        0.02,
         0,
         0,
         1,
       );
-      volume.addColorStop(0, "rgba(255,255,255,0.98)");
-      volume.addColorStop(0.18, rgba(edge, 1));
-      volume.addColorStop(0.52, rgba(body, dense ? 1 : 0.98));
-      volume.addColorStop(0.82, rgba(body, dense ? 0.96 : 0.9));
-      volume.addColorStop(0.94, rgba(body, 0.42 * c.translucency));
+      volume.addColorStop(0, rgba(edge, 1));
+      volume.addColorStop(0.48, rgba(body, dense ? 1 : 0.98));
+      volume.addColorStop(0.78, rgba(body, dense ? 0.96 : 0.9));
+      volume.addColorStop(0.92, rgba(body, 0.42 * c.translucency));
       volume.addColorStop(1, rgba(body, 0));
       s.fillStyle = volume;
       s.fillRect(-1, -1, 2, 2);
@@ -121,9 +120,9 @@ function getStamps(
       s.globalCompositeOperation = "source-atop";
       // Rich spherical form shadow on the unlit side
       const shade = s.createLinearGradient(lx, ly, -lx, -ly);
-      shade.addColorStop(0, "rgba(255,252,242,0.38)");
-      shade.addColorStop(0.28, "rgba(255,255,255,0)");
-      shade.addColorStop(0.54, rgba(core, p.lightStrength * 0.22));
+      shade.addColorStop(0, "rgba(255,255,255,0)");
+      shade.addColorStop(0.35, "rgba(255,255,255,0)");
+      shade.addColorStop(0.58, rgba(core, p.lightStrength * 0.22));
       shade.addColorStop(0.84, rgba(core, p.lightStrength * 0.62));
       shade.addColorStop(1.0, rgba(core, p.lightStrength * 0.82));
       s.fillStyle = shade;
@@ -175,9 +174,9 @@ function getStamps(
   const makeCrestRim = () =>
     sprite((s) => {
       const g = s.createRadialGradient(lx * 0.5, ly * 0.5, 0.05, 0, 0, 1);
-      g.addColorStop(0, "rgba(255,255,255,0.92)");
-      g.addColorStop(0.25, rgba(edge, 0.78));
-      g.addColorStop(0.65, rgba(edge, 0.18));
+      g.addColorStop(0, rgba(edge, 0.5));
+      g.addColorStop(0.35, rgba(edge, 0.2));
+      g.addColorStop(0.7, rgba(edge, 0.04));
       g.addColorStop(1, rgba(edge, 0));
       s.fillStyle = g;
       s.fillRect(-1, -1, 2, 2);
@@ -213,18 +212,17 @@ function getStamps(
     crestRim: makeCrestRim(),
     underside: makeUnderside(),
     core: sprite((s) => {
-      const g = s.createRadialGradient(lx * 0.32, ly * 0.32, 0.04, 0, 0, 1);
-      g.addColorStop(0, "rgba(255,255,255,0.92)");
-      g.addColorStop(0.22, rgba(edge, 1));
-      g.addColorStop(0.55, rgba(body, 0.98));
-      g.addColorStop(0.82, rgba(body, 0.65));
+      const g = s.createRadialGradient(lx * 0.28, ly * 0.28, 0.02, 0, 0, 1);
+      g.addColorStop(0, rgba(edge, 1));
+      g.addColorStop(0.5, rgba(body, 0.96));
+      g.addColorStop(0.78, rgba(body, 0.56));
       g.addColorStop(1, rgba(body, 0));
       s.fillStyle = g;
       s.fillRect(-1, -1, 2, 2);
       s.globalCompositeOperation = "source-atop";
       const shade = s.createLinearGradient(lx, ly, -lx, -ly);
-      shade.addColorStop(0, "rgba(255,252,242,0.28)");
-      shade.addColorStop(0.38, "rgba(255,255,255,0)");
+      shade.addColorStop(0, "rgba(255,255,255,0)");
+      shade.addColorStop(0.45, "rgba(255,255,255,0)");
       shade.addColorStop(0.72, rgba(core, p.lightStrength * 0.35));
       shade.addColorStop(1.0, rgba(core, p.lightStrength * 0.58));
       s.fillStyle = shade;
@@ -442,9 +440,6 @@ export function renderCloudBlob(
   const pitchSin = Math.sin(pitchRad);
   const pitchCos = Math.cos(pitchRad);
 
-  const lightRad = (p.lightAngle * Math.PI) / 180;
-  const lx = Math.cos(lightRad);
-
   // 3D Horizontal body foreshortening
   const bodyYawWidth = clamp(0.38 + Math.abs(yawCos) * 0.62, 0.38, 1);
   const bodyPitchHeight = clamp(0.74 + Math.abs(pitchCos) * 0.26, 0.74, 1);
@@ -609,16 +604,7 @@ export function renderCloudBlob(
     );
   }
 
-  // 7. TOP CREST & CHEEK RIM LIGHT ACCENTS
-  if (crownPose) {
-    stamp(ctx, s.crestRim, crownPose.x, crownPose.y - crownPose.ry * 0.42, crownPose.rx * 0.95, crownPose.ry * 0.55, 0.85);
-  }
-  if (leftCheekPose && lx < -0.1) {
-    stamp(ctx, s.crestRim, leftCheekPose.x - 8, leftCheekPose.y - leftCheekPose.ry * 0.32, leftCheekPose.rx * 0.72, leftCheekPose.ry * 0.48, 0.52);
-  }
-  if (rightCheekPose && lx > 0.1) {
-    stamp(ctx, s.crestRim, rightCheekPose.x + 8, rightCheekPose.y - rightCheekPose.ry * 0.32, rightCheekPose.rx * 0.72, rightCheekPose.ry * 0.48, 0.52);
-  }
+  // 7. TOP CREST & CHEEK RIM LIGHT ACCENTS - Disabled to ensure completely smooth, mark-free cloud surface
 
   // 8. RESTRAINED INTERNAL LIFE MOTES (Gentle, slow breathing shimmer deep inside volume)
   for (const d of SUSPENDED_DROPLETS) {
@@ -638,12 +624,12 @@ export function renderCloudBlob(
       y,
       d.radius * 7,
       d.radius * 7,
-      shimmer * d.brightness * 0.2,
+      shimmer * d.brightness * 0.16,
     );
-    // Faint, soft inner glint
+    // Faint, soft inner glint harmonized with cloud edge tint
     ctx.save();
-    ctx.globalAlpha *= shimmer * d.brightness * 0.28;
-    ctx.fillStyle = "#fffcf2";
+    ctx.globalAlpha *= shimmer * d.brightness * 0.22;
+    ctx.fillStyle = colour.edge;
     ctx.beginPath();
     ctx.arc(x, y, d.radius * 0.55, 0, TAU);
     ctx.fill();
