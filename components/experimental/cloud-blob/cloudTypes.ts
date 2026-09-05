@@ -66,6 +66,7 @@ export interface CloudDeformationParams {
   lobeSoftness: number;
   faceEmbedDepth: number; // 0 (crisp floating) to 0.35 (submerged in mist), default 0.12
   fluffiness: number; // 0 (smooth) to 2.0 (ultra-billowy cumulus fluff), default 1.2
+  lightStrength: number;
   lightAngle: number; // Key light angle in degrees, default -45 (top-left sunlight)
   cheekBlush: number; // 0 to 1 warm bioluminescent blush intensity
   cloudBrows: boolean; // Render floating wispy cloud brows
@@ -124,6 +125,9 @@ export interface CloudWisp {
   maxLife: number;
   softness: number;
   color: string;
+  angle: number;
+  shape: number;
+  curl: number;
 }
 
 export type CloudPresetName =
@@ -173,6 +177,16 @@ export interface CloudBlobBodyProps {
   showFace?: boolean;
   /** Enable interactive pointer drag / touch manipulation. */
   dragEnabled?: boolean;
+  playing?: boolean;
+  fps?: 30 | 60;
+  idleEnabled?: boolean;
+  debug?: boolean;
+  resetId?: number;
+  centreId?: number;
+  clearWispsId?: number;
+  /** Called by the single simulation clock; production controllers take ms. */
+  advanceRig?: (dtMs: number) => BlobRig;
+  onPose?: (x: number, y: number, scale: number) => void;
   /** Additional container styling. */
   className?: string;
   /** Callback fired on drag state change. */

@@ -1,0 +1,109 @@
+{
+  "comparison": {
+    "baseline": {
+      "seconds": 5.006799999999814,
+      "frames": 300,
+      "fps": 59.91851082527985,
+      "radialPerFrame": 50.03333333333333,
+      "linearPerFrame": 3.013333333333333,
+      "sampledAllocationBytesPerSecond": 11537809.379244657
+    },
+    "final": {
+      "seconds": 5.001899999999907,
+      "frames": 300,
+      "fps": 59.97720866071005,
+      "radialPerFrame": 0,
+      "linearPerFrame": 1,
+      "sampledAllocationBytesPerSecond": 1982202.7629501158,
+      "pauseStable": true
+    },
+    "jellyPixelsIdentical": true
+  },
+  "idle_profile": {
+    "30": {
+      "samples": 30,
+      "meanMs": 0.2668510378465245,
+      "p95WindowMeanMs": 0.3307692307549027,
+      "maxWisps": 1,
+      "radialGradients": 0,
+      "linearGradients": 905,
+      "frames": 905,
+      "drawImages": 17966
+    },
+    "60": {
+      "samples": 30,
+      "meanMs": 0.28415412187217454,
+      "p95WindowMeanMs": 0.4266666666604578,
+      "maxWisps": 2,
+      "radialGradients": 0,
+      "linearGradients": 1820,
+      "frames": 1820,
+      "drawImages": 35732
+    }
+  },
+  "interaction": {
+    "errors": [],
+    "cloud": {
+      "zoomDisplacements": [
+        30.616704799483017,
+        30.531948030965165,
+        30.398199329732513
+      ],
+      "trailTestMax": 4
+    },
+    "production": {
+      "canvasSizes": [
+        [
+          932,
+          932
+        ],
+        [
+          932,
+          932
+        ],
+        [
+          932,
+          932
+        ],
+        [
+          932,
+          932
+        ]
+      ]
+    },
+    "checks": [
+      "8 emotions and 9 production actions with automatic idle disabled",
+      "Cloud pause pixel equality; mouse drag/release in 8 directions at 30/60 FPS",
+      "preview zoom parity; finite trail test; clear/disable wisps; sand scene; debug; 390px layout"
+    ]
+  },
+  "production": {
+    "errors": [],
+    "cloud": {},
+    "production": {
+      "canvasSizes": [
+        [
+          932,
+          932
+        ],
+        [
+          932,
+          932
+        ],
+        [
+          932,
+          932
+        ],
+        [
+          932,
+          932
+        ]
+      ]
+    },
+    "checks": [
+      "HOME expressions, all-direction drag at 30/60, native buffers and pixel-identical pause",
+      "SENSED variants, 19 lifecycle screens, pause/replay/reset",
+      "mobile native touch drag and cancellation"
+    ]
+  }
+}

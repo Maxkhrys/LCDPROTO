@@ -39,10 +39,11 @@ export const DEFAULT_DEFORMATION: CloudDeformationParams = {
   coreDensity: 1.15,
   lobeSoftness: 1.0,
   faceEmbedDepth: 0.12,
-  fluffiness: 1.25,
-  lightAngle: -45,
+  fluffiness: 0.8,
+  lightAngle: -135,
+  lightStrength: 0.65,
   cheekBlush: 0,
-  cloudBrows: true,
+  cloudBrows: false,
   gazeX: 0,
   gazeY: 0,
 };
@@ -129,7 +130,7 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
     baseY: 76,
     radiusX: 90,
     radiusY: 52,
-    baseOpacity: 0.90,
+    baseOpacity: 0.9,
     baseSoftness: 1.25,
     lagFactor: 0.88, // Heaviest mass, settles last
     stiffness: 95,
@@ -161,13 +162,13 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
     baseY: 54,
     radiusX: 84,
     radiusY: 64,
-    baseOpacity: 0.90,
+    baseOpacity: 0.9,
     baseSoftness: 1.2,
     lagFactor: 0.76,
     stiffness: 105,
     damping: 12.0,
     breathPhase: 3.8,
-    breathAmp: 0.040,
+    breathAmp: 0.04,
     depth: -1,
   },
 
@@ -185,7 +186,7 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
     stiffness: 240,
     damping: 20.0,
     breathPhase: 0.0,
-    breathAmp: 0.030,
+    breathAmp: 0.03,
     depth: 0,
   },
 
@@ -219,7 +220,7 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
     stiffness: 130,
     damping: 13.0,
     breathPhase: 1.8,
-    breathAmp: 0.040,
+    breathAmp: 0.04,
     depth: 1,
   },
 
@@ -231,8 +232,8 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
     baseY: -68,
     radiusX: 76,
     radiusY: 54,
-    baseOpacity: 0.90,
-    baseSoftness: 1.10,
+    baseOpacity: 0.9,
+    baseSoftness: 1.1,
     lagFactor: 0.42,
     stiffness: 155,
     damping: 15.0,
@@ -250,7 +251,7 @@ export const LOBE_DEFINITIONS: readonly LobeDefinition[] = [
     radiusX: 76,
     radiusY: 62,
     baseOpacity: 0.14,
-    baseSoftness: 1.40,
+    baseSoftness: 1.4,
     lagFactor: 0.26,
     stiffness: 180,
     damping: 16.5,
@@ -274,46 +275,20 @@ export interface LobeSubPuff {
  */
 export const LOBE_SUB_PUFFS: Partial<Record<string, readonly LobeSubPuff[]>> = {
   topCrown: [
-    { offsetX: 0, offsetY: -20, radiusRatio: 0.64, phaseOffset: 0.2 },
-    { offsetX: -36, offsetY: -10, radiusRatio: 0.55, phaseOffset: 0.7 },
-    { offsetX: 35, offsetY: -8, radiusRatio: 0.52, phaseOffset: 1.1 },
-    { offsetX: -16, offsetY: -26, radiusRatio: 0.42, phaseOffset: 1.6 },
-    { offsetX: 18, offsetY: -24, radiusRatio: 0.44, phaseOffset: 2.0 },
+    { offsetX: -30, offsetY: -24, radiusRatio: 0.58, phaseOffset: 0.7 },
+    { offsetX: 30, offsetY: -14, radiusRatio: 0.45, phaseOffset: 1.7 },
   ],
   leftCheek: [
-    { offsetX: -32, offsetY: 2, radiusRatio: 0.58, phaseOffset: 0.4 },
-    { offsetX: -22, offsetY: -22, radiusRatio: 0.50, phaseOffset: 1.2 },
-    { offsetX: -20, offsetY: 26, radiusRatio: 0.52, phaseOffset: 1.9 },
-    { offsetX: -40, offsetY: 14, radiusRatio: 0.40, phaseOffset: 2.7 },
+    { offsetX: -32, offsetY: -18, radiusRatio: 0.55, phaseOffset: 1.2 },
   ],
   rightCheek: [
-    { offsetX: 30, offsetY: 0, radiusRatio: 0.56, phaseOffset: 0.6 },
-    { offsetX: 22, offsetY: -20, radiusRatio: 0.48, phaseOffset: 1.4 },
-    { offsetX: 18, offsetY: 24, radiusRatio: 0.50, phaseOffset: 2.1 },
-    { offsetX: 38, offsetY: 12, radiusRatio: 0.38, phaseOffset: 2.9 },
+    { offsetX: 30, offsetY: -8, radiusRatio: 0.5, phaseOffset: 2.1 },
   ],
   baseLeft: [
-    { offsetX: -34, offsetY: 16, radiusRatio: 0.54, phaseOffset: 0.8 },
-    { offsetX: -14, offsetY: 28, radiusRatio: 0.50, phaseOffset: 1.7 },
-    { offsetX: -44, offsetY: -2, radiusRatio: 0.44, phaseOffset: 2.5 },
+    { offsetX: -32, offsetY: 12, radiusRatio: 0.52, phaseOffset: 2.5 },
   ],
   baseRight: [
-    { offsetX: 32, offsetY: 14, radiusRatio: 0.52, phaseOffset: 1.0 },
-    { offsetX: 12, offsetY: 28, radiusRatio: 0.48, phaseOffset: 1.9 },
-    { offsetX: 42, offsetY: -4, radiusRatio: 0.42, phaseOffset: 2.8 },
-  ],
-  bottomBelly: [
-    { offsetX: 0, offsetY: 22, radiusRatio: 0.58, phaseOffset: 0.3 },
-    { offsetX: -38, offsetY: 16, radiusRatio: 0.52, phaseOffset: 1.1 },
-    { offsetX: 38, offsetY: 16, radiusRatio: 0.50, phaseOffset: 1.8 },
-    { offsetX: -18, offsetY: 30, radiusRatio: 0.44, phaseOffset: 2.4 },
-    { offsetX: 18, offsetY: 30, radiusRatio: 0.44, phaseOffset: 3.1 },
-  ],
-  core: [
-    { offsetX: -28, offsetY: -32, radiusRatio: 0.48, phaseOffset: 0.5 },
-    { offsetX: 28, offsetY: -32, radiusRatio: 0.48, phaseOffset: 1.3 },
-    { offsetX: -44, offsetY: 8, radiusRatio: 0.45, phaseOffset: 2.2 },
-    { offsetX: 44, offsetY: 8, radiusRatio: 0.45, phaseOffset: 2.8 },
+    { offsetX: 30, offsetY: 16, radiusRatio: 0.48, phaseOffset: 2.8 },
   ],
 };
 
@@ -321,20 +296,118 @@ export const LOBE_SUB_PUFFS: Partial<Record<string, readonly LobeSubPuff[]>> = {
  * Deterministic suspended light droplets inside the cloud body.
  */
 export const SUSPENDED_DROPLETS: readonly SuspendedDroplet[] = [
-  { x: -36, y: -26, radius: 2.2, brightness: 0.85, driftPhase: 0.3, driftSpeed: 1.1 },
-  { x: 42, y: -32, radius: 1.8, brightness: 0.75, driftPhase: 1.7, driftSpeed: 0.85 },
-  { x: -48, y: 18, radius: 2.4, brightness: 0.80, driftPhase: 3.1, driftSpeed: 1.0 },
-  { x: 46, y: 24, radius: 2.0, brightness: 0.70, driftPhase: 4.5, driftSpeed: 0.80 },
-  { x: -14, y: 52, radius: 1.6, brightness: 0.65, driftPhase: 2.2, driftSpeed: 1.2 },
-  { x: 22, y: 54, radius: 1.9, brightness: 0.72, driftPhase: 5.1, driftSpeed: 0.95 },
-  { x: -6, y: -52, radius: 2.5, brightness: 0.92, driftPhase: 0.8, driftSpeed: 1.3 },
-  { x: 28, y: -12, radius: 1.5, brightness: 0.60, driftPhase: 3.9, driftSpeed: 0.70 },
-  { x: -24, y: -8, radius: 2.0, brightness: 0.78, driftPhase: 2.8, driftSpeed: 0.90 },
-  { x: 12, y: 2, radius: 1.7, brightness: 0.82, driftPhase: 4.1, driftSpeed: 1.05 },
-  { x: -55, y: -6, radius: 1.4, brightness: 0.55, driftPhase: 1.2, driftSpeed: 0.75 },
-  { x: 55, y: -4, radius: 1.4, brightness: 0.55, driftPhase: 5.4, driftSpeed: 0.75 },
-  { x: 0, y: -38, radius: 2.6, brightness: 0.95, driftPhase: 0.0, driftSpeed: 1.15 },
-  { x: 0, y: 65, radius: 1.8, brightness: 0.60, driftPhase: 3.5, driftSpeed: 0.85 },
+  {
+    x: -36,
+    y: -26,
+    radius: 2.2,
+    brightness: 0.85,
+    driftPhase: 0.3,
+    driftSpeed: 1.1,
+  },
+  {
+    x: 42,
+    y: -32,
+    radius: 1.8,
+    brightness: 0.75,
+    driftPhase: 1.7,
+    driftSpeed: 0.85,
+  },
+  {
+    x: -48,
+    y: 18,
+    radius: 2.4,
+    brightness: 0.8,
+    driftPhase: 3.1,
+    driftSpeed: 1.0,
+  },
+  {
+    x: 46,
+    y: 24,
+    radius: 2.0,
+    brightness: 0.7,
+    driftPhase: 4.5,
+    driftSpeed: 0.8,
+  },
+  {
+    x: -14,
+    y: 52,
+    radius: 1.6,
+    brightness: 0.65,
+    driftPhase: 2.2,
+    driftSpeed: 1.2,
+  },
+  {
+    x: 22,
+    y: 54,
+    radius: 1.9,
+    brightness: 0.72,
+    driftPhase: 5.1,
+    driftSpeed: 0.95,
+  },
+  {
+    x: -6,
+    y: -52,
+    radius: 2.5,
+    brightness: 0.92,
+    driftPhase: 0.8,
+    driftSpeed: 1.3,
+  },
+  {
+    x: 28,
+    y: -12,
+    radius: 1.5,
+    brightness: 0.6,
+    driftPhase: 3.9,
+    driftSpeed: 0.7,
+  },
+  {
+    x: -24,
+    y: -8,
+    radius: 2.0,
+    brightness: 0.78,
+    driftPhase: 2.8,
+    driftSpeed: 0.9,
+  },
+  {
+    x: 12,
+    y: 2,
+    radius: 1.7,
+    brightness: 0.82,
+    driftPhase: 4.1,
+    driftSpeed: 1.05,
+  },
+  {
+    x: -55,
+    y: -6,
+    radius: 1.4,
+    brightness: 0.55,
+    driftPhase: 1.2,
+    driftSpeed: 0.75,
+  },
+  {
+    x: 55,
+    y: -4,
+    radius: 1.4,
+    brightness: 0.55,
+    driftPhase: 5.4,
+    driftSpeed: 0.75,
+  },
+  {
+    x: 0,
+    y: -38,
+    radius: 2.6,
+    brightness: 0.95,
+    driftPhase: 0.0,
+    driftSpeed: 1.15,
+  },
+  {
+    x: 0,
+    y: 65,
+    radius: 1.8,
+    brightness: 0.6,
+    driftPhase: 3.5,
+    driftSpeed: 0.85,
+  },
 ];
 
 export function createLobeStates(): Record<string, LobeState> {
@@ -360,7 +433,15 @@ export function computeLobeTarget(
   motion: CloudMotionConfig,
   characterVx: number,
   characterVy: number,
-  idleTime: number
+  idleTime: number,
+  out = {
+    targetX: 0,
+    targetY: 0,
+    targetScaleX: 1,
+    targetScaleY: 1,
+    targetOpacity: 1,
+    targetRotation: 0,
+  },
 ): {
   targetX: number;
   targetY: number;
@@ -378,7 +459,9 @@ export function computeLobeTarget(
   let ty = def.baseY;
 
   // 1. Out-of-sync gentle idle breathing
-  const breathCycle = Math.sin(idleTime * 1.5 + def.breathPhase) * def.breathAmp;
+  const calm = 0.35 + 0.65 * Math.pow(Math.sin(idleTime * 0.16), 2);
+  const breathCycle =
+    Math.sin(idleTime * 1.2 + def.breathPhase) * def.breathAmp * calm;
   const breathScale = 1 + breathCycle;
 
   // 2. Squash & Stretch
@@ -462,11 +545,11 @@ export function computeLobeTarget(
   let sy = breathScale * (1 + puff * 0.3);
 
   if (squash > 0) {
-    sx *= 1 + squash * 0.30;
+    sx *= 1 + squash * 0.3;
     sy *= 1 - squash * 0.24;
   }
   if (stretch > 0) {
-    sx *= 1 - stretch * 0.20;
+    sx *= 1 - stretch * 0.2;
     sy *= 1 + stretch * 0.36;
   }
 
@@ -477,15 +560,23 @@ export function computeLobeTarget(
     opacity = def.baseOpacity * (params.faceEmbedDepth / 0.14);
   }
 
-  return {
-    targetX: tx,
-    targetY: ty,
-    targetScaleX: sx,
-    targetScaleY: sy,
-    targetOpacity: opacity,
-    targetRotation: rot,
-  };
+  out.targetX = tx;
+  out.targetY = ty;
+  out.targetScaleX = sx;
+  out.targetScaleY = sy;
+  out.targetOpacity = opacity;
+  out.targetRotation = rot;
+  return out;
 }
+
+const target = {
+  targetX: 0,
+  targetY: 0,
+  targetScaleX: 1,
+  targetScaleY: 1,
+  targetOpacity: 1,
+  targetRotation: 0,
+};
 
 export function stepLobePhysics(
   lobeStates: Record<string, LobeState>,
@@ -494,9 +585,11 @@ export function stepLobePhysics(
   characterVx: number,
   characterVy: number,
   idleTime: number,
-  dt: number
+  dt: number,
 ): void {
-  const clampedDt = Math.min(dt, 0.05);
+  const clampedDt = Math.max(0, Math.min(dt, 0.05));
+  const steps = Math.max(1, Math.ceil(clampedDt * 120));
+  const h = clampedDt / steps;
 
   for (const def of LOBE_DEFINITIONS) {
     const state = lobeStates[def.id];
@@ -515,24 +608,26 @@ export function stepLobePhysics(
       motion,
       characterVx,
       characterVy,
-      idleTime
+      idleTime,
+      target,
     );
 
     const stiffness = def.stiffness * (motion.springStiffness / 145);
     const damping = def.damping * (motion.springDamping / 14.5);
 
-    // X axis spring
-    const fx = -stiffness * (state.x - targetX) - damping * state.vx;
-    state.vx += fx * clampedDt;
-    state.x += state.vx * clampedDt;
+    for (let i = 0; i < steps; i++) {
+      // X axis spring
+      const fx = -stiffness * (state.x - targetX) - damping * state.vx;
+      state.vx += fx * h;
+      state.x += state.vx * h;
 
-    // Y axis spring
-    const fy = -stiffness * (state.y - targetY) - damping * state.vy;
-    state.vy += fy * clampedDt;
-    state.y += state.vy * clampedDt;
-
+      // Y axis spring
+      const fy = -stiffness * (state.y - targetY) - damping * state.vy;
+      state.vy += fy * h;
+      state.y += state.vy * h;
+    }
     // Smooth relaxation
-    const rate = 12 * clampedDt;
+    const rate = 1 - Math.exp(-12 * clampedDt);
     state.scaleX += (targetScaleX - state.scaleX) * rate;
     state.scaleY += (targetScaleY - state.scaleY) * rate;
     state.opacity += (targetOpacity - state.opacity) * rate;
@@ -540,7 +635,10 @@ export function stepLobePhysics(
   }
 }
 
-export const PRESETS: Record<CloudPresetName, Partial<CloudDeformationParams>> = {
+export const PRESETS: Record<
+  CloudPresetName,
+  Partial<CloudDeformationParams>
+> = {
   NEUTRAL: {
     scale: 1,
     scaleX: 1,
@@ -566,7 +664,7 @@ export const PRESETS: Record<CloudPresetName, Partial<CloudDeformationParams>> =
     squash: 0,
     stretch: 0,
     lean: 0,
-    scale: 1.10,
+    scale: 1.1,
     coreDensity: 0.9,
     lobeSoftness: 1.3,
   },

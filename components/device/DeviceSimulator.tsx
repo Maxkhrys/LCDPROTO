@@ -94,6 +94,7 @@ export default function DeviceSimulator() {
     lifecycle.current.update(0)
   );
   const [screenTime, setScreenTime] = useState(0);
+  const screenClock = useRef(0);
 
   // Temporary facial-layer alignment controls. The measured anchors in
   // lib/blobRig.ts already reproduce the master, so these start at 0/0/1x.
@@ -146,14 +147,13 @@ export default function DeviceSimulator() {
   useEffect(() => {
     let frameId = 0;
     let last = performance.now();
-    let clock = 0;
     const tick = (now: number) => {
       frameId = requestAnimationFrame(tick);
       const delta = Math.min(now - last, 100);
       last = now;
       const snapshot = lifecycle.current.update(playing ? delta * speed : 0);
-      if (playing && snapshot.playing) clock += delta * speed;
-      setScreenTime(clock);
+      if (playing && snapshot.playing) screenClock.current += delta * speed;
+      setScreenTime(screenClock.current);
       setScreenSnapshot({ ...snapshot });
     };
     frameId = requestAnimationFrame(tick);
@@ -190,6 +190,7 @@ export default function DeviceSimulator() {
   }, []);
 
   const reset = useCallback(() => {
+    screenClock.current = 0;
     setState(DEFAULT_STATE);
     setSpeed(1);
     setPlaying(true);

@@ -1,23 +1,6 @@
-/**
- * Procedural Cloud Blob - Alternate Character Body Component
- *
- * Implements a true alternate character body for LCDPROTO:
- * - Direct 1:1 prop compatibility with BlobCharacter (size, renderScale, rig, colour)
- * - Direct pointer / touch drag manipulation with restrained spring jiggle & settle on release
- * - 7-lobe volumetric mist silhouette with dense core mass and crown dome
- * - High performance Canvas 2D render loop (solid 60 FPS, ~0.4ms frame time)
- * - Embedded production face rig with crisp vector procedural eyes and morphing mouth
- */
-
 "use client";
-
-import { useCallback, useEffect, useRef } from "react";
-import {
-  type CloudBlobBodyProps,
-  type CloudDeformationParams,
-  type CloudTrailConfig,
-  type CloudColourConfig,
-} from "./cloudTypes";
+import { useCallback, useEffect, useRef, type PointerEvent } from "react";
+import type { CloudBlobBodyProps } from "./cloudTypes";
 import {
   DEFAULT_DEFORMATION,
   DEFAULT_MOTION_CONFIG,
@@ -26,425 +9,344 @@ import {
   stepLobePhysics,
   LOBE_DEFINITIONS,
 } from "./cloudLobeSystem";
-import {
-  createWispPool,
-  spawnWisp,
-  updateWisps,
-} from "./cloudMistTrails";
-import {
-  renderCloudBlob,
-} from "./cloudRenderer";
-import { NEUTRAL_RIG, type BlobColour } from "@/lib/blobRig";
+import { createWispPool, spawnWisp, updateWisps } from "./cloudMistTrails";
+import { renderCloudBlob, type RenderOptions } from "./cloudRenderer";
+import { NEUTRAL_RIG } from "@/lib/blobRig";
+import { BlobDragController, type DragPose } from "@/lib/blobDrag";
+const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 
-const clamp = (v: number, min: number, max: number) =>
-  v < min ? min : v > max ? max : v;
-
-export default function CloudBlobBody({
-  size = 466,
-  renderScale = 1,
-  rig,
-  faceRig,
-  colour,
-  blobColour,
-  params: userParams,
-  motionConfig: userMotion,
-  trailConfig: userTrails,
-  cloudColour: userCloudColour,
-  showFace = true,
-  dragEnabled = true,
-  className,
-  onDragChange,
-  onTelemetry,
-}: CloudBlobBodyProps) {
+/** One clock owns face, body, drag, wisps and pause. No per-frame React updates. */
+export default function CloudBlobBody(props: CloudBlobBodyProps) {
+  const { size = 466, renderScale = 1, className } = props;
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const activeColour: BlobColour = colour || blobColour || "teal";
-  const activeRig = rig || faceRig || NEUTRAL_RIG;
-
-  // Simulation persistent refs
-  const lobeStatesRef = useRef(createLobeStates());
-  const wispPoolRef = useRef(createWispPool(8));
-  const lastTimeRef = useRef<number | null>(null);
-  const idleTimeRef = useRef(0);
-  const prevPosRef = useRef({ x: 0, y: 0, lean: 0, squash: 0 });
-  const velocityRef = useRef({ vx: 0, vy: 0 });
-
-  // Direct drag & jiggle physics refs
-  const isDraggingRef = useRef(false);
-  const dragStartRef = useRef({ clientX: 0, clientY: 0, originX: 0, originY: 0 });
-  const dragOffsetRef = useRef({ x: 0, y: 0 });
-  const dragVelocityRef = useRef({ vx: 0, vy: 0 });
-  const jiggleSpringRef = useRef({ x: 0, y: 0, vx: 0, vy: 0, active: false });
-
-  // Telemetry refs
-  const frameCountRef = useRef(0);
-  const fpsTimerRef = useRef(0);
-
-  // Live config refs to avoid restarting the animation loop on prop change
-  const configRef = useRef({
-    rig: activeRig,
-    colour: activeColour,
-    params: { ...DEFAULT_DEFORMATION, ...userParams },
-    motion: { ...DEFAULT_MOTION_CONFIG, ...userMotion },
-    trails: {
-      enabled: true,
-      spawnRate: 1.0,
-      lifetime: 0.9,
-      fadeSpeed: 1.0,
-      trailStrength: 1.0,
-      driftAmount: 1.0,
-      ...userTrails,
-    } as CloudTrailConfig,
-    cloudColour: (userCloudColour
-      ? { ...DEFAULT_COLOUR, ...userCloudColour }
-      : DEFAULT_COLOUR) as CloudColourConfig,
-    showFace,
-    dragEnabled,
-    onDragChange,
-    onTelemetry,
-  });
-
-  configRef.current = {
-    rig: activeRig,
-    colour: activeColour,
-    params: { ...DEFAULT_DEFORMATION, ...userParams },
-    motion: { ...DEFAULT_MOTION_CONFIG, ...userMotion },
-    trails: {
-      enabled: true,
-      spawnRate: 1.0,
-      lifetime: 0.9,
-      fadeSpeed: 1.0,
-      trailStrength: 1.0,
-      driftAmount: 1.0,
-      ...userTrails,
-    },
-    cloudColour: userCloudColour
-      ? { ...DEFAULT_COLOUR, ...userCloudColour }
-      : DEFAULT_COLOUR,
-    showFace,
-    dragEnabled,
-    onDragChange,
-    onTelemetry,
+  const cfg = useRef(props);
+  cfg.current = props;
+  const sim = useRef<ReturnType<typeof createSimulation> | null>(null);
+  if (!sim.current) sim.current = createSimulation();
+  const native = (e: PointerEvent<HTMLCanvasElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    return {
+      x: ((e.clientX - r.left) * size) / r.width,
+      y: ((e.clientY - r.top) * size) / r.height,
+    };
   };
-
-  // --- Pointer Drag Event Handlers -------------------------------------------
-
-  const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    if (!configRef.current.dragEnabled) return;
-    const el = containerRef.current;
-    if (!el) return;
-
-    el.setPointerCapture(e.pointerId);
-    isDraggingRef.current = true;
-    jiggleSpringRef.current.active = false;
-
-    dragStartRef.current = {
-      clientX: e.clientX,
-      clientY: e.clientY,
-      originX: dragOffsetRef.current.x,
-      originY: dragOffsetRef.current.y,
-    };
-    dragVelocityRef.current = { vx: 0, vy: 0 };
-
-    configRef.current.onDragChange?.({
-      isDragging: true,
-      offsetX: dragOffsetRef.current.x,
-      offsetY: dragOffsetRef.current.y,
-      speed: 0,
-    });
-  }, []);
-
-  const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (!isDraggingRef.current) return;
-
-    const dx = e.clientX - dragStartRef.current.clientX;
-    const dy = e.clientY - dragStartRef.current.clientY;
-
-    let targetX = dragStartRef.current.originX + dx;
-    let targetY = dragStartRef.current.originY + dy;
-
-    // Soft circular edge resistance (so character stays reasonably centered inside the bezel)
-    const dist = Math.hypot(targetX, targetY);
-    const maxR = size * 0.38;
-    if (dist > maxR) {
-      const excess = dist - maxR;
-      const dampedR = maxR + excess * 0.32;
-      targetX = (targetX / dist) * dampedR;
-      targetY = (targetY / dist) * dampedR;
-    }
-
-    // Velocity estimation
-    const vx = (targetX - dragOffsetRef.current.x) * 45;
-    const vy = (targetY - dragOffsetRef.current.y) * 45;
-    dragVelocityRef.current = { vx, vy };
-
-    dragOffsetRef.current = { x: targetX, y: targetY };
-
-    const speed = Math.hypot(vx, vy);
-    configRef.current.onDragChange?.({
-      isDragging: true,
-      offsetX: targetX,
-      offsetY: targetY,
-      speed: Math.round(speed),
-    });
-  }, [size]);
-
-  const handlePointerUp = useCallback((e: React.PointerEvent) => {
-    if (!isDraggingRef.current) return;
-    const el = containerRef.current;
-    if (el && el.hasPointerCapture(e.pointerId)) {
-      el.releasePointerCapture(e.pointerId);
-    }
-
-    isDraggingRef.current = false;
-
-    // Engage spring-based release jiggle back to center
-    const curX = dragOffsetRef.current.x;
-    const curY = dragOffsetRef.current.y;
-    const curVx = dragVelocityRef.current.vx;
-    const curVy = dragVelocityRef.current.vy;
-
-    jiggleSpringRef.current = {
-      x: curX,
-      y: curY,
-      vx: curVx * 0.7,
-      vy: curVy * 0.7,
-      active: true,
-    };
-
-    configRef.current.onDragChange?.({
+  const release = useCallback((e: PointerEvent<HTMLCanvasElement>) => {
+    const s = sim.current!;
+    if (s.pointer !== e.pointerId) return;
+    s.pointer = null;
+    s.drag.end();
+    if (e.currentTarget.hasPointerCapture(e.pointerId))
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    cfg.current.onDragChange?.({
       isDragging: false,
-      offsetX: curX,
-      offsetY: curY,
+      offsetX: s.x,
+      offsetY: s.y,
       speed: 0,
     });
   }, []);
-
-  // --- Main Animation Loop ---------------------------------------------------
 
   useEffect(() => {
-    let animId: number;
-
+    const canvas = canvasRef.current!;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const raster = clamp(renderScale, 1, 4);
+    canvas.width = canvas.height = Math.round(size * raster);
+    const s = sim.current!;
+    let frame = 0,
+      last = performance.now(),
+      accumulator = 0;
+    let telemetryTime = 0,
+      frames = 0,
+      cost = 0;
+    const options: RenderOptions = {
+      size,
+      renderScale: raster,
+      lobeStates: s.lobes,
+      colour: DEFAULT_COLOUR,
+      wisps: s.wisps,
+      showFace: true,
+      rig: NEUTRAL_RIG,
+      colourName: "teal",
+      idleTime: 0,
+      params: { ...DEFAULT_DEFORMATION },
+      wallAngle: 0,
+      wallScaleX: 1,
+      wallScaleY: 1,
+      debug: false,
+      vx: 0,
+      vy: 0,
+      safeRadius: 60,
+    };
     const tick = (now: number) => {
-      if (lastTimeRef.current === null) {
-        lastTimeRef.current = now;
-      }
-      const rawDt = (now - lastTimeRef.current) / 1000;
-      lastTimeRef.current = now;
-      const dt = Math.min(rawDt, 0.05);
-
-      idleTimeRef.current += dt;
-
-      const {
-        rig,
-        colour: bColour,
-        params,
-        motion,
-        trails,
-        cloudColour,
-        showFace: sf,
-        onTelemetry: report,
-      } = configRef.current;
-
+      frame = requestAnimationFrame(tick);
+      const c = cfg.current;
+      const elapsed = Math.max(0, now - last);
+      last = now;
+      const interval = 1000 / (c.fps ?? 60);
+      accumulator += Math.min(100, elapsed);
+      telemetryTime += elapsed;
+      if (accumulator + 0.01 < interval) return;
+      const frameMs = Math.floor((accumulator + 0.01) / interval) * interval;
+      accumulator = Math.max(0, accumulator - frameMs);
+      const playing = c.playing !== false;
+      const dt = playing ? Math.min(frameMs, 50) / 1000 : 0;
       const t0 = performance.now();
-
-      // 1. Solve release spring jiggle physics
-      if (jiggleSpringRef.current.active) {
-        const js = jiggleSpringRef.current;
-        // Damped harmonic oscillator towards (0, 0)
-        const k = motion.springStiffness * 1.15;
-        const c = motion.springDamping * 1.05;
-        const ax = -k * js.x - c * js.vx;
-        const ay = -k * js.y - c * js.vy;
-
-        js.vx += ax * dt;
-        js.vy += ay * dt;
-        js.x += js.vx * dt;
-        js.y += js.vy * dt;
-
-        dragOffsetRef.current = { x: js.x, y: js.y };
-        dragVelocityRef.current = { vx: js.vx, vy: js.vy };
-
-        // Threshold check for settling
-        if (Math.hypot(js.x, js.y) < 0.25 && Math.hypot(js.vx, js.vy) < 0.8) {
-          js.active = false;
-          dragOffsetRef.current = { x: 0, y: 0 };
-          dragVelocityRef.current = { vx: 0, vy: 0 };
-        }
+      if (s.resetId !== (c.resetId ?? 0)) {
+        s.resetId = c.resetId ?? 0;
+        s.lobes = createLobeStates();
+        s.drag.reset();
+        s.lastDrag = null;
+        s.wisps.forEach((w) => {
+          w.active = false;
+        });
+        s.time = 0;
+        s.previous = false;
+        s.emission = 0;
+        s.sequence = 0;
+        s.pointer = null;
       }
-
-      // 2. Compute Character Position & Velocity
-      const dragX = dragOffsetRef.current.x;
-      const dragY = dragOffsetRef.current.y;
-
-      const ambientY = Math.sin(idleTimeRef.current * 1.1) * motion.floatAmount;
-      const ambientX = Math.cos(idleTimeRef.current * 0.75) * motion.driftAmount;
-
-      const currentPosX = params.x + dragX + ambientX;
-      const currentPosY = params.y + dragY + ambientY;
-
-      const vx = (currentPosX - prevPosRef.current.x) / Math.max(0.001, dt);
-      const vy = (currentPosY - prevPosRef.current.y) / Math.max(0.001, dt);
-      velocityRef.current.vx = vx;
-      velocityRef.current.vy = vy;
-
-      // 3. Dynamic Stretch / Squash during Drag & Fast Motion
-      const dragSpeed = Math.hypot(vx, vy);
-      let dynamicStretch = params.stretch;
-      let dynamicSquash = params.squash;
-      let dynamicLean = params.lean;
-
-      if (dragSpeed > 60) {
-        const stretchBonus = Math.min(dragSpeed * 0.0009, 0.28);
-        dynamicStretch += stretchBonus;
-        dynamicLean += clamp(vx * 0.035, -22, 22);
+      if (s.centreId !== (c.centreId ?? 0)) {
+        s.centreId = c.centreId ?? 0;
+        s.drag.reset();
+        s.lastDrag = null;
+        s.pointer = null;
+        s.previous = false;
       }
-
-      // Release rebound jiggle creates subtle momentary squash on rebound
-      if (jiggleSpringRef.current.active) {
-        const jiggleSpeed = Math.hypot(jiggleSpringRef.current.vx, jiggleSpringRef.current.vy);
-        if (jiggleSpeed > 50) {
-          dynamicSquash += Math.min(jiggleSpeed * 0.0006, 0.18);
-        }
+      if (c.dragEnabled === false || !playing) {
+        s.drag.end();
+        s.pointer = null;
       }
-
-      // 4. Mist Wisp Emission (velocity-triggered or release-rebound)
-      if (trails.enabled) {
-        const leanDelta = Math.abs(params.lean - prevPosRef.current.lean);
-        const isRapid = dragSpeed > 75 || leanDelta > 4.5 || (jiggleSpringRef.current.active && dragSpeed > 45);
-
-        if (isRapid && Math.random() < 0.25 * trails.spawnRate) {
-          const originX = size / 2 + currentPosX + (Math.random() - 0.5) * 32;
-          const originY = size / 2 + currentPosY + 22 + (Math.random() - 0.5) * 20;
+      if (
+        s.clearId !== (c.clearWispsId ?? 0) ||
+        c.trailConfig?.enabled === false
+      ) {
+        s.clearId = c.clearWispsId ?? 0;
+        s.wisps.forEach((w) => {
+          w.active = false;
+        });
+        s.emission = 0;
+      }
+      s.time += dt;
+      const rig =
+        c.advanceRig?.(dt * 1000) ?? c.rig ?? c.faceRig ?? NEUTRAL_RIG;
+      const p = options.params;
+      Object.assign(p, DEFAULT_DEFORMATION, c.params);
+      Object.assign(s.motion, DEFAULT_MOTION_CONFIG, c.motionConfig);
+      const ambient = c.idleEnabled === false ? 0 : 1;
+      const baseX =
+        p.x +
+        rig.blob.x +
+        rig.body.x +
+        Math.sin(s.time * 0.45) * s.motion.driftAmount * ambient;
+      const baseY =
+        p.y +
+        rig.blob.y +
+        rig.body.y +
+        Math.sin(s.time * 0.8) * s.motion.floatAmount * ambient;
+      p.scale = clamp(p.scale * rig.blob.scale, 0.4, 1.3);
+      p.scaleX *= rig.blob.scaleX;
+      p.scaleY *= rig.blob.scaleY;
+      p.rotation += rig.blob.rotation + rig.body.rotation * 0.5;
+      p.squash += Math.max(0, 1 - rig.body.scaleY) * 1.4;
+      p.stretch += Math.max(0, rig.body.scaleY - 1) * 1.4;
+      p.lean += rig.body.skewX * 0.5;
+      // Radius includes current puff/softness; shared production drag handles all walls.
+      const bodyRadius =
+        170 *
+        p.scale *
+        Math.max(p.scaleX, p.scaleY) *
+        (1 + Math.max(0, p.puff) * 0.3) *
+        clamp(p.lobeSoftness, 0.75, 1.3);
+      if (playing || !s.lastDrag)
+        s.lastDrag = s.drag.step(dt * 1000, size, bodyRadius, baseX, baseY);
+      const drag = s.lastDrag;
+      p.x = baseX + drag.x;
+      p.y = baseY + drag.y;
+      // Oversize manual presets stay contained; normal acting keeps its chosen scale.
+      const maxScale = (size / 2 - 5) / Math.max(bodyRadius, 1);
+      if (maxScale < 1) p.scale *= maxScale;
+      const vx = dt > 0 && s.previous ? (p.x - s.x) / dt : s.vx;
+      const vy = dt > 0 && s.previous ? (p.y - s.y) / dt : s.vy;
+      const speed = Math.hypot(vx, vy);
+      const acceleration =
+        dt > 0 && s.previous ? Math.hypot(vx - s.vx, vy - s.vy) / dt : 0;
+      p.lean += clamp(vx * 0.022, -12, 12);
+      p.stretch += Math.min(0.14, speed * 0.0003);
+      stepLobePhysics(
+        s.lobes,
+        p,
+        s.motion,
+        vx / p.scale,
+        vy / p.scale,
+        ambient ? s.time : 0,
+        dt,
+      );
+      const trails = c.trailConfig;
+      const active = updateWisps(
+        s.wisps,
+        dt,
+        trails?.driftAmount ?? 1,
+        trails?.fadeSpeed ?? 1,
+      );
+      // Rate is time-based. No emission at mount, from cursor alone, or while paused.
+      if (dt > 0 && trails?.enabled !== false && s.previous) {
+        const energy =
+          clamp((speed - 45) / 130, 0, 1) +
+          (speed > 20 ? clamp((acceleration - 700) / 4500, 0, 0.6) : 0);
+        s.emission =
+          energy > 0
+            ? s.emission + energy * 5 * dt * (trails?.spawnRate ?? 1)
+            : 0;
+        const cap = speed > 230 ? 8 : 3;
+        if (s.emission >= 1 && active < cap) {
+          s.emission -= 1;
+          const nx = vx / Math.max(1, speed),
+            ny = vy / Math.max(1, speed);
+          const side = Math.sin(s.sequence * 2.4) * 18;
           spawnWisp(
-            wispPoolRef.current,
-            originX,
-            originY,
-            -vx * 0.18 + (Math.random() - 0.5) * 10,
-            -vy * 0.18 - 8 + (Math.random() - 0.5) * 8,
-            20 + Math.random() * 12,
-            cloudColour.edge,
-            trails.lifetime,
-            0.32 * trails.trailStrength
+            s.wisps,
+            size / 2 + p.x - nx * 104 * p.scale - ny * side,
+            size / 2 + p.y - ny * 94 * p.scale + nx * side,
+            -vx * 0.16,
+            -vy * 0.16 - 6,
+            15 + (s.sequence % 4) * 2,
+            options.colour.edge,
+            trails?.lifetime ?? 0.9,
+            0.32 * (trails?.trailStrength ?? 1),
+            s.sequence++,
           );
         }
+        s.emission = Math.min(s.emission, 1);
       }
-
-      prevPosRef.current.x = currentPosX;
-      prevPosRef.current.y = currentPosY;
-      prevPosRef.current.lean = params.lean;
-      prevPosRef.current.squash = params.squash;
-
-      // 5. Update multi-lobe spring physics
-      const combinedParams: CloudDeformationParams = {
-        ...params,
-        x: currentPosX,
-        y: currentPosY,
-        squash: dynamicSquash,
-        stretch: dynamicStretch,
-        lean: dynamicLean,
-      };
-
-      stepLobePhysics(
-        lobeStatesRef.current,
-        combinedParams,
-        motion,
-        vx,
-        vy,
-        idleTimeRef.current,
-        dt
-      );
-
-      // 6. Update trailing mist wisps
-      const activeWisps = updateWisps(wispPoolRef.current, dt, trails.driftAmount);
-
-      // 7. Render to Canvas
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          const targetW = size * renderScale;
-          const targetH = size * renderScale;
-          if (canvas.width !== targetW || canvas.height !== targetH) {
-            canvas.width = targetW;
-            canvas.height = targetH;
-          }
-
-          renderCloudBlob(ctx, {
-            size,
-            renderScale,
-            lobeStates: lobeStatesRef.current,
-            colour: cloudColour,
-            wisps: wispPoolRef.current,
-            showFace: sf,
-            rig,
-            faceRig: rig,
-            colourName: bColour,
-            blobColour: bColour,
-            idleTime: idleTimeRef.current,
-            squash: dynamicSquash,
-            lean: dynamicLean,
-            gazeX: params.gazeX,
-            gazeY: params.gazeY,
-            faceEmbedDepth: params.faceEmbedDepth,
-            fluffiness: params.fluffiness,
-            lightAngle: params.lightAngle,
-            cheekBlush: params.cheekBlush,
-            cloudBrows: params.cloudBrows,
-          });
-        }
+      if (dt > 0 || !s.previous) {
+        s.x = p.x;
+        s.y = p.y;
+        s.vx = vx;
+        s.vy = vy;
+        s.previous = true;
       }
-
-      const t1 = performance.now();
-      const frameTimeMs = Number((t1 - t0).toFixed(2));
-
-      // 8. Telemetry update
-      frameCountRef.current++;
-      fpsTimerRef.current += dt;
-
-      if (fpsTimerRef.current >= 0.5) {
-        const calculatedFps = Math.round(frameCountRef.current / fpsTimerRef.current);
-        frameCountRef.current = 0;
-        fpsTimerRef.current = 0;
-
-        if (report) {
-          let totalLag = 0;
-          for (const def of LOBE_DEFINITIONS) {
-            totalLag += def.lagFactor * motion.lobeLag * 100;
-          }
-          const avgLag = Math.round(totalLag / LOBE_DEFINITIONS.length);
-          report(calculatedFps, frameTimeMs, activeWisps, avgLag);
-        }
+      options.lobeStates = s.lobes;
+      options.rig = rig;
+      options.colour = c.cloudColour
+        ? Object.assign(s.colour, DEFAULT_COLOUR, c.cloudColour)
+        : DEFAULT_COLOUR;
+      options.colourName = c.colour ?? c.blobColour ?? "teal";
+      options.showFace = c.showFace !== false;
+      options.idleTime = ambient ? s.time : 0;
+      options.debug = c.debug ?? false;
+      options.wallAngle =
+        (drag.deformAngle * Math.PI) / 180 - (p.rotation * Math.PI) / 180;
+      options.wallScaleX = 1 + drag.bodyScaleX * 0.55;
+      options.wallScaleY = 1 + drag.bodyScaleY;
+      options.vx = vx;
+      options.vy = vy;
+      options.safeRadius = Math.max(0, size / 2 - bodyRadius);
+      s.hitRadius = Math.min(bodyRadius, size / 2 - 5);
+      renderCloudBlob(ctx, options);
+      c.onPose?.(p.x, p.y, p.scale);
+      cost += performance.now() - t0;
+      frames++;
+      if (telemetryTime >= 500) {
+        let lag = 0,
+          count = 0;
+        for (const d of LOBE_DEFINITIONS)
+          lag += Math.hypot(
+            s.lobes[d.id].x - d.baseX,
+            s.lobes[d.id].y - d.baseY,
+          );
+        for (const w of s.wisps) if (w.active) count++;
+        c.onTelemetry?.(
+          playing ? (frames * 1000) / telemetryTime : 0,
+          cost / frames,
+          count,
+          lag / LOBE_DEFINITIONS.length,
+        );
+        c.onDragChange?.({
+          isDragging: s.drag.isGrabbed,
+          offsetX: p.x,
+          offsetY: p.y,
+          speed,
+        });
+        // Developer-only DOM telemetry, readable without a React render per frame.
+        canvas.dataset.frameMs = String(cost / frames);
+        canvas.dataset.wisps = String(count);
+        canvas.dataset.x = String(p.x);
+        canvas.dataset.y = String(p.y);
+        frames = 0;
+        cost = 0;
+        telemetryTime = 0;
       }
-
-      animId = requestAnimationFrame(tick);
     };
-
-    animId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(animId);
+    frame = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(frame);
+      s.drag.end();
+      s.pointer = null;
+    };
   }, [size, renderScale]);
 
   return (
-    <div
-      ref={containerRef}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      className={`relative inline-block touch-none select-none ${
-        dragEnabled ? "cursor-grab active:cursor-grabbing" : "cursor-default"
-      } ${className ?? ""}`}
-      style={{ width: size, height: size }}
-    >
-      <canvas
-        ref={canvasRef}
-        style={{
-          width: size,
-          height: size,
-        }}
-        className="block"
-      />
-    </div>
+    <canvas
+      ref={canvasRef}
+      aria-label="Cloud character preview"
+      className={`block touch-none select-none ${className ?? ""}`}
+      style={{
+        width: size,
+        height: size,
+        cursor: props.dragEnabled === false ? "default" : "grab",
+      }}
+      onPointerDown={(e) => {
+        const s = sim.current!;
+        if (
+          cfg.current.dragEnabled === false ||
+          cfg.current.playing === false ||
+          s.pointer !== null ||
+          !e.isPrimary ||
+          e.button !== 0
+        )
+          return;
+        const p = native(e);
+        if (
+          Math.hypot(p.x - size / 2 - s.x, p.y - size / 2 - s.y) >
+          s.hitRadius * 0.82
+        )
+          return;
+        e.preventDefault();
+        s.pointer = e.pointerId;
+        e.currentTarget.setPointerCapture(e.pointerId);
+        s.drag.begin(p.x, p.y, e.timeStamp);
+      }}
+      onPointerMove={(e) => {
+        if (sim.current!.pointer !== e.pointerId) return;
+        const p = native(e);
+        sim.current!.drag.move(p.x, p.y, e.timeStamp);
+      }}
+      onPointerUp={release}
+      onPointerCancel={release}
+      onLostPointerCapture={release}
+    />
   );
+}
+function createSimulation() {
+  return {
+    lobes: createLobeStates(),
+    wisps: createWispPool(),
+    drag: new BlobDragController(),
+    lastDrag: null as DragPose | null,
+    motion: { ...DEFAULT_MOTION_CONFIG },
+    colour: { ...DEFAULT_COLOUR },
+    pointer: null as number | null,
+    time: 0,
+    x: 0,
+    y: 0,
+    vx: 0,
+    vy: 0,
+    hitRadius: 170,
+    previous: false,
+    emission: 0,
+    sequence: 0,
+    resetId: 0,
+    centreId: 0,
+    clearId: 0,
+  };
 }

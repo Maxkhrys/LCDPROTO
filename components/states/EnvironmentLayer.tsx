@@ -73,11 +73,15 @@ class ScalarSpring {
   }
 
   step(target: number, dt: number, frequency: number, damping: number) {
+    const steps = Math.max(1, Math.ceil(dt * 120));
+    const h = dt / steps;
     const omega = Math.PI * 2 * frequency;
-    const acceleration =
-      (target - this.value) * omega * omega - this.velocity * 2 * damping * omega;
-    this.velocity += acceleration * dt;
-    this.value += this.velocity * dt;
+    for (let i = 0; i < steps; i++) {
+      const acceleration =
+        (target - this.value) * omega * omega - this.velocity * 2 * damping * omega;
+      this.velocity += acceleration * h;
+      this.value += this.velocity * h;
+    }
   }
 }
 
@@ -231,6 +235,7 @@ export default function EnvironmentLayer({
   const rigRef = useRef(rig);
   const configRef = useRef(config);
   const statusRef = useRef(onStatus);
+  const elapsedRef = useRef(0);
   const shadowX = useRef(new ScalarSpring());
   const shadowY = useRef(new ScalarSpring());
   const shadowHeight = useRef(new ScalarSpring());
@@ -261,15 +266,15 @@ export default function EnvironmentLayer({
 
     let frameId = 0;
     let last = performance.now();
-    let elapsedSeconds = 0;
     let statusAt = 0;
     const render = (now: number) => {
-      const delta = Math.min(100, now - last);
+      const delta = playing ? Math.min(100, now - last) : 0;
       last = now;
-      elapsedSeconds += (delta / 1000) * speed;
+      elapsedRef.current += (delta / 1000) * speed;
+      const elapsedSeconds = elapsedRef.current;
       const active = configRef.current;
       const currentRig = rigRef.current;
-      const dt = Math.min(delta, 100) / 1000;
+      const dt = Math.min(delta, 100) * speed / 1000;
 
       backgroundCtx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
       foregroundCtx.setTransform(renderScale, 0, 0, renderScale, 0, 0);

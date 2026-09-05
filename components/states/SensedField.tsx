@@ -141,6 +141,7 @@ export default function SensedField({
       if (playing) frameId = requestAnimationFrame(frame);
     };
 
+    ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
     drawField(ctx, size, timeRef.current);
     if (playing) frameId = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(frameId);
