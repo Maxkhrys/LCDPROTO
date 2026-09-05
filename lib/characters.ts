@@ -123,6 +123,7 @@ export interface CloudSliderDef {
 }
 
 export const CLOUD_SLIDERS: readonly CloudSliderDef[] = [
+  { group: "params", key: "scale", label: "Cloud size", min: 0.5, max: 1.5, step: 0.02, fallback: 1 },
   { group: "params", key: "puff", label: "Puff", min: -0.2, max: 0.8, step: 0.02, fallback: 0 },
   { group: "params", key: "squash", label: "Squash", min: 0, max: 0.8, step: 0.02, fallback: 0 },
   { group: "params", key: "stretch", label: "Stretch", min: 0, max: 0.8, step: 0.02, fallback: 0 },

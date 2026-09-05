@@ -788,7 +788,8 @@ export default function BlobCharacter({
   const hitTest = (x: number, y: number) => {
     const blobX = size / 2 + rig.blob.x;
     const blobY = size / 2 + rig.blob.y + (settingsOpen ? size * 0.075 : 0);
-    return Math.hypot(x - blobX, y - blobY) <= size * BODY_FRACTION * 0.62;
+    const scale = rig.blob.scale || 1;
+    return Math.hypot(x - blobX, y - blobY) <= size * BODY_FRACTION * 0.62 * scale;
   };
 
   const isBlobHit = (event: MouseEvent<HTMLCanvasElement>) => {

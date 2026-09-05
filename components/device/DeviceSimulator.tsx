@@ -278,7 +278,7 @@ export default function DeviceSimulator() {
       id: "character",
       label: "Character",
       description: "Choose which body the rig drives, and tune the cloud.",
-      summary: character,
+      summary: `${character} · ${characterScale.toFixed(2)}x`,
       group: "Character",
     },
     {
@@ -452,6 +452,39 @@ export default function DeviceSimulator() {
               <p className="control-card-note">
                 {CHARACTERS.find((item) => item.id === character)?.description}
               </p>
+            </ControlCard>
+
+            <ControlCard
+              title="Character scale"
+              description="Continuous size scaler for both characters inside the circular display."
+            >
+              <ControlRange
+                label="Size scale"
+                value={characterScale}
+                min={0.5}
+                max={1.4}
+                step={0.01}
+                display={`${characterScale.toFixed(2)}x`}
+                onChange={(next) => setCharacterScale(next)}
+              />
+              <ChoiceGroup label="Presets">
+                {[
+                  { label: "Micro", value: 0.68 },
+                  { label: "Tiny", value: 0.78 },
+                  { label: "Small", value: DEFAULT_CHARACTER_SCALE },
+                  { label: "Standard", value: 1 },
+                  { label: "Large", value: 1.12 },
+                  { label: "X-Large", value: 1.25 },
+                ].map((option) => (
+                  <DevButton
+                    key={option.label}
+                    active={Math.abs(characterScale - option.value) < 0.005}
+                    onClick={() => setCharacterScale(option.value)}
+                  >
+                    {option.label}
+                  </DevButton>
+                ))}
+              </ChoiceGroup>
             </ControlCard>
 
             {character === "cloud" && (() => {
@@ -708,18 +741,28 @@ export default function DeviceSimulator() {
                 ))}
               </ChoiceGroup>
             </ControlCard>
-            <ControlCard title="Character scale" description="Five bounded preview sizes, with Small as default.">
-              <ChoiceGroup label="Size">
+            <ControlCard title="Character scale" description="Continuous size scaler for both characters inside the circular display.">
+              <ControlRange
+                label="Size scale"
+                value={characterScale}
+                min={0.5}
+                max={1.4}
+                step={0.01}
+                display={`${characterScale.toFixed(2)}x`}
+                onChange={(next) => setCharacterScale(next)}
+              />
+              <ChoiceGroup label="Presets">
                 {[
                   { label: "Micro", value: 0.68 },
                   { label: "Tiny", value: 0.78 },
                   { label: "Small", value: DEFAULT_CHARACTER_SCALE },
                   { label: "Standard", value: 1 },
                   { label: "Large", value: 1.12 },
+                  { label: "X-Large", value: 1.25 },
                 ].map((option) => (
                   <DevButton
                     key={option.label}
-                    active={characterScale === option.value}
+                    active={Math.abs(characterScale - option.value) < 0.005}
                     onClick={() => setCharacterScale(option.value)}
                   >
                     {option.label}

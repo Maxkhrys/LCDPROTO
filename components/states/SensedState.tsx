@@ -103,6 +103,7 @@ export default function SensedState({
   blobColour,
   character,
   cloudSettings,
+  characterScale,
   mindIntention,
   mindDestination,
   mindDepth,
@@ -138,6 +139,7 @@ export default function SensedState({
     mindIntention,
     mindDestination,
     mindDepth,
+    characterScale,
   });
   cfg.current = {
     calibration,
@@ -147,6 +149,7 @@ export default function SensedState({
     mindIntention,
     mindDestination,
     mindDepth,
+    characterScale,
   };
 
   const reset = useCallback(() => {
@@ -268,7 +271,7 @@ export default function SensedState({
             depth: physical.depth,
             yaw: physical.yaw,
             pitch: physical.pitch,
-            scale: (1 + amb.breath) * (1 + d.blobScale),
+            scale: (cfg.current.characterScale ?? 1) * (1 + amb.breath) * (1 + d.blobScale),
             scaleX: 1,
             scaleY: 1,
             rotation: latestRotation + d.blobSpin,
