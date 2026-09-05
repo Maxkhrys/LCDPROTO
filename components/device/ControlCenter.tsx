@@ -239,6 +239,11 @@ export default function ControlCenter({
               )}
             </div>
 
+            <a className="control-center-lab-link" href="/experimental/cloud">
+              <span>Cloud Blob R&amp;D</span>
+              <ActionIcon.chevron className="console-icon" />
+            </a>
+
             <div className="control-center-device-card">
               <span className="control-center-device-dot" aria-hidden />
               <span className="control-center-device-text">

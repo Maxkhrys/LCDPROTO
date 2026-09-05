@@ -12,6 +12,18 @@ import EmojiMakerPanel from "./EmojiMakerPanel";
 import PerformanceLabPanel from "./PerformanceLabPanel";
 import PreviewRail from "./PreviewRail";
 import { ActionIcon } from "./ConsoleIcons";
+import CharacterToolMenu, { type CharacterTool } from "./CharacterToolMenu";
+import {
+  loadCloudPresets,
+  saveCloudPreset,
+  type CloudColourPreset,
+} from "@/lib/cloudPresets";
+import {
+  applyUiAccent,
+  loadUiAccent,
+  UI_ACCENTS,
+  DEFAULT_UI_ACCENT,
+} from "@/lib/uiAccents";
 import { ScreenLifecycle, type LifecycleSnapshot } from "@/lib/screenLifecycle";
 import { isDeviceState, type FlowId, type ScreenId } from "@/lib/screenCatalogue";
 import {
@@ -105,7 +117,10 @@ export default function DeviceSimulator() {
   const [environmentStatus, setEnvironmentStatus] = useState<EnvironmentStatus | null>(null);
   const [showPupils, setShowPupils] = useState(false);
   const [blobToolsOpen, setBlobToolsOpen] = useState(false);
-  const [activeBlobTool, setActiveBlobTool] = useState<"colour" | "face" | "performance" | "pupils" | null>(null);
+  const [activeBlobTool, setActiveBlobTool] = useState<CharacterTool | null>(null);
+  const [cloudPresets, setCloudPresets] = useState<CloudColourPreset[]>([]);
+  const [presetName, setPresetName] = useState("");
+  const [uiAccent, setUiAccent] = useState(DEFAULT_UI_ACCENT);
   const [mood, setMood] = useState<HomeMood | null>(null);
   const [mindIntention, setMindIntention] = useState<BlobIntention | null>(null);
   const [mindDestination, setMindDestination] = useState<BlobDestination | null>(null);
@@ -147,6 +162,15 @@ export default function DeviceSimulator() {
   /** When true the panel rasterises at exactly 466x466 — real hardware pixels. */
   const [nativePixels, setNativePixels] = useState(false);
   const [dpr, setDpr] = useState(1);
+
+  // Presets and the accent theme live in localStorage, so they are read after
+  // mount to keep the server and first client render identical.
+  useEffect(() => {
+    setCloudPresets(loadCloudPresets());
+    const stored = loadUiAccent();
+    setUiAccent(stored);
+    applyUiAccent(stored);
+  }, []);
 
   useEffect(() => {
     document.documentElement.dataset.simulatorTheme = displayMode;
@@ -508,6 +532,40 @@ export default function DeviceSimulator() {
                   description="Choose from mist color presets or customize individual body, edge, glow and core tints."
                   icon={ActionIcon.palette}
                 >
+                  <ChoiceGroup label="Saved presets">
+                    {cloudPresets.map((preset) => (
+                      <DevButton
+                        key={preset.id}
+                        active={activePresetName === preset.name}
+                        onClick={() => applyCloudPreset(preset)}
+                      >
+                        {preset.name}
+                      </DevButton>
+                    ))}
+                  </ChoiceGroup>
+                  <div className="preset-save-row">
+                    <input
+                      aria-label="Preset name"
+                      value={presetName}
+                      placeholder="Name this cloud…"
+                      onChange={(event) => setPresetName(event.target.value)}
+                    />
+                    <DevButton
+                      active={false}
+                      onClick={() => {
+                        setCloudPresets(
+                          saveCloudPreset(presetName || `Cloud ${cloudPresets.length + 1}`, {
+                            ...effectiveBase,
+                            ...cloudSettings.colour,
+                          })
+                        );
+                        setPresetName("");
+                      }}
+                    >
+                      Save preset
+                    </DevButton>
+                  </div>
+
                   <ChoiceGroup label="Palette preset">
                     {CLOUD_COLOUR_PRESET_NAMES.map((name) => (
                       <DevButton
@@ -745,6 +803,11 @@ export default function DeviceSimulator() {
                   </DevButton>
                 ))}
               </ChoiceGroup>
+              <ChoiceGroup label="Eyes">
+                <DevButton active={showPupils} onClick={() => setShowPupils((value) => !value)}>
+                  Pupils {showPupils ? "on" : "off"}
+                </DevButton>
+              </ChoiceGroup>
             </ControlCard>
             <ControlCard title="Character scale" description="Continuous size scaler for both characters inside the circular display.">
               <ControlRange
@@ -881,6 +944,31 @@ export default function DeviceSimulator() {
                   Native pixels 1:1 {nativePixels ? "on" : "off"}
                 </DevButton>
               </div>
+            </ControlCard>
+            <ControlCard
+              title="Console appearance"
+              description="Accent theme for the control application. The device screen keeps its own scene colours."
+              icon={ActionIcon.palette}
+            >
+              <ChoiceGroup label="Accent">
+                {UI_ACCENTS.map((accent) => (
+                  <DevButton
+                    key={accent.id}
+                    active={uiAccent === accent.id}
+                    onClick={() => {
+                      setUiAccent(accent.id);
+                      applyUiAccent(accent.id);
+                    }}
+                  >
+                    <span
+                      className="accent-swatch"
+                      style={{ background: accent.accent }}
+                      aria-hidden
+                    />
+                    {accent.label}
+                  </DevButton>
+                ))}
+              </ChoiceGroup>
             </ControlCard>
             <ControlCard title="Inspection scene" description="Brown is the default environment inspection mode.">
               <SceneColourDots
@@ -1072,6 +1160,37 @@ export default function DeviceSimulator() {
     { label: "Idle motion", value: idle.enabled ? "on" : "off" },
   ];
 
+  /** Applies a saved cloud look by overriding the palette outright. */
+  const applyCloudPreset = useCallback((preset: CloudColourPreset) => {
+    setCloudSettings((current) => ({
+      ...current,
+      palettePreset: preset.name,
+      colour: { ...current.colour, ...preset.colour },
+    }));
+  }, []);
+
+  /** Left/right cycling through the same preset list the console shows. */
+  const stepCloudPreset = useCallback(
+    (direction: -1 | 1) => {
+      if (!cloudPresets.length) return;
+      setCharacter("cloud");
+      setCloudSettings((current) => {
+        const index = cloudPresets.findIndex(
+          (preset) => preset.name === current.palettePreset
+        );
+        const from = index < 0 ? 0 : index + direction;
+        const next =
+          cloudPresets[((from % cloudPresets.length) + cloudPresets.length) % cloudPresets.length];
+        return {
+          ...current,
+          palettePreset: next.name,
+          colour: { ...current.colour, ...next.colour },
+        };
+      });
+    },
+    [cloudPresets]
+  );
+
   const cycleScene = () => {
     const modes = Object.keys(DISPLAY_BACKGROUNDS) as DisplayMode[];
     const next = modes[(modes.indexOf(displayMode) + 1) % modes.length];
@@ -1184,25 +1303,30 @@ export default function DeviceSimulator() {
               cloudSettings={cloudSettings}
               onEnvironmentStatus={setEnvironmentStatus}
             />
-              <BlobToolOrbs
+              <CharacterToolMenu
                 open={blobToolsOpen}
                 active={activeBlobTool}
                 screenSize={screenSize}
                 blobColour={blobColour}
-                showPupils={showPupils}
+                presets={cloudPresets}
+                activePresetName={cloudSettings.palettePreset ?? "Follow Blob colour"}
+                onColourChange={setBlobColour}
+                onStepPreset={stepCloudPreset}
                 onSelect={(tool) => {
-                  setActiveBlobTool(tool);
+                  setActiveBlobTool((current) => (current === tool ? null : tool));
                   if (tool === "face") {
                     setActiveControl("emoji");
                     setControlsOpen(true);
                   }
-                  if (tool === "performance") {
-                    setActiveControl("performance");
+                  if (tool === "environment") {
+                    setActiveControl("environment");
                     setControlsOpen(true);
                   }
-                  if (tool === "pupils") setShowPupils((value) => !value);
+                  if (tool === "edit") {
+                    setActiveControl("character");
+                    setControlsOpen(true);
+                  }
                 }}
-                onColourChange={setBlobColour}
               />
           </div>
         </DeviceBezel>
@@ -1379,137 +1503,6 @@ function ControlRange({
       />
     </label>
   );
-}
-
-type BlobTool = "colour" | "face" | "performance" | "pupils";
-
-function BlobToolOrbs({
-  open,
-  active,
-  screenSize,
-  blobColour,
-  showPupils,
-  onSelect,
-  onColourChange,
-}: {
-  open: boolean;
-  active: BlobTool | null;
-  screenSize: number;
-  blobColour: BlobColour;
-  showPupils: boolean;
-  onSelect: (tool: BlobTool) => void;
-  onColourChange: (colour: BlobColour) => void;
-}) {
-  if (!open) return null;
-  const orbSize = Math.max(32, Math.min(48, screenSize * 0.125));
-  const orbStyle = (left: string, top: number) => ({
-    left,
-    top: screenSize * top,
-    width: orbSize,
-    height: orbSize,
-  });
-
-  return (
-    <div className="pointer-events-none absolute inset-0 z-30">
-      <div
-        className="blob-tool-orb blob-tool-orb-left pointer-events-auto absolute"
-        style={orbStyle("18%", 0.14)}
-      >
-        <OrbButton active={active === "colour"} label="Blob colour" onClick={() => onSelect("colour")}>
-          <span className="h-4 w-4 rounded-full border border-white/70" style={{ background: blobColourSwatch(blobColour) }} />
-        </OrbButton>
-      </div>
-      <div
-        className="blob-tool-orb blob-tool-orb-face pointer-events-auto absolute"
-        style={orbStyle("38%", 0.06)}
-      >
-        <OrbButton active={active === "face"} label="Expression Maker" onClick={() => onSelect("face")}>
-          <span className="text-[17px] leading-none">☺</span>
-        </OrbButton>
-      </div>
-      <div
-        className="blob-tool-orb blob-tool-orb-performance pointer-events-auto absolute"
-        style={orbStyle("62%", 0.06)}
-      >
-        <OrbButton active={active === "performance"} label="Performance Lab" onClick={() => onSelect("performance")}>
-          <span className="text-[16px] leading-none">🎭</span>
-        </OrbButton>
-      </div>
-      <div
-        className="blob-tool-orb blob-tool-orb-right pointer-events-auto absolute"
-        style={orbStyle("82%", 0.14)}
-      >
-        <OrbButton active={active === "pupils"} label={showPupils ? "Hide pupils" : "Show pupils"} onClick={() => onSelect("pupils")}>
-          <span className="relative block h-4 w-4 rounded-full border border-white/75">
-            <span className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white" />
-          </span>
-        </OrbButton>
-      </div>
-
-      {active === "colour" && (
-        <div className="pointer-events-auto absolute left-1/2 top-[30%] flex -translate-x-1/2 gap-1.5 rounded-xl border border-white/15 bg-black/75 p-2 shadow-2xl backdrop-blur-sm">
-          {BLOB_COLOURS.map((colour) => (
-            <button
-              key={colour.id}
-              type="button"
-              aria-label={`Use ${colour.label} Blob`}
-              aria-pressed={blobColour === colour.id}
-              onClick={() => onColourChange(colour.id)}
-              className="h-6 w-6 rounded-full border border-white/30 transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-              style={{ background: blobColourSwatch(colour.id) }}
-            />
-          ))}
-        </div>
-      )}
-
-      {active === "face" && (
-        <div className="pointer-events-none absolute left-1/2 top-[30%] -translate-x-1/2 rounded-xl border border-white/15 bg-black/75 px-3 py-2 text-center shadow-2xl backdrop-blur-sm">
-          <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-white/70">Face library open</p>
-          <p className="mt-1 text-[10px] text-white/40">Use Expressions tab</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function OrbButton({
-  active,
-  label,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      aria-pressed={active}
-      onClick={onClick}
-      className={`flex h-full w-full items-center justify-center rounded-full border text-white shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition duration-200 hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
-        active
-          ? "border-white/60 bg-white/20"
-          : "border-white/25 bg-black/65 hover:border-white/50 hover:bg-white/15"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function blobColourSwatch(colour: BlobColour) {
-  const swatches: Record<BlobColour, string> = {
-    purple: "#9a63ed",
-    teal: "#28c9c4",
-    yellow: "#f3c431",
-    green: "#55d963",
-    blue: "#398cff",
-    red: "#ef4b59",
-  };
-  return swatches[colour];
 }
 
 function DevButton({

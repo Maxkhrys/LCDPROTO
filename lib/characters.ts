@@ -49,7 +49,7 @@ export const CHARACTERS: readonly CharacterMeta[] = [
   },
 ] as const;
 
-export const DEFAULT_CHARACTER: CharacterId = "blob";
+export const DEFAULT_CHARACTER: CharacterId = "cloud";
 
 export const CLOUD_PALETTES: Record<BlobColour, string> = {
   teal: "Cool Mist",
