@@ -1,6 +1,6 @@
 /** Fixed pool. Positions are screen-space, detached from subsequent body motion. */
 import type { CloudWisp } from "./cloudTypes";
-export const MAX_WISPS = 8;
+export const MAX_WISPS = 36;
 export function createWispPool(capacity = MAX_WISPS): CloudWisp[] {
   return Array.from({ length: Math.min(MAX_WISPS, capacity) }, () => ({
     active: false,
@@ -8,12 +8,12 @@ export function createWispPool(capacity = MAX_WISPS): CloudWisp[] {
     y: 0,
     vx: 0,
     vy: 0,
-    radius: 18,
-    targetRadius: 30,
+    radius: 24,
+    targetRadius: 48,
     opacity: 0,
-    initialOpacity: 0.3,
+    initialOpacity: 0.5,
     age: 0,
-    maxLife: 0.9,
+    maxLife: 1.0,
     softness: 1,
     color: "#eaf3ff",
     angle: 0,
@@ -29,8 +29,8 @@ export function spawnWisp(
   vy: number,
   radius: number,
   color: string,
-  lifetime = 0.85,
-  initialOpacity = 0.32,
+  lifetime = 0.95,
+  initialOpacity = 0.55,
   sequence = 0,
 ): boolean {
   const w = pool.find((w) => !w.active);
@@ -41,15 +41,16 @@ export function spawnWisp(
   w.vx = vx;
   w.vy = vy;
   w.radius = radius;
-  w.targetRadius = radius * 1.8;
+  // Smoke puffs expand as they disperse
+  w.targetRadius = radius * (1.9 + (sequence % 3) * 0.35);
   w.age = 0;
-  w.maxLife = Math.max(0.4, Math.min(1.3, lifetime));
-  w.initialOpacity = Math.max(0, Math.min(0.45, initialOpacity));
+  w.maxLife = Math.max(0.45, Math.min(1.8, lifetime));
+  w.initialOpacity = Math.max(0, Math.min(0.85, initialOpacity));
   w.opacity = 0;
   w.color = color;
-  w.angle = Math.atan2(vy, vx);
+  w.angle = Math.atan2(vy, vx) + ((sequence % 5) - 2) * 0.22;
   w.shape = sequence % 3;
-  w.curl = sequence % 2 ? 0.7 : -0.7;
+  w.curl = ((sequence % 7) - 3) * 0.45;
   return true;
 }
 export function updateWisps(
@@ -69,15 +70,21 @@ export function updateWisps(
     }
     const p = w.age / w.maxLife;
     const h = Math.max(0, dt);
-    // Exponential drag and bounded curl; cheap scalar equivalent on MCU.
+    // Exponential atmospheric drag deceleration
     const decay = Math.exp(-2.2 * h);
     w.vx *= decay;
-    w.vy = w.vy * decay - 5 * drift * h;
-    w.x += (w.vx + Math.sin(p * Math.PI) * w.curl * 6) * h;
+    // Gentle thermal lift / buoyancy for smoke mist (rises slightly like smoke)
+    w.vy = w.vy * decay - 14 * drift * h;
+    // Turbulent vortex drift
+    w.x += (w.vx + Math.sin(p * Math.PI * 1.5) * w.curl * 9) * h;
     w.y += w.vy * h;
-    w.angle += w.curl * h * 0.4;
-    w.radius += (w.targetRadius - w.radius) * (1 - Math.exp(-2 * h));
-    w.opacity = w.initialOpacity * Math.min(1, p / 0.1) * Math.pow(1 - p, 1.6);
+    w.angle += w.curl * h * 0.5;
+    // Smoke puffs expand as they diffuse into the air
+    w.radius += (w.targetRadius - w.radius) * (1 - Math.exp(-2.6 * h));
+    // Smooth bell envelope: prompt rise, billowing linger, and soft ethereal fade
+    const fadeIn = Math.min(1, p / 0.12);
+    const fadeOut = Math.pow(1 - p, 1.35);
+    w.opacity = w.initialOpacity * fadeIn * fadeOut;
     active++;
   }
   return active;

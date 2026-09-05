@@ -67,6 +67,7 @@ interface Stamps {
   underside: HTMLCanvasElement;
   core: HTMLCanvasElement;
   mist: HTMLCanvasElement;
+  smoke: HTMLCanvasElement;
   glow: HTMLCanvasElement;
   shadow: HTMLCanvasElement;
   builds: number;
@@ -128,7 +129,7 @@ function getStamps(
       s.fillRect(-1, -1, 2, 2);
     });
 
-  // Rear Grounded Masses: Deeper tone so background lobes naturally recede behind foreground
+  // Rear Grounded Masses: Soft atmospheric tone that recedes gracefully behind the core
   const makeRearMass = () =>
     sprite((s) => {
       const volume = s.createRadialGradient(
@@ -139,20 +140,20 @@ function getStamps(
         0,
         1,
       );
-      volume.addColorStop(0, rgba(edge, 0.94));
-      volume.addColorStop(0.38, rgba(body, 0.96));
-      volume.addColorStop(0.68, rgba(core, 0.92));
-      volume.addColorStop(0.88, rgba(core, 0.4 * c.translucency));
-      volume.addColorStop(1, rgba(core, 0));
+      volume.addColorStop(0, rgba(edge, 0.96));
+      volume.addColorStop(0.35, rgba(body, 0.98));
+      volume.addColorStop(0.72, rgba(body, 0.88));
+      volume.addColorStop(0.9, rgba(core, 0.35 * c.translucency));
+      volume.addColorStop(1, rgba(body, 0));
       s.fillStyle = volume;
       s.fillRect(-1, -1, 2, 2);
 
       s.globalCompositeOperation = "source-atop";
       const shade = s.createLinearGradient(lx, ly, -lx, -ly);
-      shade.addColorStop(0, "rgba(255,255,255,0.1)");
-      shade.addColorStop(0.38, rgba(core, 0.25));
-      shade.addColorStop(0.82, rgba(core, p.lightStrength * 0.75));
-      shade.addColorStop(1.0, rgba(core, p.lightStrength * 0.9));
+      shade.addColorStop(0, "rgba(255,255,255,0.15)");
+      shade.addColorStop(0.45, "rgba(255,255,255,0)");
+      shade.addColorStop(0.8, rgba(core, p.lightStrength * 0.45));
+      shade.addColorStop(1.0, rgba(core, p.lightStrength * 0.65));
       s.fillStyle = shade;
       s.fillRect(-1, -1, 2, 2);
     });
@@ -161,9 +162,9 @@ function getStamps(
   const makeCrevice = () =>
     sprite((s) => {
       const g = s.createRadialGradient(0, 0, 0, 0, 0, 1);
-      g.addColorStop(0, rgba(core, clamp(p.lightStrength * 0.55, 0.25, 0.65)));
-      g.addColorStop(0.42, rgba(core, clamp(p.lightStrength * 0.28, 0.1, 0.35)));
-      g.addColorStop(0.78, rgba(core, 0.05));
+      g.addColorStop(0, rgba(core, clamp(p.lightStrength * 0.35, 0.15, 0.45)));
+      g.addColorStop(0.45, rgba(core, clamp(p.lightStrength * 0.18, 0.06, 0.25)));
+      g.addColorStop(0.8, rgba(core, 0.02));
       g.addColorStop(1, rgba(core, 0));
       s.fillStyle = g;
       s.fillRect(-1, -1, 2, 2);
@@ -185,8 +186,8 @@ function getStamps(
   const makeUnderside = () =>
     sprite((s) => {
       const g = s.createRadialGradient(0, 0.2, 0.1, 0, 0, 1);
-      g.addColorStop(0, rgba(core, 0.42));
-      g.addColorStop(0.55, rgba(core, 0.16));
+      g.addColorStop(0, rgba(core, 0.32));
+      g.addColorStop(0.55, rgba(core, 0.12));
       g.addColorStop(1, rgba(core, 0));
       s.fillStyle = g;
       s.fillRect(-1, -1, 2, 2);
@@ -229,6 +230,16 @@ function getStamps(
       s.fillRect(-1, -1, 2, 2);
     }),
     mist: soft(c.edge, 0.42),
+    smoke: sprite((s) => {
+      const g = s.createRadialGradient(0, 0, 0, 0, 0, 1);
+      g.addColorStop(0, rgba(edge, 0.92));
+      g.addColorStop(0.28, rgba(body, 0.76));
+      g.addColorStop(0.6, rgba(body, 0.38));
+      g.addColorStop(0.85, rgba(edge, 0.1));
+      g.addColorStop(1, rgba(body, 0));
+      s.fillStyle = g;
+      s.fillRect(-1, -1, 2, 2);
+    }, 64),
     glow: soft(c.innerGlow, 0.3),
     shadow: soft("#080b10", 0.42),
     builds: (old?.builds ?? 0) + 1,
@@ -376,41 +387,48 @@ export function renderCloudBlob(
   // Wisps stay in world space and behind the character.
   for (const w of o.wisps) {
     if (!w.active) continue;
-    const elongation = w.shape === 2 ? 1 : 1.65;
+    const elongation = w.shape === 2 ? 1.1 : 1.45;
+    // Volumetric billowing smoke puff
     stamp(
       ctx,
-      s.mist,
+      s.smoke,
       w.x,
       w.y,
       w.radius * elongation,
-      w.radius * 0.56,
+      w.radius * 0.78,
       w.opacity,
       w.angle,
     );
-    if (w.shape === 1)
+    // Ethereal outer vapor halo
+    if (w.shape !== 0) {
       stamp(
         ctx,
         s.mist,
-        w.x + Math.cos(w.angle + w.curl) * w.radius,
-        w.y + Math.sin(w.angle + w.curl) * w.radius,
-        w.radius * 0.9,
-        w.radius * 0.33,
-        w.opacity * 0.6,
+        w.x + Math.cos(w.angle + w.curl) * w.radius * 0.45,
+        w.y + Math.sin(w.angle + w.curl) * w.radius * 0.45,
+        w.radius * 1.1,
+        w.radius * 0.55,
+        w.opacity * 0.65,
         w.angle + w.curl,
       );
+    }
   }
 
-  // Contact shadow on the floor
-  const height = clamp(1 - p.y / 160, 0.45, 1.35);
-  stamp(
-    ctx,
-    s.shadow,
-    size / 2 + p.x,
-    size / 2 + 130 * p.scale + Math.max(0, p.y) * 0.4,
-    95 * p.scale * height,
-    13 * p.scale,
-    0.2 / height,
-  );
+  // Contact shadow on the floor (smoothly diffuses and fades out as cloud rises or is pulled upward)
+  const altitude = Math.max(0, -p.y);
+  const shadowFade = clamp(1 - altitude / 130, 0, 1);
+  if (shadowFade > 0.01) {
+    const height = clamp(1 - p.y / 160, 0.45, 1.35);
+    stamp(
+      ctx,
+      s.shadow,
+      size / 2 + p.x * 0.4,
+      size / 2 + 130 * p.scale + Math.max(0, p.y) * 0.4,
+      95 * p.scale * height,
+      13 * p.scale,
+      (0.22 / height) * shadowFade,
+    );
+  }
 
   const yaw = o.rig.blob.yaw ?? 0;
   const pitch = o.rig.blob.pitch ?? 0;
@@ -434,17 +452,17 @@ export function renderCloudBlob(
   ctx.rotate(-o.wallAngle);
   ctx.globalAlpha = o.rig.blob.opacity;
 
-  // Lobe 3D pose calculator with depth parallax & pull lag
+  // Lobe 3D pose calculator with depth parallax & cohesive pull lag
   const getLobePose = (def: (typeof LOBE_DEFINITIONS)[number]) => {
     const l = lobeStates[def.id] ?? { x: def.baseX, y: def.baseY, scaleX: 1, scaleY: 1, opacity: 1, rotation: 0 };
     const depth = def.depth ?? 0;
     // 3D Parallax offset: front lobes rotate with yaw, rear lobes shift opposite
     const parallaxX = depth * yawSin * 26;
     const parallaxY = depth * pitchSin * 18 - (depth > 0 ? Math.abs(yawSin) * 5 : 0);
-    // 3D Inertial pull lag along depth
-    const pullFactor = 1.8 - depth * 0.55;
-    const pullLagX = clamp(-o.vx * 0.035 * pullFactor, -22, 22);
-    const pullLagY = clamp(-o.vy * 0.035 * pullFactor, -22, 22);
+
+    // Whole-body inertial trailing lag (all lobes stay together, NO differential depth tearing)
+    const pullLagX = clamp(-o.vx * 0.02, -14, 14);
+    const pullLagY = clamp(-o.vy * 0.02, -14, 14);
 
     const x = l.x + parallaxX + pullLagX;
     const y = l.y + parallaxY + pullLagY;
@@ -465,6 +483,8 @@ export function renderCloudBlob(
 
   const coreDef = LOBE_DEFINITIONS.find((d) => d.id === "core")!;
   const corePose = getLobePose(coreDef);
+  const bottomBellyDef = LOBE_DEFINITIONS.find((d) => d.id === "bottomBelly");
+  const bottomBellyPose = bottomBellyDef ? getLobePose(bottomBellyDef) : null;
   const leftCheekDef = LOBE_DEFINITIONS.find((d) => d.id === "leftCheek");
   const rightCheekDef = LOBE_DEFINITIONS.find((d) => d.id === "rightCheek");
   const crownDef = LOBE_DEFINITIONS.find((d) => d.id === "topCrown");
@@ -505,35 +525,49 @@ export function renderCloudBlob(
     );
   }
 
-  // 2. GLOBAL UNDERSIDE AMBIENT OCCLUSION SHADOW
-  stamp(ctx, s.underside, corePose.x, corePose.y + 44, 140 * corePose.scaleX, 58 * corePose.scaleY, 0.75);
+  // 2. CONNECTIVE CORE BRIDGE (fuses core and bottom belly/base lobes into one continuous solid volume)
+  if (bottomBellyPose) {
+    const bridgeX = (corePose.x + bottomBellyPose.x) * 0.5;
+    const bridgeY = (corePose.y + bottomBellyPose.y) * 0.5;
+    stamp(
+      ctx,
+      s.mass,
+      bridgeX,
+      bridgeY,
+      118 * corePose.scaleX,
+      72 * corePose.scaleY,
+      0.94,
+      0,
+    );
+  }
 
-  // 3. REAR/CORE CREVICE AO SHADOWS
-  stamp(ctx, s.crevice, corePose.x - 46, corePose.y + 36, 48, 38, 0.6);
-  stamp(ctx, s.crevice, corePose.x + 46, corePose.y + 36, 48, 38, 0.6);
-  stamp(ctx, s.crevice, corePose.x, corePose.y + 54, 62, 42, 0.7);
+  // 3. DYNAMIC UNDERSIDE AMBIENT OCCLUSION SHADOW (anchored at true bottom perimeter)
+  const trueBottomY = bottomBellyPose
+    ? Math.max(corePose.y + 36, bottomBellyPose.y + 14)
+    : corePose.y + 44;
+  stamp(ctx, s.underside, corePose.x, trueBottomY, 130 * corePose.scaleX, 46 * corePose.scaleY, 0.48);
 
   // 4. CENTRAL CLOUD CORE
   stamp(
     ctx,
     s.core,
     corePose.x,
-    corePose.y + 12,
-    124 * corePose.scaleX,
-    98 * corePose.scaleY,
+    corePose.y + 10,
+    126 * corePose.scaleX,
+    100 * corePose.scaleY,
     clamp(p.coreDensity * colour.density, 0, 1),
   );
-  stamp(ctx, s.glow, corePose.x, corePose.y + 15, 78, 68, colour.glowIntensity * 0.16);
+  stamp(ctx, s.glow, corePose.x, corePose.y + 12, 80, 70, colour.glowIntensity * 0.16);
 
-  // 5. BILLOW CREVICE SHADOWS (Between Core & Cheeks/Crown)
-  if (leftCheekPose) {
-    stamp(ctx, s.crevice, leftCheekPose.x * 0.45 + corePose.x * 0.55, leftCheekPose.y * 0.45 + corePose.y * 0.55 + 8, 46, 42, 0.65);
+  // 5. PROXIMITY-BASED BILLOW CREVICE SHADOWS (soft, only between closely overlapping lobes)
+  if (leftCheekPose && Math.hypot(leftCheekPose.x - corePose.x, leftCheekPose.y - corePose.y) < 95) {
+    stamp(ctx, s.crevice, leftCheekPose.x * 0.5 + corePose.x * 0.5, leftCheekPose.y * 0.5 + corePose.y * 0.5 + 4, 38, 34, 0.35);
   }
-  if (rightCheekPose) {
-    stamp(ctx, s.crevice, rightCheekPose.x * 0.45 + corePose.x * 0.55, rightCheekPose.y * 0.45 + corePose.y * 0.55 + 8, 46, 42, 0.65);
+  if (rightCheekPose && Math.hypot(rightCheekPose.x - corePose.x, rightCheekPose.y - corePose.y) < 95) {
+    stamp(ctx, s.crevice, rightCheekPose.x * 0.5 + corePose.x * 0.5, rightCheekPose.y * 0.5 + corePose.y * 0.5 + 4, 38, 34, 0.35);
   }
-  if (crownPose) {
-    stamp(ctx, s.crevice, crownPose.x * 0.45 + corePose.x * 0.55, crownPose.y * 0.45 + corePose.y * 0.55 + 14, 54, 36, 0.6);
+  if (crownPose && Math.hypot(crownPose.x - corePose.x, crownPose.y - corePose.y) < 90) {
+    stamp(ctx, s.crevice, crownPose.x * 0.5 + corePose.x * 0.5, crownPose.y * 0.5 + corePose.y * 0.5 + 8, 44, 30, 0.35);
   }
 
   // 6. FRONT & MID LOBES (depth > 0: leftCheek, rightCheek, trailingTuft, topCrown)

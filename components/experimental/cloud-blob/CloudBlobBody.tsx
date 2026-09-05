@@ -190,33 +190,42 @@ export default function CloudBlobBody(props: CloudBlobBodyProps) {
       );
       // Rate is time-based. No emission at mount, from cursor alone, or while paused.
       if (dt > 0 && trails?.enabled !== false && s.previous) {
+        const isDragging = Boolean(drag.grabbed || s.pointer);
+        const dragBonus = isDragging ? 1.4 : 0;
         const energy =
-          clamp((speed - 45) / 130, 0, 1) +
-          (speed > 20 ? clamp((acceleration - 700) / 4500, 0, 0.6) : 0);
+          clamp((speed - 15) / 100, 0, 1.5) +
+          (speed > 10 ? clamp((acceleration - 500) / 3500, 0, 0.8) : 0) +
+          dragBonus;
         s.emission =
           energy > 0
-            ? s.emission + energy * 5 * dt * (trails?.spawnRate ?? 1)
+            ? s.emission + energy * 8 * dt * (trails?.spawnRate ?? 1)
             : 0;
-        const cap = speed > 230 ? 8 : 3;
-        if (s.emission >= 1 && active < cap) {
+        const cap = isDragging ? 32 : (speed > 180 ? 28 : (speed > 45 ? 18 : 8));
+        while (s.emission >= 1 && active < cap) {
           s.emission -= 1;
-          const nx = vx / Math.max(1, speed),
-            ny = vy / Math.max(1, speed);
-          const side = Math.sin(s.sequence * 2.4) * 18;
+          const speedNorm = Math.max(1, speed);
+          const nx = vx / speedNorm,
+            ny = vy / speedNorm;
+          const seq = s.sequence++;
+          const radiusJitter = ((seq % 5) - 2) * 3;
+          const puffRadius = 22 + (seq % 4) * 6 + radiusJitter;
+          const sideOffset = Math.sin(seq * 2.1) * 32 * p.scale;
+          const trailOffset = (84 + (seq % 3) * 18) * p.scale;
+
           spawnWisp(
             s.wisps,
-            size / 2 + p.x - nx * 104 * p.scale - ny * side,
-            size / 2 + p.y - ny * 94 * p.scale + nx * side,
-            -vx * 0.16,
-            -vy * 0.16 - 6,
-            15 + (s.sequence % 4) * 2,
-            options.colour.edge,
-            trails?.lifetime ?? 0.9,
-            0.32 * (trails?.trailStrength ?? 1),
-            s.sequence++,
+            size / 2 + p.x - nx * trailOffset - ny * sideOffset,
+            size / 2 + p.y - ny * trailOffset + nx * sideOffset,
+            -vx * 0.14 + Math.sin(seq * 2.5) * 14,
+            -vy * 0.14 - 12 + Math.cos(seq * 2.1) * 12,
+            puffRadius * p.scale,
+            seq % 3 === 0 ? options.colour.body : options.colour.edge,
+            (trails?.lifetime ?? 0.95) * (1 + (seq % 3) * 0.25),
+            0.55 * (trails?.trailStrength ?? 1),
+            seq,
           );
         }
-        s.emission = Math.min(s.emission, 1);
+        s.emission = Math.min(s.emission, 2);
       }
       if (dt > 0 || !s.previous) {
         s.x = p.x;

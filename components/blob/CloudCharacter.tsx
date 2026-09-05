@@ -119,7 +119,7 @@ export default function CloudCharacter({
 
   // Simulation state. Kept in refs so a slider change never restarts the sim.
   const lobeStates = useRef(createLobeStates());
-  const wisps = useRef(createWispPool(8));
+  const wisps = useRef(createWispPool(36));
   const idleTime = useRef(0);
   const lastFrame = useRef<number | null>(null);
   const previous = useRef({ x: 0, y: 0 });
@@ -277,33 +277,55 @@ export default function CloudCharacter({
     );
 
     if (step > 0 && trails.enabled !== false) {
+      const isDragging = dragging.current;
+      // Energy from movement, acceleration, and active pulling
+      const pullBonus = isDragging ? 1.4 : 0;
       const energy =
-        clamp((speed - 45) / 130, 0, 1) +
-        (speed > 20 ? clamp((acceleration - 700) / 4500, 0, 0.6) : 0);
+        clamp((speed - 15) / 100, 0, 1.5) +
+        (speed > 10 ? clamp((acceleration - 500) / 3500, 0, 0.8) : 0) +
+        pullBonus;
+
       emissionRef.current =
         energy > 0
-          ? emissionRef.current + energy * 5 * step * trails.spawnRate
+          ? emissionRef.current + energy * 8 * step * trails.spawnRate
           : 0;
-      const cap = speed > 230 ? 8 : 3;
-      if (emissionRef.current >= 1 && activeWisps < cap) {
+
+      const cap = isDragging ? 32 : (speed > 180 ? 28 : (speed > 45 ? 18 : 8));
+      while (emissionRef.current >= 1 && activeWisps < cap) {
         emissionRef.current -= 1;
-        const nxVel = vx / Math.max(1, speed);
-        const nyVel = vy / Math.max(1, speed);
-        const side = Math.sin(sequenceRef.current * 2.4) * 18;
+        const speedNorm = Math.max(1, speed);
+        const nxVel = vx / speedNorm;
+        const nyVel = vy / speedNorm;
+
+        const seq = sequenceRef.current++;
+        const radiusJitter = ((seq % 5) - 2) * 3;
+        const puffRadius = 22 + (seq % 4) * 6 + radiusJitter;
+
+        // Spawn along the trailing contour opposite to pull direction
+        const sideOffset = Math.sin(seq * 2.1) * 32 * params.scale;
+        const trailOffset = (84 + (seq % 3) * 18) * params.scale;
+
+        const spawnX = size / 2 + params.x - nxVel * trailOffset - nyVel * sideOffset;
+        const spawnY = size / 2 + params.y - nyVel * trailOffset + nxVel * sideOffset;
+
+        // Smoke particles drift backward and curl upward
+        const smokeVx = -vx * 0.14 + Math.sin(seq * 2.5) * 14;
+        const smokeVy = -vy * 0.14 - 12 + Math.cos(seq * 2.1) * 12;
+
         spawnWisp(
           wisps.current,
-          size / 2 + params.x - nxVel * 104 * params.scale - nyVel * side,
-          size / 2 + params.y - nyVel * 94 * params.scale + nxVel * side,
-          -vx * 0.16,
-          -vy * 0.16 - 6,
-          15 + (sequenceRef.current % 4) * 2,
-          palette.edge,
-          trails.lifetime,
-          0.32 * trails.trailStrength,
-          sequenceRef.current++
+          spawnX,
+          spawnY,
+          smokeVx,
+          smokeVy,
+          puffRadius * params.scale,
+          seq % 3 === 0 ? palette.body : palette.edge,
+          trails.lifetime * (1 + (seq % 3) * 0.25),
+          0.55 * trails.trailStrength,
+          seq
         );
       }
-      emissionRef.current = Math.min(emissionRef.current, 1);
+      emissionRef.current = Math.min(emissionRef.current, 2);
     }
 
     const wallAngle =

@@ -633,6 +633,32 @@ export function stepLobePhysics(
     state.opacity += (targetOpacity - state.opacity) * rate;
     state.rotation += (targetRotation - state.rotation) * rate;
   }
+
+  // Cohesive Volume Tethering:
+  // A cloud is a single connected fluid/vapor volume. Peripheral lobes must NEVER disconnect from the core.
+  const coreState = lobeStates.core;
+  if (coreState) {
+    for (const def of LOBE_DEFINITIONS) {
+      if (def.id === "core" || def.id === "frontVeil") continue;
+      const s = lobeStates[def.id];
+      if (!s) continue;
+
+      const maxDistX = Math.abs(def.baseX) + def.radiusX * 0.28;
+      const maxDistY = Math.abs(def.baseY) + def.radiusY * 0.28;
+
+      const dx = s.x - coreState.x;
+      const dy = s.y - coreState.y;
+
+      if (Math.abs(dx) > maxDistX) {
+        s.x = coreState.x + Math.sign(dx) * (maxDistX + (Math.abs(dx) - maxDistX) * 0.15);
+        s.vx *= 0.6;
+      }
+      if (Math.abs(dy) > maxDistY) {
+        s.y = coreState.y + Math.sign(dy) * (maxDistY + (Math.abs(dy) - maxDistY) * 0.15);
+        s.vy *= 0.6;
+      }
+    }
+  }
 }
 
 export const PRESETS: Record<
