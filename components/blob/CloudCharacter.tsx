@@ -274,21 +274,29 @@ export default function CloudCharacter({
     turnVelPitchRef.current += fPitch * step;
     turnPitchRef.current += turnVelPitchRef.current * step;
 
-    params.turnYaw = turnYawRef.current;
-    params.turnPitch = turnPitchRef.current;
+    // Layer emote yaw/pitch with motion heading yaw/pitch
+    const emoteYaw = blob.yaw ?? 0;
+    const emotePitch = blob.pitch ?? 0;
+    params.turnYaw = clamp(emoteYaw + turnYawRef.current, -45, 45);
+    params.turnPitch = clamp(emotePitch + turnPitchRef.current, -30, 30);
 
-    // Keep rig blob yaw & pitch synchronized so environment layer shadow sees 3D heading
+    // Keep rig blob yaw & pitch synchronized with combined turn so environment layer sees true 3D heading
     if (rig.blob) {
-      rig.blob.yaw = turnYawRef.current;
-      rig.blob.pitch = turnPitchRef.current;
+      rig.blob.yaw = params.turnYaw;
+      rig.blob.pitch = params.turnPitch;
     }
 
-    // Anticipation: Gaze leads movement direction first
-    if (speed > 18) {
-      const motionGazeX = clamp(vx / 140, -1, 1);
-      const motionGazeY = clamp(vy / 110, -1, 1);
-      params.gazeX = clamp(params.gazeX * 0.45 + motionGazeX * 0.65, -1, 1);
-      params.gazeY = clamp(params.gazeY * 0.45 + motionGazeY * 0.65, -1, 1);
+    // Anticipation: Gaze leads movement and turn direction first (Principle 1)
+    const turnGazeBiasX = clamp(params.turnYaw / 32, -0.65, 0.65);
+    const turnGazeBiasY = clamp(params.turnPitch / 22, -0.5, 0.5);
+    if (speed > 16) {
+      const motionGazeX = clamp(vx / 130, -1, 1);
+      const motionGazeY = clamp(vy / 100, -1, 1);
+      params.gazeX = clamp(params.gazeX * 0.3 + motionGazeX * 0.45 + turnGazeBiasX * 0.25, -1, 1);
+      params.gazeY = clamp(params.gazeY * 0.3 + motionGazeY * 0.45 + turnGazeBiasY * 0.25, -1, 1);
+    } else if (Math.abs(params.turnYaw) > 1 || Math.abs(params.turnPitch) > 1) {
+      params.gazeX = clamp(params.gazeX * 0.6 + turnGazeBiasX * 0.4, -1, 1);
+      params.gazeY = clamp(params.gazeY * 0.6 + turnGazeBiasY * 0.4, -1, 1);
     }
 
     // Anticipation: Tiny organic squash on rapid acceleration / directional flick

@@ -270,9 +270,9 @@ function drawFace(ctx: CanvasRenderingContext2D, o: RenderOptions) {
   const face = o.face ?? { offsetX: 0, offsetY: 0, scale: 1 };
   const faceScale = face.scale ?? 1;
 
-  // Dynamic turning yaw & pitch from both character rig and motion heading
-  const yaw = clamp((rig.blob.yaw ?? 0) + (p.turnYaw ?? 0), -45, 45);
-  const pitch = clamp((rig.blob.pitch ?? 0) + (p.turnPitch ?? 0), -30, 30);
+  // Dynamic turning yaw & pitch from combined rig and motion heading
+  const yaw = clamp(p.turnYaw ?? (rig.blob.yaw ?? 0), -45, 45);
+  const pitch = clamp(p.turnPitch ?? (rig.blob.pitch ?? 0), -30, 30);
   const yawRad = (yaw * Math.PI) / 180;
   const pitchRad = (pitch * Math.PI) / 180;
   const yawSin = Math.sin(yawRad);
@@ -280,23 +280,23 @@ function drawFace(ctx: CanvasRenderingContext2D, o: RenderOptions) {
   const pitchSin = Math.sin(pitchRad);
 
   // 1. 3D face travel across the spherical surface of the core
-  const faceTurnX = yawSin * 32;
-  const faceTurnY = pitchSin * 20 - Math.abs(yawSin) * 5;
+  const faceTurnX = yawSin * 36;
+  const faceTurnY = pitchSin * 22 - yawSin * yawSin * 6;
 
-  // Horizontal perspective foreshortening of the face mask
-  const faceYawWidth = clamp(0.42 + Math.abs(yawCos) * 0.58, 0.42, 1);
-  const facePitchHeight = clamp(0.76 + Math.abs(Math.cos(pitchRad)) * 0.24, 0.76, 1);
+  // Gentle horizontal perspective foreshortening of the face mask
+  const faceYawWidth = clamp(0.72 + Math.abs(yawCos) * 0.28, 0.72, 1);
+  const facePitchHeight = clamp(0.85 + Math.abs(Math.cos(pitchRad)) * 0.15, 0.85, 1);
 
-  // Smooth profile fade when turning beyond 50 degrees
-  const profileAmount = Math.max(0, Math.abs(yawSin) - 0.7);
-  const faceVisibility = clamp(1 - profileAmount * 2.0, 0.2, 1);
+  // Smooth profile fade when turning beyond 55 degrees
+  const profileAmount = Math.max(0, Math.abs(yawSin) - 0.8);
+  const faceVisibility = clamp(1 - profileAmount * 2.0, 0.35, 1);
 
   ctx.save();
   ctx.translate(
     core.x + (face.offsetX ?? 0) + faceTurnX,
     core.y + (face.offsetY ?? 0) + faceTurnY
   );
-  ctx.rotate(core.rotation * 0.65 + yawSin * 0.08);
+  ctx.rotate(core.rotation * 0.55 + yawSin * 0.08);
   ctx.scale(
     (1 + (core.scaleX - 1) * 0.56) * faceScale * faceYawWidth,
     (1 + (core.scaleY - 1) * 0.56) * faceScale * facePitchHeight
@@ -309,10 +309,10 @@ function drawFace(ctx: CanvasRenderingContext2D, o: RenderOptions) {
     const isLeft = id === "leftEye";
 
     // Asymmetric 3D Perspective on Left vs Right Eye:
-    // When turning left (yawSin < 0): left eye curves away / recedes; right eye faces camera / prominent
-    // When turning right (yawSin > 0): right eye curves away / recedes; left eye faces camera / prominent
-    const isReceding = isLeft ? yawSin < -0.02 : yawSin > 0.02;
-    const isProminent = isLeft ? yawSin > 0.02 : yawSin < -0.02;
+    // Leading/Near eye faces into turn (+8% to +12% scale, wider open, fully opaque).
+    // Trailing/Far eye recedes around sphere dome (-10% to -18% scale, 85-90% alpha, min 0.84 scale - never a slit).
+    const isLeadingNear = isLeft ? yawSin < -0.02 : yawSin > 0.02;
+    const isTrailingFar = isLeft ? yawSin > 0.02 : yawSin < -0.02;
     const turnMagnitude = Math.abs(yawSin);
 
     let eyeScaleX = 1.0;
@@ -320,25 +320,26 @@ function drawFace(ctx: CanvasRenderingContext2D, o: RenderOptions) {
     let eyeOpenMod = 1.0;
     let eyeAlphaMod = 1.0;
     let eyeSpacingShiftX = 0;
+    let eyeParallaxY = 0;
     let browAngleMod = 0;
 
-    if (isReceding) {
-      // Receding eye curves around the 3D dome:
-      // becomes narrower / slightly compressed / slightly more occluded / slightly less open
-      eyeScaleX = clamp(1 - turnMagnitude * 0.24, 0.76, 1);
-      eyeScaleY = clamp(1 - turnMagnitude * 0.06, 0.94, 1);
-      eyeOpenMod = clamp(1 - turnMagnitude * 0.16, 0.84, 1);
-      eyeAlphaMod = clamp(1 - turnMagnitude * 0.22, 0.78, 1);
-      // Eye spacing changes subtly (shifts slightly toward the center line along sphere curve)
+    if (isTrailingFar) {
+      // Far eye recedes smoothly along dome curve
+      eyeScaleX = clamp(1 - turnMagnitude * 0.16, 0.84, 1);
+      eyeScaleY = clamp(1 - turnMagnitude * 0.08, 0.92, 1);
+      eyeOpenMod = clamp(1 - turnMagnitude * 0.08, 0.92, 1);
+      eyeAlphaMod = clamp(1 - turnMagnitude * 0.12, 0.88, 1);
+      // Shifts slightly inward along sphere curvature
       eyeSpacingShiftX = (isLeft ? 1 : -1) * turnMagnitude * 6;
-      // Brow tilts subtly along curved brow ridge
+      // Far eye vertical parallax
+      eyeParallaxY = pitchSin * turnMagnitude * 2.5;
+      // Brow tilts along curved ridge
       browAngleMod = (isLeft ? 1 : -1) * turnMagnitude * 4;
-    } else if (isProminent) {
-      // Prominent eye faces camera directly:
-      // becomes slightly larger / slightly more open / fully opaque
-      eyeScaleX = clamp(1 + turnMagnitude * 0.08, 1, 1.12);
-      eyeScaleY = clamp(1 + turnMagnitude * 0.06, 1, 1.08);
-      eyeOpenMod = clamp(1 + turnMagnitude * 0.12, 1, 1.16);
+    } else if (isLeadingNear) {
+      // Near eye faces camera prominent
+      eyeScaleX = clamp(1 + turnMagnitude * 0.10, 1, 1.15);
+      eyeScaleY = clamp(1 + turnMagnitude * 0.08, 1, 1.12);
+      eyeOpenMod = clamp(1 + turnMagnitude * 0.14, 1, 1.20);
       eyeAlphaMod = 1.0;
       eyeSpacingShiftX = (isLeft ? 1 : -1) * turnMagnitude * 3;
       browAngleMod = (isLeft ? -1 : 1) * turnMagnitude * 2.5;
@@ -347,13 +348,16 @@ function drawFace(ctx: CanvasRenderingContext2D, o: RenderOptions) {
     t.eyeOpen *= eyeOpenMod;
 
     const eye = eyeGeometry(a.width * eyeScaleX, a.height * eyeScaleY, t, false);
-    eye.centerX += p.gazeX * 4;
-    eye.centerY += p.gazeY * 3;
+    // Principle 1: Eyes lead the turn (directional pupil gaze bias)
+    const turnGazeBiasX = yawSin * 0.45;
+    const turnGazeBiasY = pitchSin * 0.35;
+    eye.centerX += (p.gazeX + turnGazeBiasX) * 4;
+    eye.centerY += (p.gazeY + turnGazeBiasY) * 3;
 
     ctx.save();
     ctx.translate(
       a.x - size / 2 + t.socketX + eyeSpacingShiftX,
-      a.y - size / 2 + t.socketY
+      a.y - size / 2 + t.socketY + eyeParallaxY
     );
     ctx.globalAlpha *= t.opacity * eyeAlphaMod;
 
@@ -486,9 +490,11 @@ export function renderCloudBlob(
   const pitchSin = Math.sin(pitchRad);
   const pitchCos = Math.cos(pitchRad);
 
-  // 3D Horizontal body foreshortening
-  const bodyYawWidth = clamp(0.38 + Math.abs(yawCos) * 0.62, 0.38, 1);
-  const bodyPitchHeight = clamp(0.74 + Math.abs(pitchCos) * 0.26, 0.74, 1);
+  // 3D Horizontal body foreshortening:
+  // Kept subtle (0.94-1.0) so the cloud stays volumetric and never squashes into a flat paper cutout.
+  // 3D depth illusion is generated by internal lobe parallax, face dome curve, and cheek volume swells.
+  const bodyYawWidth = clamp(0.94 + Math.abs(yawCos) * 0.06, 0.94, 1);
+  const bodyPitchHeight = clamp(0.96 + Math.abs(pitchCos) * 0.04, 0.96, 1);
 
   ctx.save();
   ctx.translate(size / 2 + p.x, size / 2 + p.y);
@@ -625,8 +631,18 @@ export function renderCloudBlob(
     stamp(ctx, s.crevice, crownPose.x * 0.5 + corePose.x * 0.5, crownPose.y * 0.5 + corePose.y * 0.5 + 8, 44, 30, 0.35);
   }
 
-  // 6. FRONT & MID LOBES (depth > 0: leftCheek, rightCheek, trailingTuft, topCrown)
-  for (const def of LOBE_DEFINITIONS) {
+  // 6. FRONT & MID LOBES (depth > 0: leftCheek, rightCheek, topCrown)
+  // Dynamic 3D depth-sorting:
+  // When yawing left (yawSin < -0.02): left cheek is leading (rendered on top); right cheek is trailing (drawn first).
+  // When yawing right (yawSin > 0.02): right cheek is leading (rendered on top); left cheek is trailing (drawn first).
+  const frontLobeDefs = (yawSin > 0.02
+    ? [leftCheekDef, rightCheekDef, crownDef]
+    : yawSin < -0.02
+    ? [rightCheekDef, leftCheekDef, crownDef]
+    : [leftCheekDef, rightCheekDef, crownDef]
+  ).filter((d): d is (typeof LOBE_DEFINITIONS)[number] => Boolean(d));
+
+  for (const def of frontLobeDefs) {
     if (def.depth <= 0 || def.id === "frontVeil" || def.id === "core") continue;
     const pose = getLobePose(def);
     const l = lobeStates[def.id];

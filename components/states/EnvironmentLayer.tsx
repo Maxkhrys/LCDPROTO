@@ -305,50 +305,55 @@ export default function EnvironmentLayer({
       }
 
       const palette = scenePalette(displayMode);
-      const bodyDeformY = currentRig.body.scaleY - 1;
-      const bodyDeformX = currentRig.body.scaleX - 1;
-      const verticalSignal = clamp(
-        0.68 - currentRig.blob.y / 145 - currentRig.body.y / 180 - bodyDeformY * 1.8,
-        0.24,
-        1.22
-      );
-      // Both axes track Blob's real contact point. The springs below supply
-      // the ~100ms trail, so the shadow no longer needs a fractional follow
-      // factor — that only ever left it sitting beside him rather than under.
+      // 1. Core-driven spatial placement (ignore decorative outer wisps/billows)
       const depthScale = clamp(1 + currentRig.blob.depth * 0.28, 0.84, 1.16);
-      const yawWidth =
-        0.34 + Math.abs(Math.cos((currentRig.blob.yaw * Math.PI) / 180)) * 0.66;
+      // Turning alone should not dramatically distort the shadow: subtle footprint modulation only
+      const shadowYawMod =
+        0.95 + Math.abs(Math.cos((currentRig.blob.yaw * Math.PI) / 180)) * 0.05;
       const wholeScaleX =
-        currentRig.blob.scale * depthScale * yawWidth * currentRig.blob.scaleX;
+        currentRig.blob.scale * depthScale * shadowYawMod * currentRig.blob.scaleX;
       const wholeScaleY =
         currentRig.blob.scale * depthScale * currentRig.blob.scaleY;
 
       // Subtle lateral ground displacement and spring lag from character lean
-      const leanOffset = (currentRig.body.skewX || 0) * 0.32 * wholeScaleX;
+      const leanOffset = (currentRig.body.skewX || 0) * 0.28 * wholeScaleX;
       const footX = currentRig.blob.x + (currentRig.body.x + leanOffset) * wholeScaleX;
-      const footY =
-        currentRig.blob.y +
-        (currentRig.body.y + BODY_HALF_HEIGHT * currentRig.body.scaleY) *
-          wholeScaleY;
-      // The ground does not move with him. Dropping follows fully; rising
-      // barely follows at all, so he separates from his own shadow.
-      const restFootY = BODY_HALF_HEIGHT * wholeScaleY;
-      const sink = footY - restFootY;
-      const groundedY = restFootY + (sink > 0 ? sink : sink * 0.25);
 
+      // 2. Stable Fake Floor-Plane Ground Model with Guaranteed Minimum Visual Gap
+      // The floor plane sits at a stable physical altitude in the 466-space scene
+      const FLOOR_REST_Y = CENTRE + BODY_HALF_HEIGHT + SHADOW_DROP + active.shadowYOffset;
+      // Core center and bottom underside in screen space
+      const coreScreenY = CENTRE + currentRig.blob.y + currentRig.body.y;
+      // Belly bottom boundary (dense core underside)
+      const bodyUndersideY = coreScreenY + 108 * wholeScaleY;
+      // Stable minimum visual gap: the shadow must never visually "kiss" or overlap the body
+      const MIN_VISUAL_GAP = 22 * wholeScaleY;
+      const minShadowY = bodyUndersideY + MIN_VISUAL_GAP;
+      // Floor contact target: stays on the floor plane unless character descends past it
+      const targetFloorY = Math.max(FLOOR_REST_Y, minShadowY);
+
+      // 3. True Physical Hover Distance
+      const hoverDistance = targetFloorY - bodyUndersideY;
+      const RESTING_HOVER_GAP = FLOOR_REST_Y - (CENTRE + 108); // ~40px
+      const hoverRatio = clamp(hoverDistance / Math.max(20, RESTING_HOVER_GAP), 0.35, 2.5);
+
+      // Filtered vertical altitude signal for height scale/opacity
+      const altitudeSignal = clamp(hoverRatio, 0.35, 2.2);
       shadowX.current.step(footX, dt, 2.05 - active.shadowLag / 260, 0.72);
-      shadowY.current.step(groundedY, dt, 2.1 - active.shadowLag / 280, 0.75);
-      shadowHeight.current.step(verticalSignal, dt, 2.25 - active.shadowLag / 300, 0.76);
-      const height = clamp(shadowHeight.current.value, 0.2, 1.24);
+      shadowY.current.step(targetFloorY - CENTRE, dt, 2.1 - active.shadowLag / 280, 0.75);
+      shadowHeight.current.step(altitudeSignal, dt, 2.25 - active.shadowLag / 300, 0.76);
+      const height = clamp(shadowHeight.current.value, 0.3, 2.0);
 
-      // Height rules: higher = smaller, softer, lighter; lower = wider, darker, tighter
-      const heightScale = clamp(1 - (height - 0.45) * 0.65, 0.45, 1.25);
-      const heightOpacity = clamp(1 - (height - 0.4) * 0.65, 0.35, 1.15);
+      // 4. Height rules: higher = smaller, softer, lighter; lower = wider, darker, tighter
+      const heightScale = clamp(1 - (height - 1.0) * 0.32, 0.42, 1.28);
+      const heightOpacity = clamp(1 - (height - 1.0) * 0.40, 0.28, 1.0);
 
-      // Settling and ground contact add landing compression spread; upward stretch tightens footprint
-      const settlingSquash = sink > 0 ? clamp(sink * 0.015, 0, 0.4) : 0;
-      const squash = Math.max(0, bodyDeformY) + Math.max(0, bodyDeformX) * 0.35 + settlingSquash;
-      const stretch = Math.max(0, -bodyDeformY);
+      // 5. Compression & Landing Settlement
+      const isGroundedSink = hoverRatio < 0.95 ? (0.95 - hoverRatio) * 0.8 : 0;
+      const bodyDeformY = currentRig.body.scaleY - 1;
+      const bodyDeformX = currentRig.body.scaleX - 1;
+      const squash = Math.max(0, -bodyDeformY) + Math.max(0, bodyDeformX) * 0.35 + isGroundedSink;
+      const stretch = Math.max(0, bodyDeformY);
       const stretchComp = 1 - clamp(stretch * 0.25, 0, 0.35);
 
       // Proportional to how wide character actually is
@@ -358,18 +363,19 @@ export default function EnvironmentLayer({
       const shadowScaleY =
         active.shadowHeight * spread * (heightScale * stretchComp * 0.82 + 0.18);
       const shadowOpacity = clamp(
-        active.shadowOpacity * (heightOpacity + (sink > 0 ? 0.14 : 0)),
+        active.shadowOpacity * (heightOpacity + isGroundedSink * 0.22),
         0,
         0.95
       );
       // Dynamic softness: tighter & crisper when grounded/dropping; lighter & diffused when rising
       const dynamicSoftness = clamp(
-        active.shadowSoftness * (0.5 + (height - 0.25) * 0.85),
-        0.25,
-        1.45
+        active.shadowSoftness * (0.65 + (height - 1.0) * 0.42),
+        0.28,
+        1.55
       );
-      const shadowYPosition =
-        CENTRE + shadowY.current.value + SHADOW_DROP + active.shadowYOffset;
+      // Clamped final shadow position: strictly guaranteed to NEVER visually "kiss" the body
+      const rawShadowY = CENTRE + shadowY.current.value;
+      const shadowYPosition = Math.max(rawShadowY, bodyUndersideY + MIN_VISUAL_GAP);
 
       if (active.bounceEnabled) {
         const bounce = backgroundCtx.createRadialGradient(

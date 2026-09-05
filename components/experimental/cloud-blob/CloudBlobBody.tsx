@@ -185,21 +185,29 @@ export default function CloudBlobBody(props: CloudBlobBodyProps) {
       s.turnVelPitch += fPitch * dt;
       s.turnPitch += s.turnVelPitch * dt;
 
-      p.turnYaw = s.turnYaw;
-      p.turnPitch = s.turnPitch;
+      // Layer emote yaw/pitch with motion heading yaw/pitch
+      const emoteYaw = rig.blob?.yaw ?? 0;
+      const emotePitch = rig.blob?.pitch ?? 0;
+      p.turnYaw = clamp(emoteYaw + s.turnYaw, -45, 45);
+      p.turnPitch = clamp(emotePitch + s.turnPitch, -30, 30);
 
       // Keep rig blob yaw & pitch synchronized so environment layer shadow sees 3D heading
       if (rig.blob) {
-        rig.blob.yaw = s.turnYaw;
-        rig.blob.pitch = s.turnPitch;
+        rig.blob.yaw = p.turnYaw;
+        rig.blob.pitch = p.turnPitch;
       }
 
-      // Anticipation gaze
-      if (speed > 18) {
-        const motionGazeX = clamp(vx / 140, -1, 1);
-        const motionGazeY = clamp(vy / 110, -1, 1);
-        p.gazeX = clamp((p.gazeX ?? 0) * 0.45 + motionGazeX * 0.65, -1, 1);
-        p.gazeY = clamp((p.gazeY ?? 0) * 0.45 + motionGazeY * 0.65, -1, 1);
+      // Anticipation gaze (Principle 1: eyes lead the turn)
+      const turnGazeBiasX = clamp(p.turnYaw / 32, -0.65, 0.65);
+      const turnGazeBiasY = clamp(p.turnPitch / 22, -0.5, 0.5);
+      if (speed > 16) {
+        const motionGazeX = clamp(vx / 130, -1, 1);
+        const motionGazeY = clamp(vy / 100, -1, 1);
+        p.gazeX = clamp((p.gazeX ?? 0) * 0.3 + motionGazeX * 0.45 + turnGazeBiasX * 0.25, -1, 1);
+        p.gazeY = clamp((p.gazeY ?? 0) * 0.3 + motionGazeY * 0.45 + turnGazeBiasY * 0.25, -1, 1);
+      } else if (Math.abs(p.turnYaw) > 1 || Math.abs(p.turnPitch) > 1) {
+        p.gazeX = clamp((p.gazeX ?? 0) * 0.6 + turnGazeBiasX * 0.4, -1, 1);
+        p.gazeY = clamp((p.gazeY ?? 0) * 0.6 + turnGazeBiasY * 0.4, -1, 1);
       }
 
       // Anticipation: Tiny organic squash on rapid acceleration / directional flick

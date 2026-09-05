@@ -541,22 +541,22 @@ export function computeLobeTarget(
   if (!isCore) {
     if (def.id === "leftCheek") {
       if (yawRatio < -0.05) {
-        // Leading left side becomes fuller
-        sx *= 1 + Math.abs(yawRatio) * 0.15;
+        // Leading left side becomes fuller (+18% volume swell)
+        sx *= 1 + Math.abs(yawRatio) * 0.18;
         sy *= 1 + Math.abs(yawRatio) * 0.08;
       } else if (yawRatio > 0.05) {
-        // Trailing side compresses
-        sx *= 1 - Math.abs(yawRatio) * 0.20;
+        // Trailing side tucks and compresses (-22%)
+        sx *= 1 - Math.abs(yawRatio) * 0.22;
         sy *= 1 - Math.abs(yawRatio) * 0.10;
       }
     } else if (def.id === "rightCheek") {
       if (yawRatio > 0.05) {
-        // Leading right side becomes fuller
-        sx *= 1 + Math.abs(yawRatio) * 0.15;
+        // Leading right side becomes fuller (+18% volume swell)
+        sx *= 1 + Math.abs(yawRatio) * 0.18;
         sy *= 1 + Math.abs(yawRatio) * 0.08;
       } else if (yawRatio < -0.05) {
-        // Trailing side compresses
-        sx *= 1 - Math.abs(yawRatio) * 0.20;
+        // Trailing side tucks and compresses (-22%)
+        sx *= 1 - Math.abs(yawRatio) * 0.22;
         sy *= 1 - Math.abs(yawRatio) * 0.10;
       }
     } else if (def.id === "baseLeft") {

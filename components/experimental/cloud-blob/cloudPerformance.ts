@@ -166,6 +166,9 @@ export class CloudPerformance {
 
     t.x = d.blobX * 0.55 + emotionShakeX;
     t.y = d.blobY * 0.6 + emotionHopY + (sad ? 10 * beat : 0);
+    t.depth = d.blobDepth;
+    t.yaw = d.blobYaw;
+    t.pitch = d.blobPitch;
     t.rotation = d.blobRotation;
     t.scaleX = d.blobScaleX;
     t.scaleY = d.blobScaleY;
@@ -183,6 +186,9 @@ export class CloudPerformance {
           ...NEUTRAL_BLOB,
           x: physical.x,
           y: physical.y,
+          depth: physical.depth,
+          yaw: physical.yaw,
+          pitch: physical.pitch,
           rotation: physical.rotation,
           scale: 1 + d.blobScale * 0.4 + emotionCloudScale,
           opacity: d.blobOpacity,
