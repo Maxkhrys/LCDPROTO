@@ -277,12 +277,24 @@ export default function CloudCharacter({
     params.turnYaw = turnYawRef.current;
     params.turnPitch = turnPitchRef.current;
 
+    // Keep rig blob yaw & pitch synchronized so environment layer shadow sees 3D heading
+    if (rig.blob) {
+      rig.blob.yaw = turnYawRef.current;
+      rig.blob.pitch = turnPitchRef.current;
+    }
+
     // Anticipation: Gaze leads movement direction first
     if (speed > 18) {
       const motionGazeX = clamp(vx / 140, -1, 1);
       const motionGazeY = clamp(vy / 110, -1, 1);
       params.gazeX = clamp(params.gazeX * 0.45 + motionGazeX * 0.65, -1, 1);
       params.gazeY = clamp(params.gazeY * 0.45 + motionGazeY * 0.65, -1, 1);
+    }
+
+    // Anticipation: Tiny organic squash on rapid acceleration / directional flick
+    if (acceleration > 450) {
+      const anticipationSquash = clamp((acceleration - 450) / 5500, 0, 0.08);
+      params.squash = clamp(params.squash + anticipationSquash, 0, 0.95);
     }
 
     params.x = offsetX + ambientX;

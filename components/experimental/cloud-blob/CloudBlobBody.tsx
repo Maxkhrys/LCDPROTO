@@ -188,12 +188,24 @@ export default function CloudBlobBody(props: CloudBlobBodyProps) {
       p.turnYaw = s.turnYaw;
       p.turnPitch = s.turnPitch;
 
+      // Keep rig blob yaw & pitch synchronized so environment layer shadow sees 3D heading
+      if (rig.blob) {
+        rig.blob.yaw = s.turnYaw;
+        rig.blob.pitch = s.turnPitch;
+      }
+
       // Anticipation gaze
       if (speed > 18) {
         const motionGazeX = clamp(vx / 140, -1, 1);
         const motionGazeY = clamp(vy / 110, -1, 1);
         p.gazeX = clamp((p.gazeX ?? 0) * 0.45 + motionGazeX * 0.65, -1, 1);
         p.gazeY = clamp((p.gazeY ?? 0) * 0.45 + motionGazeY * 0.65, -1, 1);
+      }
+
+      // Anticipation: Tiny organic squash on rapid acceleration / directional flick
+      if (acceleration > 450) {
+        const anticipationSquash = clamp((acceleration - 450) / 5500, 0, 0.08);
+        p.squash = clamp(p.squash + anticipationSquash, 0, 0.95);
       }
 
       p.lean += clamp(vx * 0.022, -12, 12);

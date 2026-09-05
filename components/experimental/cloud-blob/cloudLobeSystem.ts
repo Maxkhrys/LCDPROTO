@@ -496,9 +496,14 @@ export function computeLobeTarget(
   // 7. CRITICAL LOBE LAG HIERARCHY & DIRECTIONAL AIRFLOW DEFORMATION:
   // Face leads -> core maintains chunky structural presence (lag 0.05, low stretch) -> crown & cheeks follow -> rear base & belly trail along motion wake
   // Asymmetric directional lag: front leading lobes have reduced lag; rear trailing lobes drag along wake
-  const isLeadingX = (characterVx > 10 && def.baseX > 10) || (characterVx < -10 && def.baseX < -10);
-  const isTrailingX = (characterVx > 10 && def.baseX < -10) || (characterVx < -10 && def.baseX > 10);
-  const directionalLagMod = isLeadingX ? 0.45 : isTrailingX ? 1.35 : 1.0;
+  const isLeadingX = (characterVx > 10 && def.baseX > 8) || (characterVx < -10 && def.baseX < -8);
+  const isTrailingX = (characterVx > 10 && def.baseX < -8) || (characterVx < -10 && def.baseX > 8);
+  const isLeadingY = (characterVy > 10 && def.baseY > 12) || (characterVy < -10 && def.baseY < -12);
+  const isTrailingY = (characterVy > 10 && def.baseY < -12) || (characterVy < -10 && def.baseY > 12);
+
+  let directionalLagMod = 1.0;
+  if (isLeadingX || isLeadingY) directionalLagMod *= 0.55;
+  if (isTrailingX || isTrailingY) directionalLagMod *= 1.35;
 
   const lagStrength = def.lagFactor * motion.lobeLag * 0.09 * directionalLagMod;
   const maxLobeOffset = def.radiusX * 0.48;

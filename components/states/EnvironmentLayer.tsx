@@ -345,16 +345,18 @@ export default function EnvironmentLayer({
       const heightScale = clamp(1 - (height - 0.45) * 0.65, 0.45, 1.25);
       const heightOpacity = clamp(1 - (height - 0.4) * 0.65, 0.35, 1.15);
 
-      // Settling and ground contact add landing compression spread
+      // Settling and ground contact add landing compression spread; upward stretch tightens footprint
       const settlingSquash = sink > 0 ? clamp(sink * 0.015, 0, 0.4) : 0;
       const squash = Math.max(0, bodyDeformY) + Math.max(0, bodyDeformX) * 0.35 + settlingSquash;
+      const stretch = Math.max(0, -bodyDeformY);
+      const stretchComp = 1 - clamp(stretch * 0.25, 0, 0.35);
 
       // Proportional to how wide character actually is
       const spread = Math.max(0.35, currentRig.body.scaleX * wholeScaleX);
       const shadowScaleX =
-        active.shadowWidth * spread * (heightScale + squash * 1.8);
+        active.shadowWidth * spread * (heightScale * stretchComp + squash * 1.8);
       const shadowScaleY =
-        active.shadowHeight * spread * (heightScale * 0.82 + 0.18);
+        active.shadowHeight * spread * (heightScale * stretchComp * 0.82 + 0.18);
       const shadowOpacity = clamp(
         active.shadowOpacity * (heightOpacity + (sink > 0 ? 0.14 : 0)),
         0,
