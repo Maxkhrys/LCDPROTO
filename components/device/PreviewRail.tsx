@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { ActionIcon } from "./ConsoleIcons";
+import Beam, { type BeamStyle } from "./Beam";
 
 export interface PreviewSummaryRow {
   label: string;
@@ -22,6 +23,8 @@ interface PreviewRailProps {
   inspector: PreviewSummaryRow[];
   statusTitle: string;
   statusDetail: string;
+  /** Beam palette for the active console theme. */
+  beam: BeamStyle;
   onTogglePlay: () => void;
   onResetView: () => void;
   children: React.ReactNode;
@@ -56,6 +59,7 @@ export default function PreviewRail({
   inspector,
   statusTitle,
   statusDetail,
+  beam,
   onTogglePlay,
   onResetView,
   children,
@@ -96,10 +100,12 @@ export default function PreviewRail({
             display. The Inspector simply stacks its readout above it. */}
         <section className="preview-card" hidden={docked && tab !== "preview"}>
           <header className="preview-card-head">
-            <span className="preview-live">
-              <span aria-hidden />
-              Live preview
-            </span>
+            <Beam style={beam} active={playing} strength={0.3} className="beam-inline">
+              <span className="preview-live">
+                <span aria-hidden />
+                Live preview
+              </span>
+            </Beam>
             <span className="preview-view-chip">{viewLabel}</span>
           </header>
 
@@ -146,13 +152,15 @@ export default function PreviewRail({
           <SummaryList rows={summary} />
         </section>
 
-        <section className="preview-status">
-          <ActionIcon.check className="console-icon preview-status-icon" />
-          <div>
-            <strong>{statusTitle}</strong>
-            <small>{statusDetail}</small>
-          </div>
-        </section>
+        <Beam style={beam} active={playing} strength={0.22} className="beam-block">
+          <section className="preview-status">
+            <ActionIcon.check className="console-icon preview-status-icon" />
+            <div>
+              <strong>{statusTitle}</strong>
+              <small>{statusDetail}</small>
+            </div>
+          </section>
+        </Beam>
       </div>
     </div>
   );

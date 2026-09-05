@@ -502,7 +502,8 @@ export default function SystemScreenLayer({
         height: viewportSize,
         pointerEvents: "none",
         zIndex: 5,
-        imageRendering: renderScale === 1 ? "pixelated" : "auto",
+        imageRendering:
+          renderScale === 1 && (viewportSize ?? size) >= size ? "pixelated" : "auto",
       }}
     />
   );

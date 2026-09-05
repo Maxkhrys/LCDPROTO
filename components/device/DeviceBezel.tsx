@@ -26,8 +26,12 @@ export default function DeviceBezel({ screenSize, children }: DeviceBezelProps) 
         padding: bezel,
         background:
           "linear-gradient(160deg, #24242a 0%, #101013 38%, #08080a 62%, #1c1c21 100%)",
+        // The outer hairline follows the UI theme. A fixed white ring was a
+        // rim light on the old dark chrome, but on a light surface the same
+        // ring read as an unintended pale halo around the housing. The inset
+        // highlight is the real physical one and stays.
         boxShadow:
-          "0 30px 70px -30px rgba(0,0,0,0.95), 0 0 0 1px rgba(255,255,255,0.05), inset 0 1px 1px rgba(255,255,255,0.07)",
+          "0 30px 70px -30px rgba(0,0,0,0.55), 0 0 0 1px var(--bezel-rim, rgba(0,0,0,0.06)), inset 0 1px 1px rgba(255,255,255,0.07)",
       }}
     >
       {/* Inner lip where the glass meets the housing. */}

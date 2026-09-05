@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ActionIcon, ConsoleIcon } from "./ConsoleIcons";
+import Beam, { type BeamStyle } from "./Beam";
 
 export type ControlSectionId =
   | "screens"
@@ -42,6 +43,8 @@ interface ControlCenterProps {
   onCycleScene: () => void;
   /** Copies the current console configuration for flashing to the device. */
   onSaveToDevice: () => Promise<boolean> | boolean;
+  /** Beam palette for the active console theme. */
+  beam: BeamStyle;
   children: React.ReactNode;
 }
 
@@ -64,6 +67,7 @@ export default function ControlCenter({
   onReset,
   onCycleScene,
   onSaveToDevice,
+  beam,
   children,
 }: ControlCenterProps) {
   const [query, setQuery] = useState("");
@@ -170,17 +174,19 @@ export default function ControlCenter({
             <button type="button" className="control-center-topbar-action" onClick={onReset}>
               Reset all
             </button>
-            <button
-              type="button"
-              className="control-center-topbar-action control-center-topbar-primary"
-              title="Copy the current configuration for the device"
-              onClick={async () => setSaved(await onSaveToDevice())}
-            >
-              <ActionIcon.save className="console-icon" />
-              <span className="control-center-topbar-label">
-                {saved ? "Copied config" : "Save to device"}
-              </span>
-            </button>
+            <Beam style={beam} active={!saved} size="line" strength={0.4} className="beam-inline">
+              <button
+                type="button"
+                className="control-center-topbar-action control-center-topbar-primary"
+                title="Copy the current configuration for the device"
+                onClick={async () => setSaved(await onSaveToDevice())}
+              >
+                <ActionIcon.save className="console-icon" />
+                <span className="control-center-topbar-label">
+                  {saved ? "Copied config" : "Save to device"}
+                </span>
+              </button>
+            </Beam>
             <button
               type="button"
               className="control-center-topbar-action control-center-topbar-icon"

@@ -21,6 +21,9 @@ import {
   type FaceLayerId,
 } from "@/lib/blobRig";
 import { drawDownscaled } from "./downscale";
+// The antialiased eye mask is shared with the cloud so both characters get the
+// same clean lid contours from one implementation.
+import { drawProceduralEye } from "./faceRenderer";
 
 interface BlobCharacterProps {
   /** Native screen size in pixels (466). */
@@ -325,93 +328,6 @@ function mouthPalette(colour: BlobColour) {
   }
 }
 
-/**
- * Eye mass plus both lids, from one shared geometry.
- *
- * The lids are not painted objects: they are the parts of the aperture the eye
- * is clipped out of, so the body surface already drawn underneath shows
- * through untouched. That removes every possible outline, halo or second oval,
- * and guarantees the lids can never be a different size to the eye.
- *
- * The open band is centred on the eye itself, so the top lid closes downward,
- * the bottom lid closes upward, and a squint moves both toward the centre.
- */
-function drawProceduralEye(
-  ctx: CanvasRenderingContext2D,
-  eye: EyeGeometry,
-  showPupil: boolean,
-  pupilX: number,
-  pupilY: number,
-  pupilScale: number,
-  lidBias: number
-) {
-  if (eye.open <= 0.004) return;
-  const gap = eye.height * eye.open;
-  const top = eye.centerY - gap / 2;
-  const bottom = eye.centerY + gap / 2;
-  // A small slope gives the upper and lower lids separate intent without
-  // adding a second eye asset. Negative values lower the inner edge of the
-  // left eye; positive values lower the inner edge of the right eye.
-  const lidTilt = clamp(lidBias, -1, 1) * eye.height * 0.16;
-  ctx.save();
-  // Only this curved band of the eye survives. The body surface already painted
-  // underneath is the upper and lower lid, so no opaque lid rectangle can ever
-  // expose a seam over the character.
-  ctx.beginPath();
-  ctx.moveTo(eye.centerX - eye.width, top + lidTilt);
-  ctx.quadraticCurveTo(
-    eye.centerX,
-    top - lidTilt * 0.22,
-    eye.centerX + eye.width,
-    top - lidTilt
-  );
-  ctx.lineTo(eye.centerX + eye.width, bottom - lidTilt);
-  ctx.quadraticCurveTo(
-    eye.centerX,
-    bottom + lidTilt * 0.18,
-    eye.centerX - eye.width,
-    bottom + lidTilt
-  );
-  ctx.closePath();
-  ctx.clip();
-  ctx.beginPath();
-  ctx.ellipse(
-    eye.centerX,
-    eye.centerY,
-    eye.width * 0.5,
-    eye.height * 0.5,
-    0,
-    0,
-    Math.PI * 2
-  );
-  ctx.fillStyle = "#010204";
-  ctx.fill();
-
-  // The normal face is the original solid black eye. The optional developer
-  // preview only adds one tiny white glint so gaze can be inspected without
-  // changing the shipped eye artwork or turning it into an iris.
-  if (showPupil) {
-    ctx.beginPath();
-    ctx.arc(
-      eye.centerX + clamp(pupilX, -eye.width * 0.22, eye.width * 0.22),
-      eye.centerY + clamp(pupilY, -eye.height * 0.16, eye.height * 0.16),
-      Math.max(0.8, Math.min(1.7, eye.width * 0.06 * clamp(pupilScale, 0.55, 1.45))),
-      0,
-      Math.PI * 2
-    );
-    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-    ctx.fill();
-  }
-  ctx.restore();
-}
-
-/**
- * A soft rounded bar above the eye.
- *
- * Position is derived from the same EyeGeometry as the eye, and a hard
- * geometric clearance rule keeps the brow's lowest rotated point above the
- * eye's top edge in every pose — squint, angry tilt, or downward gaze.
- */
 function drawEyebrow(
   ctx: CanvasRenderingContext2D,
   eye: EyeGeometry,

@@ -227,6 +227,48 @@ function mouthPalette(colour: BlobColour) {
  * The open band is centred on the eye itself, so the top lid closes downward,
  * the bottom lid closes upward, and a squint moves both toward the centre.
  */
+
+/**
+ * Scratch buffer for the antialiased eye mask.
+ *
+ * Canvas `clip()` is a hard, unantialiased mask in every major engine, so the
+ * eye's lid contours — the shallowest curves on the face — used to land as a
+ * one-pixel staircase against the pale body. Compositing the same two shapes
+ * in an offscreen buffer with `source-in` intersects two *antialiased fills*
+ * instead, so the coverage is analytic: solid black centre, one clean alpha
+ * step, then character material.
+ *
+ * The buffer is module-level and only grows, so a frame costs one clear, two
+ * fills and one blit — no per-frame allocation, and no filter passes. On the
+ * device the same result is a small precomputed alpha sprite blitted with a
+ * coverage multiply, which is why this stays honest for the ESP32 target.
+ */
+let eyeScratch: HTMLCanvasElement | null = null;
+let eyeScratchCtx: CanvasRenderingContext2D | null = null;
+
+function acquireEyeScratch(width: number, height: number) {
+  if (typeof document === "undefined") return null;
+  if (!eyeScratch) {
+    eyeScratch = document.createElement("canvas");
+    eyeScratchCtx = eyeScratch.getContext("2d");
+  }
+  if (!eyeScratchCtx) return null;
+  if (eyeScratch.width < width || eyeScratch.height < height) {
+    eyeScratch.width = Math.max(eyeScratch.width, width);
+    eyeScratch.height = Math.max(eyeScratch.height, height);
+  }
+  eyeScratchCtx.setTransform(1, 0, 0, 1, 0, 0);
+  eyeScratchCtx.clearRect(0, 0, width, height);
+  eyeScratchCtx.globalCompositeOperation = "source-over";
+  return eyeScratchCtx;
+}
+
+/** Total scale the context is currently drawing at, for mask supersampling. */
+function contextScale(ctx: CanvasRenderingContext2D) {
+  const t = ctx.getTransform();
+  return Math.max(1, Math.hypot(t.a, t.b));
+}
+
 export function drawProceduralEye(
   ctx: CanvasRenderingContext2D,
   eye: EyeGeometry,
@@ -244,29 +286,65 @@ export function drawProceduralEye(
   // adding a second eye asset. Negative values lower the inner edge of the
   // left eye; positive values lower the inner edge of the right eye.
   const lidTilt = clamp(lidBias, -1, 1) * eye.height * 0.16;
-  ctx.save();
-  // Only this curved band of the eye survives. The body surface already painted
-  // underneath is the upper and lower lid, so no opaque lid rectangle can ever
-  // expose a seam over the character.
-  ctx.beginPath();
-  ctx.moveTo(eye.centerX - eye.width, top + lidTilt);
-  ctx.quadraticCurveTo(
-    eye.centerX,
-    top - lidTilt * 0.22,
-    eye.centerX + eye.width,
-    top - lidTilt
-  );
-  ctx.lineTo(eye.centerX + eye.width, bottom - lidTilt);
-  ctx.quadraticCurveTo(
-    eye.centerX,
-    bottom + lidTilt * 0.18,
-    eye.centerX - eye.width,
-    bottom + lidTilt
-  );
-  ctx.closePath();
-  ctx.clip();
-  ctx.beginPath();
-  ctx.ellipse(
+
+  // Local bounding box of the aperture band, with a pixel of slack so the
+  // alpha ramp is never clipped by the buffer itself.
+  const pad = 2;
+  const boxX = eye.centerX - eye.width - pad;
+  const boxY = eye.centerY - eye.height - pad;
+  const boxW = eye.width * 2 + pad * 2;
+  const boxH = eye.height * 2 + pad * 2;
+
+  // Rasterise the mask at the resolution it will actually be shown at, so the
+  // blit resamples nothing and the eye stays as sharp as a direct fill.
+  const ss = Math.min(4, Math.max(2, Math.ceil(contextScale(ctx) * 1.5)));
+  const scratch = acquireEyeScratch(Math.ceil(boxW * ss), Math.ceil(boxH * ss));
+
+  const paint = (target: CanvasRenderingContext2D) => {
+    target.beginPath();
+    target.moveTo(eye.centerX - eye.width, top + lidTilt);
+    target.quadraticCurveTo(
+      eye.centerX,
+      top - lidTilt * 0.22,
+      eye.centerX + eye.width,
+      top - lidTilt
+    );
+    target.lineTo(eye.centerX + eye.width, bottom - lidTilt);
+    target.quadraticCurveTo(
+      eye.centerX,
+      bottom + lidTilt * 0.18,
+      eye.centerX - eye.width,
+      bottom + lidTilt
+    );
+    target.closePath();
+  };
+
+  if (!scratch) {
+    // No DOM (tests, workers): fall back to the hard clip rather than nothing.
+    ctx.save();
+    paint(ctx);
+    ctx.clip();
+    ctx.beginPath();
+    ctx.ellipse(eye.centerX, eye.centerY, eye.width * 0.5, eye.height * 0.5, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "#010204";
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
+
+  scratch.save();
+  scratch.scale(ss, ss);
+  scratch.translate(-boxX, -boxY);
+
+  // Aperture band first, then the eye mass intersected into it. Both are
+  // ordinary fills, so both carry real edge coverage.
+  paint(scratch);
+  scratch.fillStyle = "#010204";
+  scratch.fill();
+
+  scratch.globalCompositeOperation = "source-in";
+  scratch.beginPath();
+  scratch.ellipse(
     eye.centerX,
     eye.centerY,
     eye.width * 0.5,
@@ -275,24 +353,39 @@ export function drawProceduralEye(
     0,
     Math.PI * 2
   );
-  ctx.fillStyle = "#010204";
-  ctx.fill();
+  scratch.fillStyle = "#010204";
+  scratch.fill();
 
-  // The normal face is the original solid black eye. The optional developer
-  // preview only adds one tiny white glint so gaze can be inspected without
-  // changing the shipped eye artwork or turning it into an iris.
+  // The developer gaze glint rides inside the finished mask.
   if (showPupil) {
-    ctx.beginPath();
-    ctx.arc(
+    scratch.globalCompositeOperation = "source-atop";
+    scratch.beginPath();
+    scratch.arc(
       eye.centerX + clamp(pupilX, -eye.width * 0.22, eye.width * 0.22),
       eye.centerY + clamp(pupilY, -eye.height * 0.16, eye.height * 0.16),
       Math.max(0.8, Math.min(1.7, eye.width * 0.06 * clamp(pupilScale, 0.55, 1.45))),
       0,
       Math.PI * 2
     );
-    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-    ctx.fill();
+    scratch.fillStyle = "rgba(255, 255, 255, 0.9)";
+    scratch.fill();
   }
+  scratch.restore();
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(
+    scratch.canvas,
+    0,
+    0,
+    Math.ceil(boxW * ss),
+    Math.ceil(boxH * ss),
+    boxX,
+    boxY,
+    boxW,
+    boxH
+  );
   ctx.restore();
 }
 

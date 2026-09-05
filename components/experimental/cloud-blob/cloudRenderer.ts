@@ -705,9 +705,17 @@ export function renderCloudBlob(
   // 10. LOCAL FACIAL DEPTH EMBEDDING (Dense core bed beneath features)
   stamp(ctx, s.core, corePose.x, corePose.y + 8, 96 * corePose.scaleX, 74 * corePose.scaleY, 0.42);
   stamp(ctx, s.mist, corePose.x, corePose.y + 26, 88, 44, Math.max(0.08, p.faceEmbedDepth * 0.2));
+  // A slightly denser bed directly under the features so they sit in the
+  // volume rather than on it. Nothing is drawn over the black itself.
+  stamp(ctx, s.core, corePose.x, corePose.y - 4, 74 * corePose.scaleX, 54 * corePose.scaleY, 0.2 + p.faceEmbedDepth * 0.35);
 
   // 11. CRISP PRODUCTION FACE (3D Spherical placement, foreshortening, and differential eye scale)
   if (o.showFace) drawFace(ctx, o);
+  // One very light veil across the outer face field. At this opacity it never
+  // greys the features, it only stops their outline reading as a decal.
+  if (o.showFace) {
+    stamp(ctx, s.mist, corePose.x, corePose.y + 2, 104 * corePose.scaleX, 72 * corePose.scaleY, 0.05 + p.faceEmbedDepth * 0.1);
+  }
 
   if (o.debug) {
     ctx.strokeStyle = "#f0bb65";
@@ -744,5 +752,16 @@ export function renderCloudBlob(
     ctx.lineTo(size / 2 + p.x + o.vx * 0.1, size / 2 + p.y + o.vy * 0.1);
     ctx.stroke();
   }
+  ctx.restore();
+
+  // The panel crop is re-applied as an antialiased alpha mask. `clip()` alone
+  // is a hard 1-bit edge, which left the outermost ring of the round display
+  // as a stair-stepped line against the bezel — read as a pale halo.
+  ctx.save();
+  ctx.globalCompositeOperation = "destination-in";
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size / 2, 0, TAU);
+  ctx.fillStyle = "#000";
+  ctx.fill();
   ctx.restore();
 }

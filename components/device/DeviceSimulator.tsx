@@ -13,17 +13,20 @@ import PerformanceLabPanel from "./PerformanceLabPanel";
 import PreviewRail from "./PreviewRail";
 import { ActionIcon } from "./ConsoleIcons";
 import CharacterToolMenu, { type CharacterTool } from "./CharacterToolMenu";
+import Beam, { type BeamStyle } from "./Beam";
 import {
   loadCloudPresets,
   saveCloudPreset,
   type CloudColourPreset,
 } from "@/lib/cloudPresets";
 import {
-  applyUiAccent,
-  loadUiAccent,
-  UI_ACCENTS,
-  DEFAULT_UI_ACCENT,
-} from "@/lib/uiAccents";
+  applyUiTheme,
+  getUiTheme,
+  loadUiTheme,
+  UI_THEMES,
+  DEFAULT_UI_THEME,
+  type UiThemeId,
+} from "@/lib/uiThemes";
 import { ScreenLifecycle, type LifecycleSnapshot } from "@/lib/screenLifecycle";
 import { isDeviceState, type FlowId, type ScreenId } from "@/lib/screenCatalogue";
 import {
@@ -120,7 +123,7 @@ export default function DeviceSimulator() {
   const [activeBlobTool, setActiveBlobTool] = useState<CharacterTool | null>(null);
   const [cloudPresets, setCloudPresets] = useState<CloudColourPreset[]>([]);
   const [presetName, setPresetName] = useState("");
-  const [uiAccent, setUiAccent] = useState(DEFAULT_UI_ACCENT);
+  const [uiTheme, setUiTheme] = useState<UiThemeId>(DEFAULT_UI_THEME);
   const [mood, setMood] = useState<HomeMood | null>(null);
   const [mindIntention, setMindIntention] = useState<BlobIntention | null>(null);
   const [mindDestination, setMindDestination] = useState<BlobDestination | null>(null);
@@ -167,9 +170,9 @@ export default function DeviceSimulator() {
   // mount to keep the server and first client render identical.
   useEffect(() => {
     setCloudPresets(loadCloudPresets());
-    const stored = loadUiAccent();
-    setUiAccent(stored);
-    applyUiAccent(stored);
+    const stored = loadUiTheme();
+    setUiTheme(stored);
+    applyUiTheme(stored);
   }, []);
 
   useEffect(() => {
@@ -379,6 +382,11 @@ export default function DeviceSimulator() {
     },
   ];
 
+  // Declared before the section bodies: they render inline, so anything they
+  // reference has to exist by the time this runs.
+  const themeMeta = getUiTheme(uiTheme);
+  const beamStyle: BeamStyle = { variant: themeMeta.beam, mode: themeMeta.scheme };
+
   const controlContent = (() => {
     switch (activeControl) {
       case "screens":
@@ -533,15 +541,26 @@ export default function DeviceSimulator() {
                   icon={ActionIcon.palette}
                 >
                   <ChoiceGroup label="Saved presets">
-                    {cloudPresets.map((preset) => (
-                      <DevButton
-                        key={preset.id}
-                        active={activePresetName === preset.name}
-                        onClick={() => applyCloudPreset(preset)}
-                      >
-                        {preset.name}
-                      </DevButton>
-                    ))}
+                    {cloudPresets.map((preset) => {
+                      const selected = activePresetName === preset.name;
+                      return (
+                        <Beam
+                          key={preset.id}
+                          style={beamStyle}
+                          active={selected}
+                          size="sm"
+                          strength={0.3}
+                          className="beam-inline"
+                        >
+                          <DevButton
+                            active={selected}
+                            onClick={() => applyCloudPreset(preset)}
+                          >
+                            {preset.name}
+                          </DevButton>
+                        </Beam>
+                      );
+                    })}
                   </ChoiceGroup>
                   <div className="preset-save-row">
                     <input
@@ -947,28 +966,35 @@ export default function DeviceSimulator() {
             </ControlCard>
             <ControlCard
               title="Console appearance"
-              description="Accent theme for the control application. The device screen keeps its own scene colours."
+              description="Theme for the control application. The device screen keeps its own scene colours."
               icon={ActionIcon.palette}
             >
-              <ChoiceGroup label="Accent">
-                {UI_ACCENTS.map((accent) => (
-                  <DevButton
-                    key={accent.id}
-                    active={uiAccent === accent.id}
+              <div className="theme-picker" role="group" aria-label="UI theme">
+                {UI_THEMES.map((theme) => (
+                  <button
+                    key={theme.id}
+                    type="button"
+                    aria-pressed={uiTheme === theme.id}
+                    className={`theme-option ${
+                      uiTheme === theme.id ? "theme-option-active" : ""
+                    }`}
                     onClick={() => {
-                      setUiAccent(accent.id);
-                      applyUiAccent(accent.id);
+                      setUiTheme(theme.id);
+                      applyUiTheme(theme.id);
                     }}
                   >
-                    <span
-                      className="accent-swatch"
-                      style={{ background: accent.accent }}
-                      aria-hidden
-                    />
-                    {accent.label}
-                  </DevButton>
+                    <span className="theme-swatch" aria-hidden>
+                      <i style={{ background: theme.tokens["--page-bg"] }} />
+                      <i style={{ background: theme.tokens["--app-surface"] }} />
+                      <i style={{ background: theme.tokens["--accent"] }} />
+                    </span>
+                    <span className="theme-option-text">
+                      <strong>{theme.label}</strong>
+                      <small>{theme.description}</small>
+                    </span>
+                  </button>
                 ))}
-              </ChoiceGroup>
+              </div>
             </ControlCard>
             <ControlCard title="Inspection scene" description="Brown is the default environment inspection mode.">
               <SceneColourDots
@@ -1259,6 +1285,7 @@ export default function DeviceSimulator() {
       onTogglePlay={() => setPlaying((value) => !value)}
       onResetView={resetView}
       inspector={inspectorRows}
+      beam={beamStyle}
     >
       <div
         className={`sim-stage ${controlsOpen ? "sim-stage-docked" : ""}`}
@@ -1349,6 +1376,7 @@ export default function DeviceSimulator() {
         onReset={reset}
         onCycleScene={cycleScene}
         onSaveToDevice={saveToDevice}
+        beam={beamStyle}
       >
         {controlContent}
       </ControlCenter>

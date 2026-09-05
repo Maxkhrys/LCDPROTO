@@ -520,7 +520,11 @@ export default function CloudCharacter({
         // round crop and the cloud was sliced off along the edges.
         width: viewportSize ?? size,
         height: viewportSize ?? size,
-        imageRendering: renderScale === 1 ? "pixelated" : "auto",
+        // Nearest-neighbour is the honest look only when the native buffer is
+        // being magnified. Downscaling with it threw away the face's edge
+        // coverage and put the staircase back.
+        imageRendering:
+          renderScale === 1 && (viewportSize ?? size) >= size ? "pixelated" : "auto",
         touchAction: drag ? "none" : undefined,
         cursor: drag ? (grabbing ? "grabbing" : "grab") : undefined,
       }}
