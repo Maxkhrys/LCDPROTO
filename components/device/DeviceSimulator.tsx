@@ -11,6 +11,7 @@ import ScreenBrowser from "@/components/screens/ScreenBrowser";
 import EmojiMakerPanel from "./EmojiMakerPanel";
 import PerformanceLabPanel from "./PerformanceLabPanel";
 import PreviewRail from "./PreviewRail";
+import { ActionIcon } from "./ConsoleIcons";
 import { ScreenLifecycle, type LifecycleSnapshot } from "@/lib/screenLifecycle";
 import { isDeviceState, type FlowId, type ScreenId } from "@/lib/screenCatalogue";
 import {
@@ -438,8 +439,9 @@ export default function DeviceSimulator() {
             <ControlCard
               title="Body"
               description="The rig, face, drives and physics are shared. Only the body changes."
+              icon={ActionIcon.body}
             >
-              <ChoiceGroup label="Character">
+              <ChoiceGroup label="Character" tone="solid">
                 {CHARACTERS.map((option) => (
                   <DevButton
                     key={option.id}
@@ -458,6 +460,7 @@ export default function DeviceSimulator() {
             <ControlCard
               title="Character scale"
               description="Continuous size scaler for both characters inside the circular display."
+              icon={ActionIcon.scale}
             >
               <ControlRange
                 label="Size scale"
@@ -503,6 +506,7 @@ export default function DeviceSimulator() {
                 <ControlCard
                   title="Cloud colour & palette"
                   description="Choose from mist color presets or customize individual body, edge, glow and core tints."
+                  icon={ActionIcon.palette}
                 >
                   <ChoiceGroup label="Palette preset">
                     {CLOUD_COLOUR_PRESET_NAMES.map((name) => (
@@ -1068,11 +1072,144 @@ export default function DeviceSimulator() {
     { label: "Idle motion", value: idle.enabled ? "on" : "off" },
   ];
 
+  const cycleScene = () => {
+    const modes = Object.keys(DISPLAY_BACKGROUNDS) as DisplayMode[];
+    const next = modes[(modes.indexOf(displayMode) + 1) % modes.length];
+    setDisplayMode(next);
+    setScreenColour(DISPLAY_BACKGROUNDS[next]);
+  };
+
+  /**
+   * "Save to device" has no hardware to talk to in the prototype, so it hands
+   * the current console configuration to the clipboard for flashing.
+   */
+  const saveToDevice = async () => {
+    const payload = JSON.stringify(
+      {
+        character,
+        characterScale,
+        blobColour,
+        cloudSettings,
+        displayMode,
+        screenColour,
+        environment,
+        state,
+        fps,
+        speed,
+        idle,
+        calibration,
+      },
+      null,
+      2
+    );
+    try {
+      await navigator.clipboard.writeText(payload);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const inspectorRows = [
+    { label: "Model", value: DEVICE_CONFIG.mcu },
+    { label: "Panel", value: `${DEVICE_CONFIG.display} · ${DEVICE_CONFIG.displayInterface}` },
+    { label: "Resolution", value: `${DEVICE_CONFIG.resolution}×${DEVICE_CONFIG.resolution}` },
+    { label: "Render scale", value: `${renderScale}x` },
+    { label: "Device pixel ratio", value: dpr.toFixed(2) },
+    { label: "Screen", value: screenSnapshot.screen },
+    { label: "Progress", value: `${Math.round(screenSnapshot.progress * 100)}%` },
+    { label: "Transport", value: playing ? "running" : "paused" },
+    { label: "Speed", value: `${speed}x` },
+  ];
+
   const resetView = () => {
     setScreenScale(1.2);
     setCharacterScale(DEFAULT_CHARACTER_SCALE);
     setNativePixels(false);
   };
+
+  const previewRail = (
+    <PreviewRail
+      docked={controlsOpen}
+      playing={playing}
+      viewLabel={`${displayMode} view`}
+      caption={`${characterScale.toFixed(2)}x · ${characterLabel} · ${paletteLabel}`}
+      summary={previewSummary}
+      statusTitle={playing ? "All systems nominal" : "Playback paused"}
+      statusDetail={`${playing ? "Rendering" : "Holding"} at ${fps} fps · ${meta.label}`}
+      onTogglePlay={() => setPlaying((value) => !value)}
+      onResetView={resetView}
+      inspector={inspectorRows}
+    >
+      <div
+        className={`sim-stage ${controlsOpen ? "sim-stage-docked" : ""}`}
+      >
+      <div
+        ref={frameRef}
+        className="device-frame flex aspect-square w-full max-w-full items-center justify-center"
+        style={{ width: `min(100%, ${Math.round(DEFAULT_OUTER * screenScale)}px, var(--stage-max))` }}
+      >
+        <DeviceBezel screenSize={screenSize}>
+          <div className="relative">
+            <ScreenStage
+              screen={screenSnapshot.screen}
+              progress={screenSnapshot.progress}
+              simulated={screenSnapshot.simulated}
+              time={screenTime}
+              screenSize={screenSize}
+              playing={playing}
+              speed={speed}
+              runId={runId}
+              fps={fps}
+              calibration={calibration}
+              renderScale={renderScale}
+              idle={idle}
+              autoBehaviourEnabled={autoBehaviourEnabled}
+              triggerRequest={trigger}
+              onBehaviourStatus={setStatus}
+              displayMode={displayMode}
+              screenColour={screenColour}
+              onOpenBlobTools={() => { if (!blobToolsOpen) { setBlobToolsOpen(true); setActiveBlobTool(null); } }}
+              onCloseBlobTools={() => { setBlobToolsOpen(false); setActiveBlobTool(null); }}
+              blobToolsOpen={blobToolsOpen}
+              mood={mood}
+              showPupils={showPupils}
+              blobColour={blobColour}
+              characterScale={characterScale}
+              mindIntention={mindIntention}
+              mindDestination={mindDestination}
+              mindDepth={mindDepth}
+              environment={environment}
+              character={character}
+              cloudSettings={cloudSettings}
+              onEnvironmentStatus={setEnvironmentStatus}
+            />
+              <BlobToolOrbs
+                open={blobToolsOpen}
+                active={activeBlobTool}
+                screenSize={screenSize}
+                blobColour={blobColour}
+                showPupils={showPupils}
+                onSelect={(tool) => {
+                  setActiveBlobTool(tool);
+                  if (tool === "face") {
+                    setActiveControl("emoji");
+                    setControlsOpen(true);
+                  }
+                  if (tool === "performance") {
+                    setActiveControl("performance");
+                    setControlsOpen(true);
+                  }
+                  if (tool === "pupils") setShowPupils((value) => !value);
+                }}
+                onColourChange={setBlobColour}
+              />
+          </div>
+        </DeviceBezel>
+      </div>
+      </div>
+    </PreviewRail>
+  );
 
   return (
     <div className={`sim-ui ${controlsOpen ? "sim-ui-docked" : ""}`}>
@@ -1082,92 +1219,15 @@ export default function DeviceSimulator() {
         sections={controlSections}
         statusLabel={playing ? "Device connected" : "Device paused"}
         statusDetail={`LCDPROTO · ${DEVICE_CONFIG.resolution}×${DEVICE_CONFIG.resolution}`}
+        preview={previewRail}
         onOpenChange={setControlsOpen}
         onActiveChange={setActiveControl}
         onReset={reset}
+        onCycleScene={cycleScene}
+        onSaveToDevice={saveToDevice}
       >
         {controlContent}
       </ControlCenter>
-
-      <PreviewRail
-        docked={controlsOpen}
-        playing={playing}
-        viewLabel={`${displayMode} view`}
-        caption={`${characterScale.toFixed(2)}x · ${characterLabel} · ${paletteLabel}`}
-        summary={previewSummary}
-        statusTitle={playing ? "All systems nominal" : "Playback paused"}
-        statusDetail={`${playing ? "Rendering" : "Holding"} at ${fps} fps · ${meta.label}`}
-        onTogglePlay={() => setPlaying((value) => !value)}
-        onResetView={resetView}
-      >
-        <div
-          className={`sim-stage ${controlsOpen ? "sim-stage-docked" : ""}`}
-        >
-        <div
-          ref={frameRef}
-          className="device-frame flex aspect-square w-full max-w-full items-center justify-center"
-          style={{ width: `min(100%, ${Math.round(DEFAULT_OUTER * screenScale)}px, var(--stage-max))` }}
-        >
-          <DeviceBezel screenSize={screenSize}>
-            <div className="relative">
-              <ScreenStage
-                screen={screenSnapshot.screen}
-                progress={screenSnapshot.progress}
-                simulated={screenSnapshot.simulated}
-                time={screenTime}
-                screenSize={screenSize}
-                playing={playing}
-                speed={speed}
-                runId={runId}
-                fps={fps}
-                calibration={calibration}
-                renderScale={renderScale}
-                idle={idle}
-                autoBehaviourEnabled={autoBehaviourEnabled}
-                triggerRequest={trigger}
-                onBehaviourStatus={setStatus}
-                displayMode={displayMode}
-                screenColour={screenColour}
-                onOpenBlobTools={() => { if (!blobToolsOpen) { setBlobToolsOpen(true); setActiveBlobTool(null); } }}
-                onCloseBlobTools={() => { setBlobToolsOpen(false); setActiveBlobTool(null); }}
-                blobToolsOpen={blobToolsOpen}
-                mood={mood}
-                showPupils={showPupils}
-                blobColour={blobColour}
-                characterScale={characterScale}
-                mindIntention={mindIntention}
-                mindDestination={mindDestination}
-                mindDepth={mindDepth}
-                environment={environment}
-                character={character}
-                cloudSettings={cloudSettings}
-                onEnvironmentStatus={setEnvironmentStatus}
-              />
-                <BlobToolOrbs
-                  open={blobToolsOpen}
-                  active={activeBlobTool}
-                  screenSize={screenSize}
-                  blobColour={blobColour}
-                  showPupils={showPupils}
-                  onSelect={(tool) => {
-                    setActiveBlobTool(tool);
-                    if (tool === "face") {
-                      setActiveControl("emoji");
-                      setControlsOpen(true);
-                    }
-                    if (tool === "performance") {
-                      setActiveControl("performance");
-                      setControlsOpen(true);
-                    }
-                    if (tool === "pupils") setShowPupils((value) => !value);
-                  }}
-                  onColourChange={setBlobColour}
-                />
-            </div>
-          </DeviceBezel>
-        </div>
-        </div>
-      </PreviewRail>
     </div>
   );
 }
@@ -1175,17 +1235,22 @@ export default function DeviceSimulator() {
 function ControlCard({
   title,
   description,
+  icon: Icon,
   children,
 }: {
   title: string;
   description?: string;
+  icon?: (props: { className?: string }) => React.ReactElement;
   children: React.ReactNode;
 }) {
   return (
     <section className="control-card">
       <div className="control-card-heading">
-        <h2>{title}</h2>
-        {description && <p>{description}</p>}
+        {Icon && <Icon className="console-icon" />}
+        <div>
+          <h2>{title}</h2>
+          {description && <p>{description}</p>}
+        </div>
       </div>
       <div className="control-card-body">{children}</div>
     </section>
@@ -1239,13 +1304,16 @@ function SceneColourDots({ value, onChange }: { value: DisplayMode; onChange: (m
 
 function ChoiceGroup({
   label,
+  tone = "soft",
   children,
 }: {
   label: string;
+  /** "solid" marks a primary body/mode picker: the selection fills blue. */
+  tone?: "soft" | "solid";
   children: React.ReactNode;
 }) {
   return (
-    <div className="choice-group">
+    <div className={`choice-group ${tone === "solid" ? "choice-group-solid" : ""}`}>
       <span>{label}</span>
       <div>{children}</div>
     </div>
@@ -1268,6 +1336,14 @@ const CLOUD_GROUP_NOTES = {
   colour: "Volume, glow and translucency of the mist body.",
   face: "The shared face is anchored for Blob's silhouette; seat it on the cloud here.",
 } as const;
+
+/** Percentage of the track that should read as filled, for the blue slider. */
+function rangeFill(value: number, min: number, max: number) {
+  const span = max - min;
+  if (span <= 0) return { "--fill": "0%" } as React.CSSProperties;
+  const pct = Math.min(100, Math.max(0, ((value - min) / span) * 100));
+  return { "--fill": `${pct}%` } as React.CSSProperties;
+}
 
 function ControlRange({
   label,
@@ -1299,6 +1375,7 @@ function ControlRange({
         value={value}
         onChange={(event) => onChange(Number(event.currentTarget.value))}
         className="control-range-input"
+        style={rangeFill(value, min, max)}
       />
     </label>
   );
@@ -1724,6 +1801,7 @@ function Slider({
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
         className="control-range-input"
+        style={rangeFill(value, min, max)}
       />
       <output>
         {format(value)}

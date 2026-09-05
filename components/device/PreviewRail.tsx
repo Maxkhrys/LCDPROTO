@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { ActionIcon } from "./ConsoleIcons";
 
 export interface PreviewSummaryRow {
@@ -13,16 +13,33 @@ interface PreviewRailProps {
   /** True while the console is docked, which reveals the dashboard cards. */
   docked: boolean;
   playing: boolean;
-  /** Chip in the preview head — which scene colour the panel is showing. */
+  /** Chip in the preview head — which scene the panel is showing. */
   viewLabel: string;
   /** One-line caption under the device. */
   caption: string;
   summary: PreviewSummaryRow[];
+  /** Deeper read-only diagnostics, shown on the Inspector tab. */
+  inspector: PreviewSummaryRow[];
   statusTitle: string;
   statusDetail: string;
   onTogglePlay: () => void;
   onResetView: () => void;
   children: React.ReactNode;
+}
+
+function SummaryList({ rows }: { rows: PreviewSummaryRow[] }) {
+  return (
+    <dl className="preview-summary-list">
+      {rows.map((row) => (
+        <div key={row.label} className="preview-summary-row">
+          <dt>{row.label}</dt>
+          <dd className={row.accent ? "preview-summary-accent" : undefined}>
+            {row.value}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
 }
 
 /**
@@ -36,6 +53,7 @@ export default function PreviewRail({
   viewLabel,
   caption,
   summary,
+  inspector,
   statusTitle,
   statusDetail,
   onTogglePlay,
@@ -43,6 +61,7 @@ export default function PreviewRail({
   children,
 }: PreviewRailProps) {
   const stageRef = useRef<HTMLDivElement>(null);
+  const [tab, setTab] = useState<"preview" | "inspector">("preview");
 
   const toggleFullscreen = useCallback(() => {
     const el = stageRef.current;
@@ -55,61 +74,86 @@ export default function PreviewRail({
 
   return (
     <div className={`preview-rail ${docked ? "preview-rail-docked" : ""}`}>
-      <section className="preview-card">
-        <header className="preview-card-head">
-          <span className="preview-live">
-            <span aria-hidden />
-            Live preview
-          </span>
-          <span className="preview-view-chip">{viewLabel}</span>
-        </header>
-
-        <div ref={stageRef} className="preview-stage">
-          {children}
-        </div>
-
-        <p className="preview-caption">{caption}</p>
-      </section>
-
-      <div className="preview-actions" role="group" aria-label="Preview controls">
-        <button type="button" className="preview-action" onClick={onTogglePlay}>
-          <PlayIcon className="console-icon" />
-          <span>{playing ? "Pause" : "Play"}</span>
-        </button>
-        <button type="button" className="preview-action" onClick={onResetView}>
-          <ActionIcon.reset className="console-icon" />
-          <span>Reset view</span>
-        </button>
-        <button type="button" className="preview-action" onClick={toggleFullscreen}>
-          <ActionIcon.fullscreen className="console-icon" />
-          <span>Fullscreen</span>
-        </button>
-      </div>
-
-      <section className="preview-summary">
-        <header className="preview-summary-head">
-          <ActionIcon.sliders className="console-icon" />
-          <h2>Parameter summary</h2>
-        </header>
-        <dl className="preview-summary-list">
-          {summary.map((row) => (
-            <div key={row.label} className="preview-summary-row">
-              <dt>{row.label}</dt>
-              <dd className={row.accent ? "preview-summary-accent" : undefined}>
-                {row.value}
-              </dd>
-            </div>
+      {docked && (
+        <div className="preview-tabs" role="tablist" aria-label="Preview mode">
+          {(["preview", "inspector"] as const).map((id) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              className={`preview-tab ${tab === id ? "preview-tab-active" : ""}`}
+              onClick={() => setTab(id)}
+            >
+              {id === "preview" ? "Preview" : "Inspector"}
+            </button>
           ))}
-        </dl>
-      </section>
-
-      <section className="preview-status">
-        <ActionIcon.check className="console-icon preview-status-icon" />
-        <div>
-          <strong>{statusTitle}</strong>
-          <small>{statusDetail}</small>
         </div>
-      </section>
+      )}
+
+      <div className="preview-panel">
+        {/* The stage stays mounted on both tabs: hiding it would restart the
+            display. The Inspector simply stacks its readout above it. */}
+        <section className="preview-card" hidden={docked && tab !== "preview"}>
+          <header className="preview-card-head">
+            <span className="preview-live">
+              <span aria-hidden />
+              Live preview
+            </span>
+            <span className="preview-view-chip">{viewLabel}</span>
+          </header>
+
+          <div ref={stageRef} className="preview-stage">
+            {children}
+          </div>
+
+          <p className="preview-caption">{caption}</p>
+        </section>
+
+        {docked && tab === "inspector" && (
+          <section className="preview-inspector">
+            <h2>Device inspector</h2>
+            <SummaryList rows={inspector} />
+          </section>
+        )}
+
+        <div className="preview-actions" role="group" aria-label="Preview controls">
+          <button type="button" className="preview-action" onClick={onTogglePlay}>
+            <i>
+              <PlayIcon className="console-icon" />
+            </i>
+            <span>{playing ? "Pause" : "Play"}</span>
+          </button>
+          <button type="button" className="preview-action" onClick={onResetView}>
+            <i>
+              <ActionIcon.reset className="console-icon" />
+            </i>
+            <span>Reset view</span>
+          </button>
+          <button type="button" className="preview-action" onClick={toggleFullscreen}>
+            <i>
+              <ActionIcon.fullscreen className="console-icon" />
+            </i>
+            <span>Fullscreen</span>
+          </button>
+        </div>
+
+        <section className="preview-summary">
+          <header className="preview-summary-head">
+            <ActionIcon.sliders className="console-icon" />
+            <h2>Parameter summary</h2>
+          </header>
+          <SummaryList rows={summary} />
+        </section>
+
+        <section className="preview-status">
+          <ActionIcon.check className="console-icon preview-status-icon" />
+          <div>
+            <strong>{statusTitle}</strong>
+            <small>{statusDetail}</small>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

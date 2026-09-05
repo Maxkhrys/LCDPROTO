@@ -112,6 +112,47 @@ export const ConsoleIcon = {
 } satisfies Record<ControlSectionId, (p: IconProps) => React.ReactElement>;
 
 export const ActionIcon = {
+  search: (p: IconProps) => (
+    <Svg {...p}>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m15.8 15.8 3.7 3.7" />
+    </Svg>
+  ),
+  sun: (p: IconProps) => (
+    <Svg {...p}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6" />
+    </Svg>
+  ),
+  terminal: (p: IconProps) => (
+    <Svg {...p}>
+      <path d="m5 8 3.6 3.6L5 15.2M11.5 16h7" />
+    </Svg>
+  ),
+  save: (p: IconProps) => (
+    <Svg {...p}>
+      <path d="M8 5.5 18.5 12 8 18.5Z" />
+    </Svg>
+  ),
+  body: (p: IconProps) => (
+    <Svg {...p}>
+      <path d="M12 3.5 20 8v8l-8 4.5L4 16V8Z" />
+      <path d="M12 12.2 20 8M12 12.2V20.5M12 12.2 4 8" />
+    </Svg>
+  ),
+  scale: (p: IconProps) => (
+    <Svg {...p}>
+      <path d="M4.5 9.5v-5h5M19.5 14.5v5h-5" />
+      <path d="M4.5 4.5 19.5 19.5" />
+    </Svg>
+  ),
+  palette: (p: IconProps) => (
+    <Svg {...p}>
+      <path d="M12 20.5a8.5 8.5 0 1 1 8.5-8.5c0 2-1.7 2.6-3.4 2.6h-1.4a2 2 0 0 0-1.4 3.4c.5.6.2 2.5-2.3 2.5Z" />
+      <circle cx="8.4" cy="11" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="8" r="1.1" fill="currentColor" stroke="none" />
+    </Svg>
+  ),
   pause: (p: IconProps) => (
     <Svg {...p}>
       <path d="M9.5 5.5v13M14.5 5.5v13" />
