@@ -61,6 +61,10 @@ const rgba = (c: ReturnType<typeof parseHexColor>, a: number) =>
 interface Stamps {
   key: string;
   mass: HTMLCanvasElement;
+  rearMass: HTMLCanvasElement;
+  crevice: HTMLCanvasElement;
+  crestRim: HTMLCanvasElement;
+  underside: HTMLCanvasElement;
   core: HTMLCanvasElement;
   mist: HTMLCanvasElement;
   glow: HTMLCanvasElement;
@@ -82,7 +86,7 @@ function getStamps(
   c: CloudColourConfig,
   p: CloudDeformationParams,
 ) {
-  const key = `${c.body}|${c.edge}|${c.coreTint}|${c.innerGlow}|${p.lightAngle}|${p.lightStrength}|${c.translucency}`;
+  const key = `${c.body}|${c.edge}|${c.coreTint}|${c.innerGlow}|${p.lightAngle}|${p.lightStrength}|${c.translucency}|v2`;
   const old = caches.get(ctx);
   if (old?.key === key) return old;
   const body = parseHexColor(c.body),
@@ -91,32 +95,103 @@ function getStamps(
   const rad = (p.lightAngle * Math.PI) / 180;
   const lx = Math.cos(rad),
     ly = Math.sin(rad);
+
+  // Front & Mid Volumetric Lobe: Strong directional spherical lighting with terminator form shadow
   const makeMass = (dense: boolean) =>
     sprite((s) => {
-      // Broad opaque interior, short feathered perimeter. Light describes one side.
       const volume = s.createRadialGradient(
-        lx * 0.26,
-        ly * 0.26,
-        0.02,
+        lx * 0.32,
+        ly * 0.32,
+        0.04,
         0,
         0,
         1,
       );
-      volume.addColorStop(0, rgba(edge, 1));
+      volume.addColorStop(0, "rgba(255,255,255,0.96)");
+      volume.addColorStop(0.18, rgba(edge, 1));
       volume.addColorStop(0.48, rgba(body, dense ? 1 : 0.98));
-      volume.addColorStop(0.75, rgba(body, dense ? 0.96 : 0.88));
-      volume.addColorStop(0.89, rgba(body, 0.5 * c.translucency));
+      volume.addColorStop(0.74, rgba(body, dense ? 0.94 : 0.86));
+      volume.addColorStop(0.88, rgba(body, 0.45 * c.translucency));
       volume.addColorStop(1, rgba(body, 0));
       s.fillStyle = volume;
       s.fillRect(-1, -1, 2, 2);
+
       s.globalCompositeOperation = "source-atop";
+      // Rich spherical form shadow on the unlit side
       const shade = s.createLinearGradient(lx, ly, -lx, -ly);
-      shade.addColorStop(0, "rgba(255,248,231,0.18)");
-      shade.addColorStop(0.48, "rgba(255,255,255,0)");
-      shade.addColorStop(1, rgba(core, p.lightStrength * 0.5));
+      shade.addColorStop(0, "rgba(255,252,242,0.34)");
+      shade.addColorStop(0.32, "rgba(255,255,255,0)");
+      shade.addColorStop(0.58, rgba(core, p.lightStrength * 0.25));
+      shade.addColorStop(0.86, rgba(core, p.lightStrength * 0.65));
+      shade.addColorStop(1.0, rgba(core, p.lightStrength * 0.82));
       s.fillStyle = shade;
       s.fillRect(-1, -1, 2, 2);
     });
+
+  // Rear Grounded Masses: Deeper tone so background lobes naturally recede behind foreground
+  const makeRearMass = () =>
+    sprite((s) => {
+      const volume = s.createRadialGradient(
+        lx * 0.22,
+        ly * 0.22,
+        0.04,
+        0,
+        0,
+        1,
+      );
+      volume.addColorStop(0, rgba(edge, 0.94));
+      volume.addColorStop(0.38, rgba(body, 0.96));
+      volume.addColorStop(0.68, rgba(core, 0.92));
+      volume.addColorStop(0.88, rgba(core, 0.4 * c.translucency));
+      volume.addColorStop(1, rgba(core, 0));
+      s.fillStyle = volume;
+      s.fillRect(-1, -1, 2, 2);
+
+      s.globalCompositeOperation = "source-atop";
+      const shade = s.createLinearGradient(lx, ly, -lx, -ly);
+      shade.addColorStop(0, "rgba(255,255,255,0.1)");
+      shade.addColorStop(0.38, rgba(core, 0.25));
+      shade.addColorStop(0.82, rgba(core, p.lightStrength * 0.75));
+      shade.addColorStop(1.0, rgba(core, p.lightStrength * 0.9));
+      s.fillStyle = shade;
+      s.fillRect(-1, -1, 2, 2);
+    });
+
+  // Crevice Ambient Occlusion: Soft darkening between overlapping billows
+  const makeCrevice = () =>
+    sprite((s) => {
+      const g = s.createRadialGradient(0, 0, 0, 0, 0, 1);
+      g.addColorStop(0, rgba(core, clamp(p.lightStrength * 0.55, 0.25, 0.65)));
+      g.addColorStop(0.42, rgba(core, clamp(p.lightStrength * 0.28, 0.1, 0.35)));
+      g.addColorStop(0.78, rgba(core, 0.05));
+      g.addColorStop(1, rgba(core, 0));
+      s.fillStyle = g;
+      s.fillRect(-1, -1, 2, 2);
+    }, 64);
+
+  // Top Crest Rim Light: Radiant rim accent catching directional light on crown/shoulders
+  const makeCrestRim = () =>
+    sprite((s) => {
+      const g = s.createRadialGradient(lx * 0.5, ly * 0.5, 0.05, 0, 0, 1);
+      g.addColorStop(0, "rgba(255,255,255,0.85)");
+      g.addColorStop(0.25, rgba(edge, 0.65));
+      g.addColorStop(0.65, rgba(edge, 0.12));
+      g.addColorStop(1, rgba(edge, 0));
+      s.fillStyle = g;
+      s.fillRect(-1, -1, 2, 2);
+    }, 64);
+
+  // Global Underside Ambient Shadow: Anchors the bottom mass
+  const makeUnderside = () =>
+    sprite((s) => {
+      const g = s.createRadialGradient(0, 0.2, 0.1, 0, 0, 1);
+      g.addColorStop(0, rgba(core, 0.42));
+      g.addColorStop(0.55, rgba(core, 0.16));
+      g.addColorStop(1, rgba(core, 0));
+      s.fillStyle = g;
+      s.fillRect(-1, -1, 2, 2);
+    }, 128);
+
   const soft = (color: string, middle: number) =>
     sprite((s) => {
       const rgb = parseHexColor(color);
@@ -127,12 +202,18 @@ function getStamps(
       s.fillStyle = g;
       s.fillRect(-1, -1, 2, 2);
     }, 64);
-  const stamps = {
+
+  const stamps: Stamps = {
     key,
     mass: makeMass(false),
+    rearMass: makeRearMass(),
+    crevice: makeCrevice(),
+    crestRim: makeCrestRim(),
+    underside: makeUnderside(),
     core: sprite((s) => {
       const g = s.createRadialGradient(lx * 0.32, ly * 0.32, 0.04, 0, 0, 1);
-      g.addColorStop(0, rgba(edge, 1));
+      g.addColorStop(0, "rgba(255,255,255,0.85)");
+      g.addColorStop(0.2, rgba(edge, 1));
       g.addColorStop(0.5, rgba(body, 0.96));
       g.addColorStop(0.78, rgba(body, 0.56));
       g.addColorStop(1, rgba(body, 0));
@@ -140,9 +221,10 @@ function getStamps(
       s.fillRect(-1, -1, 2, 2);
       s.globalCompositeOperation = "source-atop";
       const shade = s.createLinearGradient(lx, ly, -lx, -ly);
-      shade.addColorStop(0, "rgba(255,248,235,0)");
-      shade.addColorStop(0.45, "rgba(255,248,235,0)");
-      shade.addColorStop(1, rgba(core, p.lightStrength * 0.45));
+      shade.addColorStop(0, "rgba(255,252,242,0.22)");
+      shade.addColorStop(0.4, "rgba(255,255,255,0)");
+      shade.addColorStop(0.75, rgba(core, p.lightStrength * 0.38));
+      shade.addColorStop(1.0, rgba(core, p.lightStrength * 0.6));
       s.fillStyle = shade;
       s.fillRect(-1, -1, 2, 2);
     }),
@@ -177,23 +259,57 @@ function drawFace(ctx: CanvasRenderingContext2D, o: RenderOptions) {
   const core = o.lobeStates.core;
   const face = o.face ?? { offsetX: 0, offsetY: 0, scale: 1 };
   const faceScale = face.scale ?? 1;
+
+  const yaw = rig.blob.yaw ?? 0;
+  const pitch = rig.blob.pitch ?? 0;
+  const yawRad = (yaw * Math.PI) / 180;
+  const pitchRad = (pitch * Math.PI) / 180;
+  const yawSin = Math.sin(yawRad);
+  const yawCos = Math.cos(yawRad);
+  const pitchSin = Math.sin(pitchRad);
+
+  // 3D face travel across the spherical surface of the core
+  const faceTurnX = yawSin * 38;
+  const faceTurnY = pitchSin * 24 - Math.abs(yawSin) * 6;
+
+  // Horizontal perspective foreshortening of the face
+  const faceYawWidth = clamp(0.35 + Math.abs(yawCos) * 0.65, 0.35, 1);
+  const facePitchHeight = clamp(0.72 + Math.abs(Math.cos(pitchRad)) * 0.28, 0.72, 1);
+
+  // Smooth profile fade when turning beyond 55 degrees
+  const profileAmount = Math.max(0, Math.abs(yawSin) - 0.45);
+  const faceVisibility = clamp(1 - profileAmount * 1.5, 0.15, 1);
+
   ctx.save();
-  ctx.translate(core.x + (face.offsetX ?? 0), core.y + (face.offsetY ?? 0));
-  ctx.rotate(core.rotation * 0.65);
-  // Core carries anchors; artwork inherits only part of its expansion.
-  ctx.scale(
-    (1 + (core.scaleX - 1) * 0.56) * faceScale,
-    (1 + (core.scaleY - 1) * 0.56) * faceScale
+  ctx.translate(
+    core.x + (face.offsetX ?? 0) + faceTurnX,
+    core.y + (face.offsetY ?? 0) + faceTurnY
   );
+  ctx.rotate(core.rotation * 0.65 + yawSin * 0.08);
+  ctx.scale(
+    (1 + (core.scaleX - 1) * 0.56) * faceScale * faceYawWidth,
+    (1 + (core.scaleY - 1) * 0.56) * faceScale * facePitchHeight
+  );
+  ctx.globalAlpha *= faceVisibility;
+
   for (const id of ["leftEye", "rightEye"] as const) {
     const a = faceAnchor(id, size, colourName),
       t = rig[id];
-    const eye = eyeGeometry(a.width, a.height, t, false);
+    const isLeft = id === "leftEye";
+    // Near vs far eye perspective:
+    const isReceding = isLeft ? yawSin < -0.05 : yawSin > 0.05;
+    const recedingAmount = Math.abs(yawSin);
+    const eyePerspX = isReceding
+      ? clamp(1 - recedingAmount * 0.28, 0.72, 1)
+      : clamp(1 + recedingAmount * 0.1, 1, 1.12);
+    const eyePerspAlpha = isReceding ? clamp(1 - recedingAmount * 0.25, 0.7, 1) : 1;
+
+    const eye = eyeGeometry(a.width * eyePerspX, a.height, t, false);
     eye.centerX += p.gazeX * 4;
     eye.centerY += p.gazeY * 3;
     ctx.save();
     ctx.translate(a.x - size / 2 + t.socketX, a.y - size / 2 + t.socketY);
-    ctx.globalAlpha *= t.opacity;
+    ctx.globalAlpha *= t.opacity * eyePerspAlpha;
     // Optional mist accent sits behind canonical black brows, never replaces them.
     if (p.cloudBrows) {
       ctx.save();
@@ -226,6 +342,7 @@ function drawFace(ctx: CanvasRenderingContext2D, o: RenderOptions) {
     );
     ctx.restore();
   }
+
   const a = faceAnchor("mouth", size, colourName),
     t = rig.mouth;
   ctx.translate(a.x - size / 2 + t.x, a.y - size / 2 + t.y);
@@ -255,6 +372,7 @@ export function renderCloudBlob(
   ctx.beginPath();
   ctx.arc(size / 2, size / 2, size / 2, 0, TAU);
   ctx.clip();
+
   // Wisps stay in world space and behind the character.
   for (const w of o.wisps) {
     if (!w.active) continue;
@@ -281,6 +399,8 @@ export function renderCloudBlob(
         w.angle + w.curl,
       );
   }
+
+  // Contact shadow on the floor
   const height = clamp(1 - p.y / 160, 0.45, 1.35);
   stamp(
     ctx,
@@ -291,68 +411,181 @@ export function renderCloudBlob(
     13 * p.scale,
     0.2 / height,
   );
+
+  const yaw = o.rig.blob.yaw ?? 0;
+  const pitch = o.rig.blob.pitch ?? 0;
+  const yawRad = (yaw * Math.PI) / 180;
+  const pitchRad = (pitch * Math.PI) / 180;
+  const yawSin = Math.sin(yawRad);
+  const yawCos = Math.cos(yawRad);
+  const pitchSin = Math.sin(pitchRad);
+  const pitchCos = Math.cos(pitchRad);
+
+  // 3D Horizontal body foreshortening
+  const bodyYawWidth = clamp(0.38 + Math.abs(yawCos) * 0.62, 0.38, 1);
+  const bodyPitchHeight = clamp(0.74 + Math.abs(pitchCos) * 0.26, 0.74, 1);
+
   ctx.save();
   ctx.translate(size / 2 + p.x, size / 2 + p.y);
   ctx.rotate((p.rotation * Math.PI) / 180);
-  ctx.scale(p.scale * p.scaleX, p.scale * p.scaleY);
+  ctx.scale(p.scale * p.scaleX * bodyYawWidth, p.scale * p.scaleY * bodyPitchHeight);
   ctx.rotate(o.wallAngle);
   ctx.scale(o.wallScaleX, o.wallScaleY);
   ctx.rotate(-o.wallAngle);
   ctx.globalAlpha = o.rig.blob.opacity;
-  // Keep seven major masses. Secondary billows have lower amplitude and phase lag.
-  for (const def of LOBE_DEFINITIONS) {
-    if (def.id === "frontVeil" || def.id === "core") continue;
-    const l = lobeStates[def.id];
+
+  // Lobe 3D pose calculator with depth parallax & pull lag
+  const getLobePose = (def: (typeof LOBE_DEFINITIONS)[number]) => {
+    const l = lobeStates[def.id] ?? { x: def.baseX, y: def.baseY, scaleX: 1, scaleY: 1, opacity: 1, rotation: 0 };
+    const depth = def.depth ?? 0;
+    // 3D Parallax offset: front lobes rotate with yaw, rear lobes shift opposite
+    const parallaxX = depth * yawSin * 26;
+    const parallaxY = depth * pitchSin * 18 - (depth > 0 ? Math.abs(yawSin) * 5 : 0);
+    // 3D Inertial pull lag along depth
+    const pullFactor = 1.8 - depth * 0.55;
+    const pullLagX = clamp(-o.vx * 0.035 * pullFactor, -22, 22);
+    const pullLagY = clamp(-o.vy * 0.035 * pullFactor, -22, 22);
+
+    const x = l.x + parallaxX + pullLagX;
+    const y = l.y + parallaxY + pullLagY;
+
+    // Perspective size modulation based on depth and viewing angle
+    const sideFactor = def.baseX > 0 ? 1 : def.baseX < 0 ? -1 : 0;
+    const cheekPerspective = sideFactor !== 0 && sideFactor * yawSin < 0
+      ? clamp(1 - Math.abs(yawSin) * 0.32, 0.68, 1)
+      : clamp(1 + Math.abs(yawSin) * 0.12, 1, 1.15);
+    const depthScale = (1.0 + depth * yawCos * 0.06) * cheekPerspective;
+
     const softness = clamp(p.lobeSoftness, 0.75, 1.3);
-    const rx = def.radiusX * l.scaleX * softness,
-      ry = def.radiusY * l.scaleY * softness;
+    const rx = def.radiusX * l.scaleX * softness * depthScale;
+    const ry = def.radiusY * l.scaleY * softness * depthScale;
+
+    return { x, y, rx, ry, opacity: l.opacity, rotation: l.rotation, scaleX: l.scaleX, scaleY: l.scaleY, depth };
+  };
+
+  const coreDef = LOBE_DEFINITIONS.find((d) => d.id === "core")!;
+  const corePose = getLobePose(coreDef);
+  const leftCheekDef = LOBE_DEFINITIONS.find((d) => d.id === "leftCheek");
+  const rightCheekDef = LOBE_DEFINITIONS.find((d) => d.id === "rightCheek");
+  const crownDef = LOBE_DEFINITIONS.find((d) => d.id === "topCrown");
+  const leftCheekPose = leftCheekDef ? getLobePose(leftCheekDef) : null;
+  const rightCheekPose = rightCheekDef ? getLobePose(rightCheekDef) : null;
+  const crownPose = crownDef ? getLobePose(crownDef) : null;
+
+  // 1. REAR GROUNDED LOBES (depth < 0: bottomBelly, baseLeft, baseRight)
+  for (const def of LOBE_DEFINITIONS) {
+    if (def.depth >= 0 || def.id === "frontVeil") continue;
+    const pose = getLobePose(def);
+    const l = lobeStates[def.id];
     const subs = LOBE_SUB_PUFFS[def.id];
-    if (subs && p.fluffiness > 0.05)
+    if (subs && p.fluffiness > 0.05) {
+      for (const sub of subs) {
+        const breathe = Math.sin(t * 1.1 + (sub.phaseOffset ?? 0)) * 0.7;
+        stamp(
+          ctx,
+          s.rearMass,
+          pose.x + sub.offsetX * p.fluffiness * l.scaleX,
+          pose.y + (sub.offsetY * p.fluffiness + breathe) * l.scaleY,
+          pose.rx * sub.radiusRatio,
+          pose.ry * sub.radiusRatio,
+          l.opacity * 0.85,
+          pose.rotation,
+        );
+      }
+    }
+    stamp(
+      ctx,
+      s.rearMass,
+      pose.x,
+      pose.y,
+      pose.rx,
+      pose.ry,
+      Math.min(1, l.opacity * colour.density * 1.05),
+      pose.rotation,
+    );
+  }
+
+  // 2. GLOBAL UNDERSIDE AMBIENT OCCLUSION SHADOW
+  stamp(ctx, s.underside, corePose.x, corePose.y + 44, 140 * corePose.scaleX, 58 * corePose.scaleY, 0.75);
+
+  // 3. REAR/CORE CREVICE AO SHADOWS
+  stamp(ctx, s.crevice, corePose.x - 46, corePose.y + 36, 48, 38, 0.6);
+  stamp(ctx, s.crevice, corePose.x + 46, corePose.y + 36, 48, 38, 0.6);
+  stamp(ctx, s.crevice, corePose.x, corePose.y + 54, 62, 42, 0.7);
+
+  // 4. CENTRAL CLOUD CORE
+  stamp(
+    ctx,
+    s.core,
+    corePose.x,
+    corePose.y + 12,
+    124 * corePose.scaleX,
+    98 * corePose.scaleY,
+    clamp(p.coreDensity * colour.density, 0, 1),
+  );
+  stamp(ctx, s.glow, corePose.x, corePose.y + 15, 78, 68, colour.glowIntensity * 0.16);
+
+  // 5. BILLOW CREVICE SHADOWS (Between Core & Cheeks/Crown)
+  if (leftCheekPose) {
+    stamp(ctx, s.crevice, leftCheekPose.x * 0.45 + corePose.x * 0.55, leftCheekPose.y * 0.45 + corePose.y * 0.55 + 8, 46, 42, 0.65);
+  }
+  if (rightCheekPose) {
+    stamp(ctx, s.crevice, rightCheekPose.x * 0.45 + corePose.x * 0.55, rightCheekPose.y * 0.45 + corePose.y * 0.55 + 8, 46, 42, 0.65);
+  }
+  if (crownPose) {
+    stamp(ctx, s.crevice, crownPose.x * 0.45 + corePose.x * 0.55, crownPose.y * 0.45 + corePose.y * 0.55 + 14, 54, 36, 0.6);
+  }
+
+  // 6. FRONT & MID LOBES (depth > 0: leftCheek, rightCheek, trailingTuft, topCrown)
+  for (const def of LOBE_DEFINITIONS) {
+    if (def.depth <= 0 || def.id === "frontVeil" || def.id === "core") continue;
+    const pose = getLobePose(def);
+    const l = lobeStates[def.id];
+    const subs = LOBE_SUB_PUFFS[def.id];
+    if (subs && p.fluffiness > 0.05) {
       for (const sub of subs) {
         const breathe = Math.sin(t * 1.1 + (sub.phaseOffset ?? 0)) * 0.7;
         stamp(
           ctx,
           s.mass,
-          l.x + sub.offsetX * p.fluffiness * l.scaleX,
-          l.y + (sub.offsetY * p.fluffiness + breathe) * l.scaleY,
-          rx * sub.radiusRatio,
-          ry * sub.radiusRatio,
-          l.opacity * 0.85,
-          l.rotation,
+          pose.x + sub.offsetX * p.fluffiness * l.scaleX,
+          pose.y + (sub.offsetY * p.fluffiness + breathe) * l.scaleY,
+          pose.rx * sub.radiusRatio,
+          pose.ry * sub.radiusRatio,
+          l.opacity * 0.88,
+          pose.rotation,
         );
       }
+    }
     stamp(
       ctx,
       s.mass,
-      l.x,
-      l.y,
-      rx,
-      ry,
+      pose.x,
+      pose.y,
+      pose.rx,
+      pose.ry,
       Math.min(1, l.opacity * colour.density * 1.08),
-      l.rotation,
+      pose.rotation,
     );
   }
-  const core = lobeStates.core;
-  // Continuous front mass joins the overlapping shoulders without outlining every lobe.
-  stamp(
-    ctx,
-    s.core,
-    core.x,
-    core.y + 12,
-    123 * core.scaleX,
-    98 * core.scaleY,
-    clamp(p.coreDensity * colour.density, 0, 1),
-  );
-  stamp(ctx, s.glow, core.x, core.y + 15, 76, 66, colour.glowIntensity * 0.13);
-  // Fourteen tiny lights, independently twinkling. Dim intervals create quiet.
+
+  // 7. TOP CREST RIM LIGHT ACCENT
+  if (crownPose) {
+    stamp(ctx, s.crestRim, crownPose.x, crownPose.y - crownPose.ry * 0.42, crownPose.rx * 0.95, crownPose.ry * 0.55, 0.8);
+  }
+
+  // 8. FOURTEEN INTERNAL LIGHTS / TWINKLING DROPLETS (with 3D depth parallax)
   for (const d of SUSPENDED_DROPLETS) {
     const twinkle = Math.pow(
       Math.max(0, Math.sin(t * d.driftSpeed + d.driftPhase)),
       10,
     );
     if (twinkle < 0.025) continue;
-    const x = core.x + d.x * 1.65,
-      y = core.y + d.y * 1.25;
+    const dropDepth = d.radius > 1.3 ? 1 : -0.8;
+    const dropParallaxX = dropDepth * yawSin * 18;
+    const dropParallaxY = dropDepth * pitchSin * 12;
+    const x = corePose.x + d.x * 1.65 + dropParallaxX;
+    const y = corePose.y + d.y * 1.25 + dropParallaxY;
     stamp(
       ctx,
       s.mist,
@@ -370,42 +603,49 @@ export function renderCloudBlob(
     ctx.fill();
     ctx.restore();
   }
-  if (p.cheekBlush > 0) {
+
+  // 9. CHEEK BLUSH
+  if (p.cheekBlush > 0 && leftCheekPose && rightCheekPose) {
     ctx.save();
     ctx.fillStyle = "#e8999f";
-    ctx.globalAlpha *= p.cheekBlush * 0.12;
+    ctx.globalAlpha *= p.cheekBlush * 0.15;
     ctx.beginPath();
-    ctx.ellipse(-52, 16, 17, 8, 0, 0, TAU);
-    ctx.ellipse(52, 16, 17, 8, 0, 0, TAU);
+    ctx.ellipse(leftCheekPose.x + 18, leftCheekPose.y + 16, 17, 8, 0, 0, TAU);
+    ctx.ellipse(rightCheekPose.x - 18, rightCheekPose.y + 16, 17, 8, 0, 0, TAU);
     ctx.fill();
     ctx.restore();
   }
-  // Faint veil below face; never paints opaque lids or obscures black features.
-  stamp(ctx, s.mist, core.x, core.y + 30, 82, 46, p.faceEmbedDepth * 0.16);
+
+  // 10. FAINT VEIL BELOW FACE
+  stamp(ctx, s.mist, corePose.x, corePose.y + 30, 82, 46, p.faceEmbedDepth * 0.16);
+
+  // 11. CRISP PRODUCTION FACE (3D Spherical placement, foreshortening, and differential eye scale)
   if (o.showFace) drawFace(ctx, o);
+
   if (o.debug) {
     ctx.strokeStyle = "#f0bb65";
     ctx.fillStyle = "#f0bb65";
     ctx.lineWidth = 0.7;
-    for (const d of LOBE_DEFINITIONS) {
-      const l = lobeStates[d.id];
+    for (const def of LOBE_DEFINITIONS) {
+      const pose = getLobePose(def);
       ctx.beginPath();
       ctx.ellipse(
-        l.x,
-        l.y,
-        d.radiusX * l.scaleX,
-        d.radiusY * l.scaleY,
-        l.rotation,
+        pose.x,
+        pose.y,
+        pose.rx,
+        pose.ry,
+        pose.rotation,
         0,
         TAU,
       );
       ctx.stroke();
-      ctx.fillRect(l.x - 1.5, l.y - 1.5, 3, 3);
+      ctx.fillRect(pose.x - 1.5, pose.y - 1.5, 3, 3);
     }
     ctx.strokeStyle = "#ed768e";
-    ctx.strokeRect(core.x - 5, core.y - 5, 10, 10);
+    ctx.strokeRect(corePose.x - 5, corePose.y - 5, 10, 10);
   }
   ctx.restore();
+
   if (o.debug) {
     ctx.strokeStyle = "#80d8b5";
     ctx.lineWidth = 1;
