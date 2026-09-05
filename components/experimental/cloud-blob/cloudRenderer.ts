@@ -44,6 +44,8 @@ export interface RenderOptions {
   showContactShadow?: boolean;
 }
 const TAU = Math.PI * 2;
+/** 466-space distance between authored depth tiers, for the 2.5D rotation. */
+const DEPTH_UNIT = 34;
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 export function parseHexColor(hex: string) {
   const clean = hex.replace("#", "");
@@ -264,6 +266,32 @@ function stamp(
   ctx.restore();
 }
 
+/**
+ * Projects a face feature onto the front of a rounded volume.
+ *
+ * The face is not one flat layer that gets squashed: each anchor sits at its
+ * own angle on a sphere of radius FACE_RADIUS, and yaw rotates that angle.
+ * Spacing compression, the near/far relationship and how far the whole group
+ * travels all fall out of the projection rather than being faked with scaleX.
+ *
+ * Returns the projected offset plus `facing`, which is 1 when the feature
+ * points straight at the viewer and falls off as it curves away.
+ */
+const FACE_RADIUS = 96;
+
+function projectFeature(ox: number, oy: number, yawRad: number, pitchRad: number) {
+  const theta = Math.asin(clamp(ox / FACE_RADIUS, -1, 1));
+  const turned = theta + yawRad;
+  const x = FACE_RADIUS * Math.sin(turned);
+  const facing = Math.cos(turned);
+
+  const phi = Math.asin(clamp(oy / FACE_RADIUS, -1, 1));
+  const turnedY = phi + pitchRad;
+  const y = FACE_RADIUS * Math.sin(turnedY);
+
+  return { x, y, facing: clamp(facing, -1, 1) };
+}
+
 function drawFace(ctx: CanvasRenderingContext2D, o: RenderOptions) {
   const { size, rig, colourName, params: p } = o;
   const core = o.lobeStates.core;
@@ -276,20 +304,21 @@ function drawFace(ctx: CanvasRenderingContext2D, o: RenderOptions) {
   const yawRad = (yaw * Math.PI) / 180;
   const pitchRad = (pitch * Math.PI) / 180;
   const yawSin = Math.sin(yawRad);
-  const yawCos = Math.cos(yawRad);
   const pitchSin = Math.sin(pitchRad);
 
-  // 1. 3D face travel across the spherical surface of the core
-  const faceTurnX = yawSin * 32;
+  // The face group rides around the surface of the core.
+  const faceTurnX = yawSin * 30;
   const faceTurnY = pitchSin * 20 - Math.abs(yawSin) * 5;
 
-  // Horizontal perspective foreshortening of the face mask
-  const faceYawWidth = clamp(0.42 + Math.abs(yawCos) * 0.58, 0.42, 1);
-  const facePitchHeight = clamp(0.76 + Math.abs(Math.cos(pitchRad)) * 0.24, 0.76, 1);
+  // The group as a whole is only lightly foreshortened. Perspective is carried
+  // by the per-feature projection below; crushing the whole plane on top of it
+  // is what used to turn the eyes into slits.
+  const faceYawWidth = clamp(0.82 + Math.cos(yawRad) * 0.18, 0.72, 1);
+  const facePitchHeight = clamp(0.88 + Math.abs(Math.cos(pitchRad)) * 0.12, 0.86, 1);
 
-  // Smooth profile fade when turning beyond 50 degrees
-  const profileAmount = Math.max(0, Math.abs(yawSin) - 0.7);
-  const faceVisibility = clamp(1 - profileAmount * 2.0, 0.2, 1);
+  // Smooth profile fade only at extreme angles.
+  const profileAmount = Math.max(0, Math.abs(yawSin) - 0.78);
+  const faceVisibility = clamp(1 - profileAmount * 2.0, 0.35, 1);
 
   ctx.save();
   ctx.translate(
@@ -308,53 +337,48 @@ function drawFace(ctx: CanvasRenderingContext2D, o: RenderOptions) {
       t = { ...rig[id] };
     const isLeft = id === "leftEye";
 
-    // Asymmetric 3D Perspective on Left vs Right Eye:
-    // When turning left (yawSin < 0): left eye curves away / recedes; right eye faces camera / prominent
-    // When turning right (yawSin > 0): right eye curves away / recedes; left eye faces camera / prominent
-    const isReceding = isLeft ? yawSin < -0.02 : yawSin > 0.02;
-    const isProminent = isLeft ? yawSin > 0.02 : yawSin < -0.02;
-    const turnMagnitude = Math.abs(yawSin);
+    // Where this eye ends up once the face plane has turned. Everything about
+    // the eye's position and prominence comes from this one projection.
+    const baseX = a.x - size / 2;
+    const baseY = a.y - size / 2;
+    const projected = projectFeature(baseX, baseY, yawRad, pitchRad);
 
-    let eyeScaleX = 1.0;
-    let eyeScaleY = 1.0;
-    let eyeOpenMod = 1.0;
-    let eyeAlphaMod = 1.0;
-    let eyeSpacingShiftX = 0;
-    let browAngleMod = 0;
+    // How square-on this eye now is, relative to facing the viewer.
+    const facing = clamp(projected.facing, 0.2, 1);
+    const restFacing = Math.cos(Math.asin(clamp(baseX / FACE_RADIUS, -1, 1)));
+    const prominence = clamp(facing / Math.max(restFacing, 0.2), 0.6, 1.25);
 
-    if (isReceding) {
-      // Receding eye curves around the 3D dome:
-      // becomes narrower / slightly compressed / slightly more occluded / slightly less open
-      eyeScaleX = clamp(1 - turnMagnitude * 0.24, 0.76, 1);
-      eyeScaleY = clamp(1 - turnMagnitude * 0.06, 0.94, 1);
-      eyeOpenMod = clamp(1 - turnMagnitude * 0.16, 0.84, 1);
-      eyeAlphaMod = clamp(1 - turnMagnitude * 0.22, 0.78, 1);
-      // Eye spacing changes subtly (shifts slightly toward the center line along sphere curve)
-      eyeSpacingShiftX = (isLeft ? 1 : -1) * turnMagnitude * 6;
-      // Brow tilts subtly along curved brow ridge
-      browAngleMod = (isLeft ? 1 : -1) * turnMagnitude * 4;
-    } else if (isProminent) {
-      // Prominent eye faces camera directly:
-      // becomes slightly larger / slightly more open / fully opaque
-      eyeScaleX = clamp(1 + turnMagnitude * 0.08, 1, 1.12);
-      eyeScaleY = clamp(1 + turnMagnitude * 0.06, 1, 1.08);
-      eyeOpenMod = clamp(1 + turnMagnitude * 0.12, 1, 1.16);
-      eyeAlphaMod = 1.0;
-      eyeSpacingShiftX = (isLeft ? 1 : -1) * turnMagnitude * 3;
-      browAngleMod = (isLeft ? -1 : 1) * turnMagnitude * 2.5;
-    }
+    // Readability floors. The far eye narrows and dims, but it never collapses
+    // into a bar: at full yaw it is still four fifths of its width and nearly
+    // its full height, which stays clearly legible at 466.
+    const eyeScaleX = clamp(0.82 + (prominence - 1) * 0.55, 0.82, 1.1);
+    const eyeScaleY = clamp(0.95 + (prominence - 1) * 0.18, 0.95, 1.06);
+    const eyeOpenMod = clamp(0.92 + (prominence - 1) * 0.3, 0.9, 1.12);
+    const eyeAlphaMod = clamp(0.84 + (prominence - 1) * 0.5, 0.84, 1);
+    const browAngleMod = (isLeft ? 1 : -1) * yawSin * 4;
 
     t.eyeOpen *= eyeOpenMod;
 
     const eye = eyeGeometry(a.width * eyeScaleX, a.height * eyeScaleY, t, false);
-    eye.centerX += p.gazeX * 4;
-    eye.centerY += p.gazeY * 3;
+
+    // Directional gaze. This is the loudest part of the turn on purpose: the
+    // pupil mass travels up to a third of the aperture, which reads instantly
+    // at native size, and still leaves the black inside the lid band.
+    const gazeTravelX = eye.width * 0.33;
+    const gazeTravelY = eye.height * 0.16;
+    eye.centerX = clamp(
+      eye.centerX + p.gazeX * gazeTravelX,
+      -gazeTravelX,
+      gazeTravelX
+    );
+    eye.centerY = clamp(
+      eye.centerY + p.gazeY * gazeTravelY,
+      -gazeTravelY,
+      gazeTravelY
+    );
 
     ctx.save();
-    ctx.translate(
-      a.x - size / 2 + t.socketX + eyeSpacingShiftX,
-      a.y - size / 2 + t.socketY
-    );
+    ctx.translate(projected.x + t.socketX, projected.y + t.socketY);
     ctx.globalAlpha *= t.opacity * eyeAlphaMod;
 
     // Optional mist accent behind brows
@@ -368,6 +392,8 @@ function drawFace(ctx: CanvasRenderingContext2D, o: RenderOptions) {
       ctx.restore();
     }
 
+    // The brow is drawn in the eye's own projected space, so it travels with
+    // its socket around the curve without any separate bookkeeping.
     ctx.save();
     ctx.globalAlpha *= 0.88;
     drawEyebrow(
@@ -392,15 +418,22 @@ function drawFace(ctx: CanvasRenderingContext2D, o: RenderOptions) {
     ctx.restore();
   }
 
-  // Mouth: shifts toward turning direction with perspective compression
-  const mouthShiftX = yawSin * 14;
-  const mouthShiftY = pitchSin * 6;
-  const mouthPerspX = clamp(1 - Math.abs(yawSin) * 0.18, 0.78, 1);
-
+  // The mouth rides the same curved surface, and leans a little further into
+  // the turn than the eyes so the whole head reads as pointing that way.
   const a = faceAnchor("mouth", size, colourName),
     t = rig.mouth;
+  const mouthProjected = projectFeature(
+    a.x - size / 2,
+    a.y - size / 2,
+    yawRad,
+    pitchRad
+  );
+  const mouthPerspX = clamp(0.86 + Math.cos(yawRad) * 0.14, 0.82, 1);
   ctx.save();
-  ctx.translate(a.x - size / 2 + t.x + mouthShiftX, a.y - size / 2 + t.y + mouthShiftY);
+  ctx.translate(
+    mouthProjected.x + t.x + yawSin * 5,
+    mouthProjected.y + t.y
+  );
   ctx.globalAlpha *= t.opacity;
   drawMouthShape(
     ctx,
@@ -511,29 +544,65 @@ export function renderCloudBlob(
     const l = lobeStates[def.id] ?? { x: def.baseX, y: def.baseY, scaleX: 1, scaleY: 1, opacity: 1, rotation: 0 };
     const depth = def.depth ?? 0;
     // 3D Parallax offset: front lobes rotate with yaw, rear lobes shift opposite
-    const parallaxX = depth * yawSin * 26;
     const parallaxY = depth * pitchSin * 18 - (depth > 0 ? Math.abs(yawSin) * 5 : 0);
 
     // Whole-body inertial trailing lag (all lobes stay together, NO differential depth tearing)
     const pullLagX = clamp(-o.vx * 0.02, -14, 14);
     const pullLagY = clamp(-o.vy * 0.02, -14, 14);
 
-    const x = l.x + parallaxX + pullLagX;
+    // 2.5D projection. Each lobe carries a cheap z taken from its authored
+    // depth tier, and yaw rotates the (x, z) pair about the body axis. That
+    // single rotation gives three things the old parallax offset could not:
+    // real horizontal foreshortening, a near/far scale that follows the
+    // rotated z rather than the authored one, and a projected z the draw order
+    // can sort on — so a cheek genuinely swings in front of or behind the core
+    // instead of staying pinned to its tier.
+    const bz = depth * DEPTH_UNIT;
+    const bx = def.baseX;
+    const rotatedX = bx * yawCos + bz * yawSin;
+    const rotatedZ = -bx * yawSin + bz * yawCos;
+    const projectionShift = rotatedX - bx;
+
+    const x = l.x + projectionShift + pullLagX;
     const y = l.y + parallaxY + pullLagY;
 
-    // Perspective size modulation based on depth and viewing angle
-    const sideFactor = def.baseX > 0 ? 1 : def.baseX < 0 ? -1 : 0;
-    const cheekPerspective = sideFactor !== 0 && sideFactor * yawSin < 0
-      ? clamp(1 - Math.abs(yawSin) * 0.32, 0.68, 1)
-      : clamp(1 + Math.abs(yawSin) * 0.12, 1, 1.15);
-    const depthScale = (1.0 + depth * yawCos * 0.06) * cheekPerspective;
+    // Near lobes read slightly larger and clearer, far ones slightly smaller
+    // and denser. Kept gentle: this is depth cueing, not a zoom.
+    const zNorm = clamp(rotatedZ / (DEPTH_UNIT * 2.4), -1, 1);
+    const depthScale = clamp(1 + zNorm * 0.11, 0.86, 1.14);
 
     const softness = clamp(p.lobeSoftness, 0.75, 1.3);
     const rx = def.radiusX * l.scaleX * softness * depthScale;
     const ry = def.radiusY * l.scaleY * softness * depthScale;
 
-    return { x, y, rx, ry, opacity: l.opacity, rotation: l.rotation, scaleX: l.scaleX, scaleY: l.scaleY, depth };
+    return {
+      x,
+      y,
+      rx,
+      ry,
+      opacity: l.opacity,
+      rotation: l.rotation,
+      scaleX: l.scaleX,
+      scaleY: l.scaleY,
+      depth,
+      z: rotatedZ,
+      zNorm,
+    };
   };
+
+  /**
+   * Every shell lobe posed once, back to front on projected z. Six poses and
+   * one sort per frame — nothing next to the stamps they feed.
+   */
+  const shellLobes = LOBE_DEFINITIONS.filter(
+    (def) => def.id !== "frontVeil" && def.id !== "core"
+  )
+    .map((def) => ({ def, pose: getLobePose(def) }))
+    .sort((a, b) => a.pose.z - b.pose.z);
+
+  /** Membership is the projected z, so a lobe can change sides mid-turn. */
+  const orderedLobes = (predicate: (z: number) => boolean) =>
+    shellLobes.filter((entry) => predicate(entry.pose.z));
 
   const coreDef = LOBE_DEFINITIONS.find((d) => d.id === "core")!;
   const corePose = getLobePose(coreDef);
@@ -546,10 +615,9 @@ export function renderCloudBlob(
   const rightCheekPose = rightCheekDef ? getLobePose(rightCheekDef) : null;
   const crownPose = crownDef ? getLobePose(crownDef) : null;
 
-  // 1. REAR GROUNDED LOBES (depth < 0: bottomBelly, baseLeft, baseRight)
-  for (const def of LOBE_DEFINITIONS) {
-    if (def.depth >= 0 || def.id === "frontVeil") continue;
-    const pose = getLobePose(def);
+  // 1. LOBES BEHIND THE CORE, back to front on projected z. Membership is no
+  // longer the authored tier: during a turn a cheek can cross into this group.
+  for (const { def, pose } of orderedLobes((z) => z < 0)) {
     const l = lobeStates[def.id];
     const subs = LOBE_SUB_PUFFS[def.id];
     if (subs && p.fluffiness > 0.05) {
@@ -574,7 +642,7 @@ export function renderCloudBlob(
       pose.y,
       pose.rx,
       pose.ry,
-      Math.min(1, l.opacity * colour.density * 1.05),
+      Math.min(1, l.opacity * colour.density * 1.05 * (1 - pose.zNorm * 0.06)),
       pose.rotation + lightFollowRotation,
     );
   }
@@ -625,10 +693,8 @@ export function renderCloudBlob(
     stamp(ctx, s.crevice, crownPose.x * 0.5 + corePose.x * 0.5, crownPose.y * 0.5 + corePose.y * 0.5 + 8, 44, 30, 0.35);
   }
 
-  // 6. FRONT & MID LOBES (depth > 0: leftCheek, rightCheek, trailingTuft, topCrown)
-  for (const def of LOBE_DEFINITIONS) {
-    if (def.depth <= 0 || def.id === "frontVeil" || def.id === "core") continue;
-    const pose = getLobePose(def);
+  // 6. LOBES IN FRONT OF THE CORE, back to front on projected z.
+  for (const { def, pose } of orderedLobes((z) => z >= 0)) {
     const l = lobeStates[def.id];
     const subs = LOBE_SUB_PUFFS[def.id];
     if (subs && p.fluffiness > 0.05) {
@@ -653,7 +719,7 @@ export function renderCloudBlob(
       pose.y,
       pose.rx,
       pose.ry,
-      Math.min(1, l.opacity * colour.density * 1.08),
+      Math.min(1, l.opacity * colour.density * 1.08 * (1 + pose.zNorm * 0.05)),
       pose.rotation + lightFollowRotation,
     );
   }

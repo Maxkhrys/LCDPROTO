@@ -316,8 +316,11 @@ export default function EnvironmentLayer({
       // the ~100ms trail, so the shadow no longer needs a fractional follow
       // factor — that only ever left it sitting beside him rather than under.
       const depthScale = clamp(1 + currentRig.blob.depth * 0.28, 0.84, 1.16);
+      // Turning alone must not swing the footprint about: a rounded mass seen
+      // from a slightly different angle still casts almost the same shadow.
+      // The yaw term is kept as a token narrowing only.
       const yawWidth =
-        0.34 + Math.abs(Math.cos((currentRig.blob.yaw * Math.PI) / 180)) * 0.66;
+        0.88 + Math.abs(Math.cos((currentRig.blob.yaw * Math.PI) / 180)) * 0.12;
       const wholeScaleX =
         currentRig.blob.scale * depthScale * yawWidth * currentRig.blob.scaleX;
       const wholeScaleY =

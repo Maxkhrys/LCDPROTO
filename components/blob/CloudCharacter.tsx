@@ -132,6 +132,15 @@ export default function CloudCharacter({
   const turnPitchRef = useRef(0);
   const turnVelYawRef = useRef(0);
   const turnVelPitchRef = useRef(0);
+  // Turn-intent chain. `intent` is what the character has decided to do,
+  // `gazeLead` is the eyes acting on it immediately, and `yawIntent` is the
+  // same decision delayed so the face plane commits after the eyes do.
+  const intentXRef = useRef(0);
+  const intentYRef = useRef(0);
+  const gazeLeadXRef = useRef(0);
+  const gazeLeadYRef = useRef(0);
+  const yawIntentRef = useRef(0);
+  const pitchIntentRef = useRef(0);
 
   // Pointer bookkeeping, mirroring BlobCharacter so both characters feel the
   // same to handle.
@@ -260,10 +269,54 @@ export default function CloudCharacter({
     prevVel.current.vx = vx;
     prevVel.current.vy = vy;
 
-    // Directional Turning & Heading System:
-    // Derives smoothed yaw & pitch from actual motion velocity, so Cloud "faces into" movement
-    const desiredYaw = speed > 5 ? clamp(vx * 0.08, -26, 26) : 0;
-    const desiredPitch = speed > 5 ? clamp(vy * 0.05, -16, 16) : 0;
+    // ---- Turn intent -----------------------------------------------------
+    //
+    // Yaw is never taken from raw velocity. Velocity alone jitters at low
+    // speed and, worse, it only exists *after* the body has already moved —
+    // which is precisely why the turn never read: everything arrived at once.
+    //
+    // Instead a smoothed, acceleration-led heading is the single decision, and
+    // the three consumers read it at different delays: eyes now, face plane
+    // ~110ms later, core after that through the existing spring. Attack is
+    // fast and release is slow, so a held direction keeps the eyes biased
+    // toward it instead of snapping back between velocity samples.
+    const lead = (current: number, target: number, tau: number) =>
+      current + (target - current) * (1 - Math.exp(-step / Math.max(tau, 1e-3)));
+
+    // Acceleration term: the eyes can reach the new direction before the
+    // displacement that would report it has accumulated.
+    const predictedVx = vx + ax * 0.09;
+    const predictedVy = vy + ay * 0.09;
+    // Deadzone on speed, not on the axis, so slow diagonal drift still reads.
+    const MOVE_FLOOR = 13;
+    const intentActive = speed > MOVE_FLOOR;
+    const targetIntentX = intentActive ? clamp(predictedVx / 95, -1, 1) : 0;
+    const targetIntentY = intentActive ? clamp(predictedVy / 130, -1, 1) : 0;
+
+    const attack = 0.055;
+    const release = 0.34;
+    intentXRef.current = lead(
+      intentXRef.current,
+      targetIntentX,
+      Math.abs(targetIntentX) > Math.abs(intentXRef.current) ? attack : release
+    );
+    intentYRef.current = lead(
+      intentYRef.current,
+      targetIntentY,
+      Math.abs(targetIntentY) > Math.abs(intentYRef.current) ? attack : release
+    );
+
+    // The eyes are the fastest link in the chain and overshoot the decision
+    // slightly, which is what makes the look read as intent rather than drift.
+    gazeLeadXRef.current = lead(gazeLeadXRef.current, intentXRef.current * 1.12, 0.045);
+    gazeLeadYRef.current = lead(gazeLeadYRef.current, intentYRef.current * 0.7, 0.06);
+
+    // The face plane follows the same decision one beat later.
+    yawIntentRef.current = lead(yawIntentRef.current, intentXRef.current, 0.11);
+    pitchIntentRef.current = lead(pitchIntentRef.current, intentYRef.current, 0.13);
+
+    const desiredYaw = clamp(yawIntentRef.current * 26, -26, 26);
+    const desiredPitch = clamp(pitchIntentRef.current * 15, -16, 16);
 
     // Damped 2nd-order spring physics (critically damped with ~6% organic overshoot on sudden stops)
     const springK = 125;
@@ -285,13 +338,18 @@ export default function CloudCharacter({
       rig.blob.pitch = turnPitchRef.current;
     }
 
-    // Anticipation: Gaze leads movement direction first
-    if (speed > 18) {
-      const motionGazeX = clamp(vx / 140, -1, 1);
-      const motionGazeY = clamp(vy / 110, -1, 1);
-      params.gazeX = clamp(params.gazeX * 0.45 + motionGazeX * 0.65, -1, 1);
-      params.gazeY = clamp(params.gazeY * 0.45 + motionGazeY * 0.65, -1, 1);
-    }
+    // The authored expression gaze stays in charge of the subtle idle look;
+    // the turn adds to it and wins when the character is actually going
+    // somewhere, so a deliberate move always reads on the eyes first.
+    const turnGazeX = clamp(gazeLeadXRef.current, -1, 1);
+    const turnGazeY = clamp(gazeLeadYRef.current, -1, 1);
+    const turnWeight = Math.min(1, Math.abs(turnGazeX) * 1.35);
+    params.gazeX = clamp(params.gazeX * (1 - turnWeight) + turnGazeX, -1, 1);
+    params.gazeY = clamp(
+      params.gazeY * (1 - Math.min(1, Math.abs(turnGazeY) * 1.35)) + turnGazeY,
+      -1,
+      1
+    );
 
     // Anticipation: Tiny organic squash on rapid acceleration / directional flick
     if (acceleration > 450) {
