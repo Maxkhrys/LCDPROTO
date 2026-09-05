@@ -2,6 +2,8 @@
 
 :root {
   color-scheme: dark;
+  /* Docked console width — the preview rail reserves exactly this much. */
+  --console-width: min(880px, 56vw);
   --simulator-bg: #050506;
   --simulator-ink: #f5f5f7;
   --dev-panel-bg: #101013;
@@ -170,17 +172,37 @@ canvas {
 
 /* Master control console. It stays dark in every scene mode so controls keep
    the same contrast while the simulated world changes underneath. */
-.control-center-root {
-  --console-bg: #171512;
-  --console-surface: #211e1a;
-  --console-surface-raised: #29251f;
-  --console-ink: #f3eee5;
-  --console-muted: #beb5a8;
-  --console-faint: #8b8276;
-  --console-accent: #d2ad72;
-  --console-accent-ink: #20180d;
-  --console-border: rgb(243 238 229 / 0.11);
+.control-center-root,
+.preview-rail {
+  --console-bg: #17140f;
+  --console-bg-deep: #121009;
+  --console-surface: #201c16;
+  --console-surface-raised: #29241c;
+  --console-hover: rgb(243 238 229 / 0.05);
+  --console-ink: #f4efe6;
+  --console-muted: #c1b8a9;
+  --console-faint: #8d8578;
+  --console-accent: #d8b47b;
+  --console-accent-soft: rgb(216 180 123 / 0.16);
+  --console-accent-ink: #1f1709;
+  --console-positive: #9dbd8c;
+  --console-border: rgb(244 239 230 / 0.09);
+  --console-border-strong: rgb(244 239 230 / 0.16);
+  --console-shadow: 0 26px 60px rgb(14 10 5 / 0.4);
+  --console-radius: 18px;
+  --console-radius-sm: 10px;
   color: var(--console-ink);
+}
+
+.control-center-root {
+  font-feature-settings: "cv05", "ss01";
+}
+
+/* One stroked icon family across nav, cards and preview actions. */
+.console-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
 }
 
 .control-center-root button:focus-visible,
@@ -263,13 +285,41 @@ canvas {
  * sitting under a dimmed overlay: the point of opening the console is to watch
  * the character react to the sliders, so it stays lit and fully interactive.
  */
-.sim-stage {
-  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+.sim-ui {
+  --stage-max: clamp(240px, calc(100dvh - 380px), 620px);
+  display: flex;
+  min-height: calc(100dvh - 60px);
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 16px;
 }
 
-@media (min-width: 1100px) {
-  .sim-stage-shifted {
-    transform: translateX(min(34vw, 430px));
+.sim-stage {
+  display: flex;
+  min-height: 0;
+  width: 100%;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/*
+ * With the console docked the display slides clear of the panel instead of
+ * sitting under a dimmed overlay: the point of opening the console is to watch
+ * the character react to the sliders, so it stays lit and fully interactive.
+ */
+@media (min-width: 1180px) {
+  .sim-ui-docked {
+    --stage-max: clamp(200px, calc(100dvh - 655px), 360px);
+    display: block;
+    padding-left: calc(var(--console-width) + 40px);
+  }
+
+  .sim-ui-docked .sim-stage {
+    flex: 0 0 auto;
   }
 }
 
@@ -280,24 +330,31 @@ canvas {
   bottom: 16px;
   left: 16px;
   display: grid;
-  width: min(920px, calc(100vw - 72px));
+  width: min(920px, calc(100vw - 32px));
   min-width: 0;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
   border: 1px solid var(--console-border);
-  border-radius: 16px;
+  border-radius: var(--console-radius);
   background: var(--console-bg);
-  box-shadow: 16px 24px 54px rgb(19 13 7 / 0.32);
+  box-shadow: var(--console-shadow);
+}
+
+@media (min-width: 1180px) {
+  .control-center-panel {
+    width: var(--console-width);
+  }
 }
 
 .control-center-header {
   display: flex;
-  min-height: 70px;
+  min-height: 68px;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
   border-bottom: 1px solid var(--console-border);
-  padding: 14px 18px 14px 20px;
+  padding: 14px 18px 14px 22px;
+  background: var(--console-bg-deep);
 }
 
 .control-center-title-block,
@@ -313,21 +370,32 @@ canvas {
 
 .control-center-wordmark {
   font-size: 15px;
-  font-weight: 760;
-  letter-spacing: 0.09em;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.control-center-tagline {
+  margin-top: 2px;
+  color: var(--console-faint);
+  font-size: 11px;
+  letter-spacing: 0.01em;
 }
 
 .control-center-live {
-  gap: 7px;
+  gap: 8px;
+  border: 1px solid var(--console-border);
+  border-radius: 999px;
+  padding: 5px 11px 5px 9px;
   color: var(--console-muted);
-  font-size: 12px;
+  font-size: 11.5px;
 }
 
 .control-center-live span {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #95b487;
+  background: var(--console-positive);
+  box-shadow: 0 0 0 3px rgb(157 189 140 / 0.16);
 }
 
 .control-center-header-actions {
@@ -336,85 +404,117 @@ canvas {
 
 .control-center-reset,
 .control-center-close {
+  display: inline-flex;
   min-height: 36px;
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--console-border);
-  border-radius: 8px;
+  border-radius: var(--console-radius-sm);
   background: transparent;
   color: var(--console-muted);
   transition: transform 140ms ease-out, background-color 140ms ease-out,
-    color 140ms ease-out;
+    border-color 140ms ease-out, color 140ms ease-out;
+}
+
+.control-center-reset:hover,
+.control-center-close:hover {
+  border-color: var(--console-border-strong);
+  background: var(--console-hover);
+  color: var(--console-ink);
 }
 
 .control-center-reset {
-  padding: 0 12px;
-  font-size: 12px;
+  padding: 0 14px;
+  font-size: 12.5px;
+  font-weight: 560;
 }
 
 .control-center-close {
   width: 36px;
   padding: 0;
-  font-size: 22px;
-  line-height: 1;
 }
 
 .control-center-layout {
   display: grid;
   min-height: 0;
-  grid-template-columns: 216px minmax(0, 1fr);
+  grid-template-columns: 244px minmax(0, 1fr);
 }
 
 .control-center-nav {
+  display: grid;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+  border-right: 1px solid var(--console-border);
+  background: var(--console-bg-deep);
+}
+
+.control-center-nav-scroll {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  border-right: 1px solid var(--console-border);
-  padding: 14px 10px 20px;
-  background: #13110f;
+  padding: 16px 12px 18px;
+  scrollbar-color: rgb(244 239 230 / 0.18) transparent;
 }
 
 .control-center-nav-group + .control-center-nav-group {
-  margin-top: 17px;
+  margin-top: 20px;
 }
 
 .control-center-nav-heading {
-  padding: 0 9px 6px;
+  padding: 0 10px 8px;
   color: var(--console-faint);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 650;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.13em;
   text-transform: uppercase;
 }
 
 .control-center-nav-items {
   display: grid;
-  gap: 3px;
+  gap: 2px;
 }
 
 .control-center-nav-item {
-  display: grid;
+  display: flex;
   width: 100%;
-  min-height: 48px;
-  align-content: center;
-  gap: 2px;
+  min-height: 46px;
+  align-items: center;
+  gap: 11px;
   border: 1px solid transparent;
-  border-radius: 9px;
-  padding: 7px 9px;
+  border-radius: 11px;
+  padding: 7px 11px;
   color: var(--console-muted);
   text-align: left;
   transition: transform 130ms ease-out, background-color 130ms ease-out,
     border-color 130ms ease-out, color 130ms ease-out;
 }
 
-.control-center-nav-item > span {
+.control-center-nav-item:hover {
+  background: var(--console-hover);
+  color: var(--console-ink);
+}
+
+.control-center-nav-icon {
+  color: var(--console-faint);
+  transition: color 130ms ease-out;
+}
+
+.control-center-nav-text {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.control-center-nav-text > span {
   font-size: 13px;
-  font-weight: 620;
+  font-weight: 600;
+  letter-spacing: -0.005em;
 }
 
 .control-center-nav-item small {
   overflow: hidden;
   color: var(--console-faint);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10px;
+  font-size: 10.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -425,8 +525,48 @@ canvas {
   color: var(--console-ink);
 }
 
+.control-center-nav-item-active .control-center-nav-icon,
 .control-center-nav-item-active small {
   color: var(--console-accent);
+}
+
+.control-center-device-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 12px 14px;
+  border: 1px solid var(--console-border);
+  border-radius: 12px;
+  padding: 11px 12px;
+  background: var(--console-surface);
+}
+
+.control-center-device-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--console-positive);
+  box-shadow: 0 0 0 3px rgb(157 189 140 / 0.14);
+}
+
+.control-center-device-text {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.control-center-device-text strong {
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.control-center-device-text small {
+  overflow: hidden;
+  color: var(--console-faint);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .control-center-workspace {
@@ -441,35 +581,47 @@ canvas {
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
-  border-bottom: 1px solid var(--console-border);
-  padding: 18px 22px 16px;
+  padding: 26px 28px 18px;
 }
 
 .control-center-section-header h1 {
   color: var(--console-ink);
-  font-size: 22px;
-  font-weight: 690;
-  letter-spacing: -0.025em;
-  line-height: 1.1;
+  font-size: 27px;
+  font-weight: 680;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
 }
 
 .control-center-section-header p {
-  max-width: 540px;
-  margin-top: 6px;
+  max-width: 560px;
+  margin-top: 7px;
   color: var(--console-muted);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 13.5px;
+  line-height: 1.5;
 }
 
-.control-center-section-header output {
-  max-width: 190px;
-  overflow: hidden;
-  padding-top: 3px;
-  color: var(--console-accent);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+.control-center-section-chip {
+  display: flex;
+  max-width: 260px;
+  align-items: baseline;
+  gap: 9px;
+  border: 1px solid var(--console-border);
+  border-radius: 999px;
+  padding: 7px 14px;
+  background: var(--console-surface);
+}
+
+.control-center-section-chip span {
+  color: var(--console-faint);
   font-size: 11px;
+}
+
+.control-center-section-chip output {
+  overflow: hidden;
+  color: var(--console-ink);
+  font-size: 12px;
+  font-weight: 600;
   text-overflow: ellipsis;
-  text-transform: uppercase;
   white-space: nowrap;
 }
 
@@ -477,21 +629,238 @@ canvas {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 20px 22px 32px;
-  scrollbar-color: rgb(243 238 229 / 0.24) transparent;
+  padding: 6px 28px 34px;
+  scrollbar-color: rgb(244 239 230 / 0.2) transparent;
 }
 
-.control-center-footer {
+/* ---------------------------------------------------------------------------
+ * Preview rail — the live device plus its dashboard cards. It shares the
+ * console's token set so the two halves read as one tool.
+ * ------------------------------------------------------------------------ */
+.preview-rail {
   display: flex;
-  min-height: 38px;
+  width: 100%;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.preview-card {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.preview-card-head,
+.preview-actions,
+.preview-summary,
+.preview-status {
+  width: 100%;
+  max-width: 420px;
+}
+
+.preview-card-head {
+  display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 12px;
+}
+
+.preview-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--console-border);
+  border-radius: 999px;
+  padding: 5px 13px 5px 11px;
+  background: var(--console-surface);
+  color: var(--console-muted);
+  font-size: 12px;
+  font-weight: 560;
+}
+
+.preview-live span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--console-positive);
+  box-shadow: 0 0 0 3px rgb(157 189 140 / 0.16);
+}
+
+.preview-view-chip {
+  border: 1px solid var(--console-border);
+  border-radius: 999px;
+  padding: 5px 12px;
+  background: var(--console-surface);
+  color: var(--console-muted);
+  font-size: 11.5px;
+  text-transform: capitalize;
+}
+
+.preview-caption {
+  border: 1px solid var(--console-border);
+  border-radius: 999px;
+  padding: 7px 18px;
+  background: var(--console-surface);
+  color: var(--console-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.preview-stage {
+  display: flex;
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-stage:fullscreen {
+  background: var(--simulator-bg);
+}
+
+.preview-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.preview-action {
+  display: flex;
+  min-height: 62px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid var(--console-border);
+  border-radius: 14px;
+  background: var(--console-surface);
+  color: var(--console-muted);
+  font-size: 11.5px;
+  font-weight: 560;
+  transition: transform 130ms ease-out, background-color 130ms ease-out,
+    border-color 130ms ease-out, color 130ms ease-out;
+}
+
+.preview-action:hover {
+  border-color: var(--console-border-strong);
+  background: var(--console-surface-raised);
+  color: var(--console-ink);
+}
+
+.preview-action:active {
+  transform: scale(0.97);
+}
+
+.preview-summary,
+.preview-status {
+  border: 1px solid var(--console-border);
+  border-radius: 16px;
+  background: var(--console-surface);
+}
+
+.preview-summary {
+  display: none;
+  padding: 4px 0 6px;
+}
+
+.preview-summary-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 16px 11px;
+  color: var(--console-muted);
+}
+
+.preview-summary-head h2 {
+  color: var(--console-ink);
+  font-size: 13px;
+  font-weight: 620;
+}
+
+.preview-summary-list {
+  display: grid;
+  padding: 0 16px 8px;
+}
+
+.preview-summary-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
   border-top: 1px solid var(--console-border);
-  padding: 8px 20px;
+  padding: 7px 0;
+}
+
+.preview-summary-row dt {
   color: var(--console-faint);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10px;
+  font-size: 12px;
+}
+
+.preview-summary-row dd {
+  overflow: hidden;
+  color: var(--console-ink);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 580;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-summary-accent {
+  color: var(--console-accent) !important;
+}
+
+.preview-status {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.preview-status-icon {
+  color: var(--console-positive);
+}
+
+.preview-status strong,
+.preview-status small {
+  display: block;
+}
+
+.preview-status strong {
+  font-size: 12.5px;
+  font-weight: 620;
+}
+
+.preview-status small {
+  margin-top: 2px;
+  color: var(--console-faint);
+  font-size: 11.5px;
+}
+
+/* The dashboard cards only earn their space once the console is docked. */
+@media (min-width: 1180px) {
+  .preview-rail-docked {
+    max-width: 420px;
+    margin: 0 auto;
+  }
+
+  .preview-rail-docked .preview-summary,
+  .preview-rail-docked .preview-status {
+    display: block;
+  }
+
+  .preview-rail-docked .preview-status {
+    display: flex;
+  }
 }
 
 .control-card-stack {
@@ -1548,14 +1917,22 @@ canvas {
   }
 
   .control-center-nav {
+    display: block;
+    border-right: 0;
+    border-bottom: 1px solid var(--console-border);
+  }
+
+  .control-center-nav-scroll {
     display: flex;
     gap: 15px;
     overflow-x: auto;
     overflow-y: hidden;
-    border-right: 0;
-    border-bottom: 1px solid var(--console-border);
     padding: 9px 10px 10px;
     scrollbar-width: thin;
+  }
+
+  .control-center-device-card {
+    display: none;
   }
 
   .control-center-nav-group,
@@ -1598,21 +1975,12 @@ canvas {
     font-size: 12px;
   }
 
-  .control-center-section-header output {
+  .control-center-section-chip {
     display: none;
   }
 
   .control-center-content {
     padding: 14px 14px 24px;
-  }
-
-  .control-center-footer {
-    justify-content: center;
-    padding: 7px 12px;
-  }
-
-  .control-center-footer span:last-child {
-    display: none;
   }
 
   .control-range-grid,
@@ -1670,6 +2038,8 @@ canvas {
 
 @media (prefers-reduced-motion: reduce) {
   .control-center-root *,
+  .preview-rail *,
+  .sim-stage,
   .screen-browser-progress span {
     transition-duration: 0ms !important;
   }

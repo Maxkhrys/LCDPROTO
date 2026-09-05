@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { ActionIcon, ConsoleIcon } from "./ConsoleIcons";
 
 export type ControlSectionId =
   | "screens"
@@ -29,6 +30,9 @@ interface ControlCenterProps {
   open: boolean;
   active: ControlSectionId;
   sections: ControlSectionDefinition[];
+  /** Short line under the nav — what the simulated hardware is doing. */
+  statusLabel: string;
+  statusDetail: string;
   onOpenChange: (open: boolean) => void;
   onActiveChange: (section: ControlSectionId) => void;
   onReset: () => void;
@@ -46,6 +50,8 @@ export default function ControlCenter({
   open,
   active,
   sections,
+  statusLabel,
+  statusDetail,
   onOpenChange,
   onActiveChange,
   onReset,
@@ -86,39 +92,42 @@ export default function ControlCenter({
       )}
 
       {open && (
-        <>
-          <aside
-            id="lcdproto-control-center"
-            aria-label="LCDPROTO controls"
-            className="control-center-panel"
-            role="region"
-          >
-            <header className="control-center-header">
-              <div className="control-center-title-block">
+        <aside
+          id="lcdproto-control-center"
+          aria-label="LCDPROTO controls"
+          className="control-center-panel"
+          role="region"
+        >
+          <header className="control-center-header">
+            <div className="control-center-title-block">
+              <div className="control-center-brand">
                 <div className="control-center-wordmark">LCDPROTO</div>
-                <div className="control-center-live">
-                  <span aria-hidden />
-                  Console live
-                </div>
+                <div className="control-center-tagline">Creative hardware console</div>
               </div>
-              <div className="control-center-header-actions">
-                <button type="button" className="control-center-reset" onClick={onReset}>
-                  Reset all
-                </button>
-                <button
-                  type="button"
-                  className="control-center-close"
-                  aria-label="Close controls"
-                  autoFocus
-                  onClick={() => onOpenChange(false)}
-                >
-                  ×
-                </button>
+              <div className="control-center-live">
+                <span aria-hidden />
+                Console live
               </div>
-            </header>
+            </div>
+            <div className="control-center-header-actions">
+              <button type="button" className="control-center-reset" onClick={onReset}>
+                Reset all
+              </button>
+              <button
+                type="button"
+                className="control-center-close"
+                aria-label="Close controls"
+                autoFocus
+                onClick={() => onOpenChange(false)}
+              >
+                <ActionIcon.close className="console-icon" />
+              </button>
+            </div>
+          </header>
 
-            <div className="control-center-layout">
-              <nav className="control-center-nav" aria-label="Control sections">
+          <div className="control-center-layout">
+            <nav className="control-center-nav" aria-label="Control sections">
+              <div className="control-center-nav-scroll">
                 {GROUPS.map((group) => (
                   <div className="control-center-nav-group" key={group}>
                     <div className="control-center-nav-heading">{group}</div>
@@ -127,6 +136,7 @@ export default function ControlCenter({
                         .filter((section) => section.group === group)
                         .map((section) => {
                           const selected = section.id === active;
+                          const Icon = ConsoleIcon[section.id];
                           return (
                             <button
                               key={section.id}
@@ -137,34 +147,43 @@ export default function ControlCenter({
                               aria-current={selected ? "page" : undefined}
                               onClick={() => onActiveChange(section.id)}
                             >
-                              <span>{section.label}</span>
-                              <small>{section.summary}</small>
+                              <Icon className="console-icon control-center-nav-icon" />
+                              <span className="control-center-nav-text">
+                                <span>{section.label}</span>
+                                <small>{section.summary}</small>
+                              </span>
                             </button>
                           );
                         })}
                     </div>
                   </div>
                 ))}
-              </nav>
+              </div>
 
-              <section className="control-center-workspace">
-                <div className="control-center-section-header">
-                  <div>
-                    <h1>{activeSection.label}</h1>
-                    <p>{activeSection.description}</p>
-                  </div>
+              <div className="control-center-device-card">
+                <span className="control-center-device-dot" aria-hidden />
+                <span className="control-center-device-text">
+                  <strong>{statusLabel}</strong>
+                  <small>{statusDetail}</small>
+                </span>
+              </div>
+            </nav>
+
+            <section className="control-center-workspace">
+              <div className="control-center-section-header">
+                <div>
+                  <h1>{activeSection.label}</h1>
+                  <p>{activeSection.description}</p>
+                </div>
+                <div className="control-center-section-chip">
+                  <span>Active</span>
                   <output>{activeSection.summary}</output>
                 </div>
-                <div className="control-center-content">{children}</div>
-              </section>
-            </div>
-
-            <footer className="control-center-footer">
-              <span>466 × 466 authored canvas</span>
-              <span>All controls stay outside the display</span>
-            </footer>
-          </aside>
-        </>
+              </div>
+              <div className="control-center-content">{children}</div>
+            </section>
+          </div>
+        </aside>
       )}
     </div>
   );

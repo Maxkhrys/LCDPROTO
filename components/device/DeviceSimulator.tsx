@@ -10,6 +10,7 @@ import ScreenStage from "@/components/screens/ScreenStage";
 import ScreenBrowser from "@/components/screens/ScreenBrowser";
 import EmojiMakerPanel from "./EmojiMakerPanel";
 import PerformanceLabPanel from "./PerformanceLabPanel";
+import PreviewRail from "./PreviewRail";
 import { ScreenLifecycle, type LifecycleSnapshot } from "@/lib/screenLifecycle";
 import { isDeviceState, type FlowId, type ScreenId } from "@/lib/screenCatalogue";
 import {
@@ -1039,12 +1040,48 @@ export default function DeviceSimulator() {
     }
   })();
 
+  const characterLabel =
+    CHARACTERS.find((item) => item.id === character)?.label ?? character;
+  const paletteLabel =
+    character === "cloud"
+      ? (cloudSettings.palettePreset === "Follow Blob colour"
+          ? CLOUD_PALETTES[blobColour]
+          : cloudSettings.palettePreset) ?? CLOUD_PALETTES[blobColour]
+      : `${blobColour[0].toUpperCase()}${blobColour.slice(1)}`;
+  const behaviourLabel = autoBehaviourEnabled
+    ? (status?.id ?? "REST")
+    : status?.id && status.id !== "REST"
+      ? status.id
+      : "manual";
+
+  const previewSummary = [
+    { label: "Character", value: characterLabel },
+    { label: "Scale", value: `${characterScale.toFixed(2)}x` },
+    { label: "Palette", value: paletteLabel, accent: true },
+    { label: "State", value: meta.label },
+    { label: "Frame rate", value: `${fps} fps` },
+    {
+      label: "Sampling",
+      value: nativePixels ? "1:1 pixels" : `${renderScale}x sampled`,
+    },
+    { label: "Behaviour", value: behaviourLabel },
+    { label: "Idle motion", value: idle.enabled ? "on" : "off" },
+  ];
+
+  const resetView = () => {
+    setScreenScale(1.2);
+    setCharacterScale(DEFAULT_CHARACTER_SCALE);
+    setNativePixels(false);
+  };
+
   return (
-    <div className="sim-ui relative flex min-h-[calc(100dvh-24px)] w-full flex-col items-center gap-3 sm:gap-4">
+    <div className={`sim-ui ${controlsOpen ? "sim-ui-docked" : ""}`}>
       <ControlCenter
         open={controlsOpen}
         active={activeControl}
         sections={controlSections}
+        statusLabel={playing ? "Device connected" : "Device paused"}
+        statusDetail={`LCDPROTO · ${DEVICE_CONFIG.resolution}×${DEVICE_CONFIG.resolution}`}
         onOpenChange={setControlsOpen}
         onActiveChange={setActiveControl}
         onReset={reset}
@@ -1052,12 +1089,25 @@ export default function DeviceSimulator() {
         {controlContent}
       </ControlCenter>
 
-      <div
-        className={`sim-stage flex min-h-0 w-full flex-1 items-center justify-center ${
-          controlsOpen ? "sim-stage-shifted" : ""
-        }`}
+      <PreviewRail
+        docked={controlsOpen}
+        playing={playing}
+        viewLabel={`${displayMode} view`}
+        caption={`${characterScale.toFixed(2)}x · ${characterLabel} · ${paletteLabel}`}
+        summary={previewSummary}
+        statusTitle={playing ? "All systems nominal" : "Playback paused"}
+        statusDetail={`${playing ? "Rendering" : "Holding"} at ${fps} fps · ${meta.label}`}
+        onTogglePlay={() => setPlaying((value) => !value)}
+        onResetView={resetView}
       >
-        <div ref={frameRef} className="flex aspect-square w-full max-w-full items-center justify-center" style={{ width: `min(100%, ${Math.round(DEFAULT_OUTER * screenScale)}px, max(280px, calc(100dvh - 76px)))` }}>
+        <div
+          className={`sim-stage ${controlsOpen ? "sim-stage-docked" : ""}`}
+        >
+        <div
+          ref={frameRef}
+          className="device-frame flex aspect-square w-full max-w-full items-center justify-center"
+          style={{ width: `min(100%, ${Math.round(DEFAULT_OUTER * screenScale)}px, var(--stage-max))` }}
+        >
           <DeviceBezel screenSize={screenSize}>
             <div className="relative">
               <ScreenStage
@@ -1116,48 +1166,8 @@ export default function DeviceSimulator() {
             </div>
           </DeviceBezel>
         </div>
-      </div>
-
-      {/* Dev readout — outside the device, never inside the panel */}
-      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 font-mono text-[10px] uppercase tracking-[0.18em] text-white/25">
-        <span>
-          {DEVICE_CONFIG.resolution}&times;{DEVICE_CONFIG.resolution}
-        </span>
-        <span aria-hidden className="text-white/10">
-          /
-        </span>
-        <span style={{ color: `${meta.accent}b3` }}>{meta.label}</span>
-        <span aria-hidden className="text-white/10">
-          /
-        </span>
-        <span>{fps} fps</span>
-        <span aria-hidden className="text-white/10">
-          /
-        </span>
-        <span>{nativePixels ? "1:1 pixels" : `${renderScale}x sampled`}</span>
-        <span aria-hidden className="text-white/10">
-          /
-        </span>
-        <span>{blobColour}</span>
-        <span aria-hidden className="text-white/10">
-          /
-        </span>
-        <span>{idle.enabled ? "idle on" : "idle off"}</span>
-        <span aria-hidden className="text-white/10">
-          /
-        </span>
-        <span className="text-white/40">
-          {autoBehaviourEnabled
-            ? (status?.id ?? "REST")
-            : status?.id && status.id !== "REST"
-              ? status.id
-              : "manual"}
-        </span>
-        <span aria-hidden className="text-white/10">
-          /
-        </span>
-        <span>{playing ? "running" : "paused"}</span>
-      </div>
+        </div>
+      </PreviewRail>
     </div>
   );
 }
