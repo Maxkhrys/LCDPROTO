@@ -17,7 +17,6 @@ export type LobeId =
   | "baseLeft"
   | "baseRight"
   | "bottomBelly"
-  | "trailingTuft"
   | "frontVeil";
 
 export interface LobeDefinition {
@@ -35,7 +34,6 @@ export interface LobeDefinition {
   breathPhase: number;
   breathAmp: number;
   depth: number; // Order: <0 rear base, 0 core, 1-2 mid crown/cheeks, 10 front veil over face
-  circPhase?: number; // Phase offset in radians for traveling wind circulation
 }
 
 export interface LobeState {
@@ -68,11 +66,10 @@ export interface CloudDeformationParams {
   lobeSoftness: number;
   faceEmbedDepth: number; // 0 (crisp floating) to 0.35 (submerged in mist), default 0.12
   fluffiness: number; // 0 (smooth) to 2.0 (ultra-billowy cumulus fluff), default 1.2
+  lightStrength: number;
   lightAngle: number; // Key light angle in degrees, default -45 (top-left sunlight)
   cheekBlush: number; // 0 to 1 warm bioluminescent blush intensity
   cloudBrows: boolean; // Render floating wispy cloud brows
-  sandBounce?: number; // 0 to 1 warm environmental floor bounce reflection
-  billowContrast?: number; // 0.5 to 1.5 volumetric shading contrast
   gazeX: number; // -1 to 1 iris glance
   gazeY: number; // -1 to 1 iris glance
 }
@@ -114,36 +111,6 @@ export interface SuspendedDroplet {
   driftSpeed: number;
 }
 
-export type ParticleDepthClass = "rear" | "mid" | "front";
-
-export interface InternalAuraParticle {
-  id: string;
-  depthClass: ParticleDepthClass;
-  attachedLobe: LobeId;
-  baseX: number;
-  baseY: number;
-  baseRadius: number;
-  haloRadius: number;
-  baseOpacity: number;
-  speed: number;
-  phase: number;
-  twinkleDepth: number;
-  driftPhase: number;
-  driftSpeed: number;
-  driftRadius: number;
-}
-
-export interface TwinklingStar {
-  x: number;
-  y: number;
-  baseRadius: number;
-  rayLength: number;
-  speed: number;
-  phase: number;
-  hueShift?: string;
-  attachedLobe: string;
-}
-
 export interface CloudWisp {
   active: boolean;
   x: number;
@@ -158,12 +125,9 @@ export interface CloudWisp {
   maxLife: number;
   softness: number;
   color: string;
-  wobbleSpeed?: number;
-  wobbleAmp?: number;
-  wobblePhase?: number;
-  isMicroParticle?: boolean;
-  stretchFactor?: number;
-  angle?: number;
+  angle: number;
+  shape: number;
+  curl: number;
 }
 
 export type CloudPresetName =
@@ -213,6 +177,16 @@ export interface CloudBlobBodyProps {
   showFace?: boolean;
   /** Enable interactive pointer drag / touch manipulation. */
   dragEnabled?: boolean;
+  playing?: boolean;
+  fps?: 30 | 60;
+  idleEnabled?: boolean;
+  debug?: boolean;
+  resetId?: number;
+  centreId?: number;
+  clearWispsId?: number;
+  /** Called by the single simulation clock; production controllers take ms. */
+  advanceRig?: (dtMs: number) => BlobRig;
+  onPose?: (x: number, y: number, scale: number) => void;
   /** Additional container styling. */
   className?: string;
   /** Callback fired on drag state change. */

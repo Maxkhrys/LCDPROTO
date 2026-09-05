@@ -470,7 +470,8 @@ export default function HomeState({
             cloudMotion={cloudSettings.motion}
             cloudTrails={cloudSettings.trails}
             cloudColour={cloudSettings.colour}
-    cloudFace={cloudSettings.face}
+            cloudFace={cloudSettings.face}
+            cloudPalette={cloudSettings.palettePreset}
           />
         ) : (
           <BlobCharacter

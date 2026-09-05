@@ -190,8 +190,13 @@ export class ScreenLifecycle {
     if (this.playing && duration > 0) {
       this.elapsed += clamp(dtMs, 0, 250);
       if (this.elapsed >= duration) {
-        if (this.flow) {
+        if (this.externalProgress !== null) {
+          // Real progress owns completion; a slow OTA must not finish on a timer.
+          this.elapsed = duration;
+        } else if (this.flow) {
+          const remainder = this.elapsed - duration;
           this.advance();
+          this.elapsed = remainder;
         } else if (definition.transitionOut === "cut") {
           // Screens that end by cutting to black — SLEEP above all — hold
           // their final frame instead of looping. Looping a sleep preview back
@@ -201,7 +206,7 @@ export class ScreenLifecycle {
         } else {
           // Every other single-screen preview loops, so the developer can keep
           // watching the motion without pressing replay.
-          this.elapsed = 0;
+          this.elapsed %= duration;
         }
       }
     }

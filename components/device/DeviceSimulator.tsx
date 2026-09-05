@@ -15,11 +15,19 @@ import { isDeviceState, type FlowId, type ScreenId } from "@/lib/screenCatalogue
 import {
   CHARACTERS,
   CLOUD_SLIDERS,
+  CLOUD_COLOUR_PRESET_NAMES,
+  CLOUD_PALETTES,
   DEFAULT_CHARACTER,
   DEFAULT_CLOUD_SETTINGS,
   type CharacterId,
   type CloudSettings,
 } from "@/lib/characters";
+import {
+  DEFAULT_COLOUR,
+  COLOUR_PRESETS,
+  PRESETS as CLOUD_SHAPE_PRESETS,
+} from "@/components/experimental/cloud-blob/cloudLobeSystem";
+import type { CloudPresetName } from "@/components/experimental/cloud-blob/cloudTypes";
 import { DEVICE_CONFIG, type Fps, type Speed } from "@/lib/deviceConfig";
 import {
   DEFAULT_FACE_CALIBRATION,
@@ -446,6 +454,158 @@ export default function DeviceSimulator() {
               </p>
             </ControlCard>
 
+            {character === "cloud" && (() => {
+              const activePresetName = cloudSettings.palettePreset ?? "Follow Blob colour";
+              const effectiveBase =
+                activePresetName !== "Follow Blob colour" && COLOUR_PRESETS[activePresetName]
+                  ? COLOUR_PRESETS[activePresetName]
+                  : (COLOUR_PRESETS[CLOUD_PALETTES[blobColour]] ?? DEFAULT_COLOUR);
+              const currentBody = cloudSettings.colour.body ?? effectiveBase.body;
+              const currentEdge = cloudSettings.colour.edge ?? effectiveBase.edge;
+              const currentGlow = cloudSettings.colour.innerGlow ?? effectiveBase.innerGlow;
+              const currentCore = cloudSettings.colour.coreTint ?? effectiveBase.coreTint;
+
+              return (
+                <ControlCard
+                  title="Cloud colour & palette"
+                  description="Choose from mist color presets or customize individual body, edge, glow and core tints."
+                >
+                  <ChoiceGroup label="Palette preset">
+                    {CLOUD_COLOUR_PRESET_NAMES.map((name) => (
+                      <DevButton
+                        key={name}
+                        active={activePresetName === name}
+                        onClick={() => {
+                          if (name === "Follow Blob colour") {
+                            setCloudSettings((current) => ({
+                              ...current,
+                              palettePreset: "Follow Blob colour",
+                              colour: {},
+                            }));
+                          } else {
+                            setCloudSettings((current) => ({
+                              ...current,
+                              palettePreset: name,
+                              colour: {
+                                ...current.colour,
+                                ...COLOUR_PRESETS[name],
+                              },
+                            }));
+                          }
+                        }}
+                      >
+                        {name}
+                      </DevButton>
+                    ))}
+                  </ChoiceGroup>
+                  <p className="control-card-note">
+                    {activePresetName === "Follow Blob colour"
+                      ? `Matching Blob colour (${blobColour}): ${CLOUD_PALETTES[blobColour] ?? "Cool Mist"}`
+                      : `Active palette: ${activePresetName}`}
+                  </p>
+                  <label className="control-colour-field">
+                    <span>
+                      <strong>Body mist</strong>
+                      <small>Base volumetric body color</small>
+                    </span>
+                    <input
+                      aria-label="Cloud body color"
+                      type="color"
+                      value={currentBody}
+                      onChange={(e) =>
+                        setCloudSettings((current) => ({
+                          ...current,
+                          colour: { ...current.colour, body: e.target.value },
+                        }))
+                      }
+                    />
+                    <output>{currentBody}</output>
+                  </label>
+                  <label className="control-colour-field">
+                    <span>
+                      <strong>Perimeter mist</strong>
+                      <small>Outer edge wisps & droplet highlight</small>
+                    </span>
+                    <input
+                      aria-label="Cloud edge color"
+                      type="color"
+                      value={currentEdge}
+                      onChange={(e) =>
+                        setCloudSettings((current) => ({
+                          ...current,
+                          colour: { ...current.colour, edge: e.target.value },
+                        }))
+                      }
+                    />
+                    <output>{currentEdge}</output>
+                  </label>
+                  <label className="control-colour-field">
+                    <span>
+                      <strong>Inner glow</strong>
+                      <small>Core internal luminescence</small>
+                    </span>
+                    <input
+                      aria-label="Cloud inner glow color"
+                      type="color"
+                      value={currentGlow}
+                      onChange={(e) =>
+                        setCloudSettings((current) => ({
+                          ...current,
+                          colour: { ...current.colour, innerGlow: e.target.value },
+                        }))
+                      }
+                    />
+                    <output>{currentGlow}</output>
+                  </label>
+                  <label className="control-colour-field">
+                    <span>
+                      <strong>Core tint</strong>
+                      <small>Deep shade & lighting shadow</small>
+                    </span>
+                    <input
+                      aria-label="Cloud core tint"
+                      type="color"
+                      value={currentCore}
+                      onChange={(e) =>
+                        setCloudSettings((current) => ({
+                          ...current,
+                          colour: { ...current.colour, coreTint: e.target.value },
+                        }))
+                      }
+                    />
+                    <output>{currentCore}</output>
+                  </label>
+                </ControlCard>
+              );
+            })()}
+
+            {character === "cloud" && (
+              <ControlCard
+                title="Cloud shape presets"
+                description="Instant volumetric shapes from the cloud simulator."
+              >
+                <ChoiceGroup label="Archetype">
+                  {(Object.keys(CLOUD_SHAPE_PRESETS) as CloudPresetName[]).map((name) => (
+                    <DevButton
+                      key={name}
+                      onClick={() => {
+                        const presetParams = CLOUD_SHAPE_PRESETS[name];
+                        setCloudSettings((current) => ({
+                          ...current,
+                          params: {
+                            ...current.params,
+                            ...presetParams,
+                          },
+                        }));
+                      }}
+                    >
+                      {name.toLowerCase()}
+                    </DevButton>
+                  ))}
+                </ChoiceGroup>
+              </ControlCard>
+            )}
+
             {character === "cloud" &&
               (["params", "motion", "trails", "colour", "face"] as const).map((group) => (
                 <ControlCard
@@ -453,6 +613,42 @@ export default function DeviceSimulator() {
                   title={CLOUD_GROUP_TITLES[group]}
                   description={CLOUD_GROUP_NOTES[group]}
                 >
+                  {group === "params" && (
+                    <ChoiceGroup label="Secondary brows">
+                      <DevButton
+                        active={Boolean(cloudSettings.params.cloudBrows)}
+                        onClick={() =>
+                          setCloudSettings((current) => ({
+                            ...current,
+                            params: {
+                              ...current.params,
+                              cloudBrows: !current.params.cloudBrows,
+                            },
+                          }))
+                        }
+                      >
+                        Mist brows {cloudSettings.params.cloudBrows ? "on" : "off"}
+                      </DevButton>
+                    </ChoiceGroup>
+                  )}
+                  {group === "trails" && (
+                    <ChoiceGroup label="Shedding">
+                      <DevButton
+                        active={cloudSettings.trails.enabled !== false}
+                        onClick={() =>
+                          setCloudSettings((current) => ({
+                            ...current,
+                            trails: {
+                              ...current.trails,
+                              enabled: current.trails.enabled === false,
+                            },
+                          }))
+                        }
+                      >
+                        Trails {cloudSettings.trails.enabled !== false ? "on" : "off"}
+                      </DevButton>
+                    </ChoiceGroup>
+                  )}
                   {CLOUD_SLIDERS.filter((slider) => slider.group === group).map(
                     (slider) => {
                       const bucket = cloudSettings[slider.group] as Record<
@@ -489,7 +685,7 @@ export default function DeviceSimulator() {
               <ControlCard title="Reset">
                 <ChoiceGroup label="Cloud">
                   <DevButton onClick={() => setCloudSettings(DEFAULT_CLOUD_SETTINGS)}>
-                    Reset cloud sliders
+                    Reset cloud settings & sliders
                   </DevButton>
                 </ChoiceGroup>
               </ControlCard>

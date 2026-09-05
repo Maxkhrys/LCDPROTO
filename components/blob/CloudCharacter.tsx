@@ -1,21 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { drawBlobFace } from "@/components/blob/BlobCharacter";
 import {
   DEFAULT_COLOUR,
   DEFAULT_DEFORMATION,
   DEFAULT_MOTION_CONFIG,
   createLobeStates,
   stepLobePhysics,
-  LOBE_DEFINITIONS,
+  COLOUR_PRESETS,
 } from "@/components/experimental/cloud-blob/cloudLobeSystem";
 import {
   createWispPool,
-  spawnRandomIdleWisp,
-  spawnDirectionalTrailWisp,
-  spawnOvershootMistWisp,
-  spawnImpactMistWisp,
+  spawnWisp,
   updateWisps,
 } from "@/components/experimental/cloud-blob/cloudMistTrails";
 import { renderCloudBlob } from "@/components/experimental/cloud-blob/cloudRenderer";
@@ -26,16 +22,16 @@ import type {
   CloudTrailConfig,
 } from "@/components/experimental/cloud-blob/cloudTypes";
 import type { BlobDragController } from "@/lib/blobDrag";
-import type { CloudFaceSettings } from "@/lib/characters";
+import {
+  type CloudFaceSettings,
+  CLOUD_PALETTES,
+} from "@/lib/characters";
 import {
   BODY_FRACTION,
   NEUTRAL_RIG,
   type BlobColour,
   type BlobRig,
 } from "@/lib/blobRig";
-
-/** How much of the rig's body deformation the face inherits on the cloud. */
-const FACE_DEFORM_INHERIT = 0.3;
 
 interface CloudCharacterProps {
   /** Native screen size in pixels (466). */
@@ -58,6 +54,7 @@ interface CloudCharacterProps {
   cloudTrails?: Partial<CloudTrailConfig>;
   cloudColour?: Partial<CloudColourConfig>;
   cloudFace?: CloudFaceSettings;
+  cloudPalette?: string;
   canvasRef?: React.MutableRefObject<HTMLCanvasElement | null>;
 }
 
@@ -70,10 +67,10 @@ const clamp = (value: number, min: number, max: number) =>
 
 const DEFAULT_TRAILS: CloudTrailConfig = {
   enabled: true,
-  spawnRate: 0.5,
+  spawnRate: 1,
   lifetime: 0.9,
   fadeSpeed: 1,
-  trailStrength: 0.6,
+  trailStrength: 1,
   driftAmount: 1,
 };
 
@@ -109,6 +106,7 @@ export default function CloudCharacter({
   cloudTrails,
   cloudColour,
   cloudFace,
+  cloudPalette,
   canvasRef: exportCanvasRef,
 }: CloudCharacterProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -121,14 +119,13 @@ export default function CloudCharacter({
 
   // Simulation state. Kept in refs so a slider change never restarts the sim.
   const lobeStates = useRef(createLobeStates());
-  const wisps = useRef(createWispPool(24));
+  const wisps = useRef(createWispPool(8));
   const idleTime = useRef(0);
-  const idleWispTimer = useRef(0);
-  const nextIdleInterval = useRef(4.5 + Math.random() * 3.0);
   const lastFrame = useRef<number | null>(null);
   const previous = useRef({ x: 0, y: 0 });
+  const emissionRef = useRef(0);
+  const sequenceRef = useRef(0);
   const prevVel = useRef({ vx: 0, vy: 0 });
-  const prevPress = useRef(0);
 
   // Pointer bookkeeping, mirroring BlobCharacter so both characters feel the
   // same to handle.
@@ -149,7 +146,6 @@ export default function CloudCharacter({
     const step = clamp(dt, 0, 0.05);
     idleTime.current += step;
 
-    const centre = size / 2;
     const { blob, body } = rig;
 
     // The lobe system deliberately has no concept of position, scale or
@@ -217,16 +213,31 @@ export default function CloudCharacter({
       gazeY: clamp(rig.leftEye.y / 7, -1, 1),
     };
 
+    // Resolve palette preset / custom color
+    let basePalette: CloudColourConfig = DEFAULT_COLOUR;
+    if (cloudPalette && cloudPalette !== "Follow Blob colour" && COLOUR_PRESETS[cloudPalette]) {
+      basePalette = COLOUR_PRESETS[cloudPalette];
+    } else if (colour && CLOUD_PALETTES[colour] && COLOUR_PRESETS[CLOUD_PALETTES[colour]]) {
+      basePalette = COLOUR_PRESETS[CLOUD_PALETTES[colour]];
+    }
+    const palette: CloudColourConfig = {
+      ...basePalette,
+      ...cloudColour,
+    };
+
     const motion: CloudMotionConfig = { ...DEFAULT_MOTION_CONFIG, ...cloudMotion };
     const trails: CloudTrailConfig = { ...DEFAULT_TRAILS, ...cloudTrails };
-    const palette: CloudColourConfig = { ...DEFAULT_COLOUR, ...cloudColour };
 
     // Whole-character placement, matching BlobCharacter's own chain.
     const depthScale = clamp(1 + blob.depth * 0.28, 0.84, 1.16);
-    const scaleX = blob.scale * depthScale * blob.scaleX;
-    const scaleY = blob.scale * depthScale * blob.scaleY;
+    const scaleX = blob.scaleX;
+    const scaleY = blob.scaleY;
     const offsetX = blob.x + body.x;
     const offsetY = blob.y + body.y + (settingsOpen ? size * 0.075 : 0);
+
+    // Ambient float and drift
+    const ambientX = Math.sin(idleTime.current * 0.45) * motion.driftAmount;
+    const ambientY = Math.sin(idleTime.current * 0.8) * motion.floatAmount;
 
     // Character velocity in 466-space pixels per second, for the lobe lag.
     const vx = (offsetX - previous.current.x) / Math.max(step, 1e-3);
@@ -234,185 +245,93 @@ export default function CloudCharacter({
     previous.current.x = offsetX;
     previous.current.y = offsetY;
 
+    const speed = Math.hypot(vx, vy);
+    const ax = (vx - prevVel.current.vx) / Math.max(step, 1e-3);
+    const ay = (vy - prevVel.current.vy) / Math.max(step, 1e-3);
+    const acceleration = Math.hypot(ax, ay);
+    prevVel.current.vx = vx;
+    prevVel.current.vy = vy;
+
+    params.x = offsetX + ambientX;
+    params.y = offsetY + ambientY;
+    params.scale = depthScale * (cloudParams?.scale ?? 1);
+    params.scaleX = scaleX;
+    params.scaleY = scaleY;
+    params.rotation = blob.rotation + body.rotation * 0.5;
+
     stepLobePhysics(
       lobeStates.current,
       params,
       motion,
-      vx,
-      vy,
+      vx / params.scale,
+      vy / params.scale,
       idleTime.current,
-      step,
-      offsetX,
-      offsetY
+      step
     );
 
-    if (trails.enabled) {
-      const speed = Math.hypot(vx, vy);
-      const ax = (vx - prevVel.current.vx) / Math.max(step, 1e-3);
-      const ay = (vy - prevVel.current.vy) / Math.max(step, 1e-3);
-      const decelDot = vx * ax + vy * ay;
+    const activeWisps = updateWisps(
+      wisps.current,
+      step,
+      trails.driftAmount,
+      trails.fadeSpeed
+    );
 
-      if (speed >= 55) {
-        spawnDirectionalTrailWisp(
+    if (step > 0 && trails.enabled !== false) {
+      const energy =
+        clamp((speed - 45) / 130, 0, 1) +
+        (speed > 20 ? clamp((acceleration - 700) / 4500, 0, 0.6) : 0);
+      emissionRef.current =
+        energy > 0
+          ? emissionRef.current + energy * 5 * step * trails.spawnRate
+          : 0;
+      const cap = speed > 230 ? 8 : 3;
+      if (emissionRef.current >= 1 && activeWisps < cap) {
+        emissionRef.current -= 1;
+        const nxVel = vx / Math.max(1, speed);
+        const nyVel = vy / Math.max(1, speed);
+        const side = Math.sin(sequenceRef.current * 2.4) * 18;
+        spawnWisp(
           wisps.current,
-          centre + offsetX,
-          centre + offsetY,
-          vx,
-          vy,
+          size / 2 + params.x - nxVel * 104 * params.scale - nyVel * side,
+          size / 2 + params.y - nyVel * 94 * params.scale + nxVel * side,
+          -vx * 0.16,
+          -vy * 0.16 - 6,
+          15 + (sequenceRef.current % 4) * 2,
           palette.edge,
-          trails.trailStrength,
           trails.lifetime,
-          params.squash,
-          params.stretch
+          0.32 * trails.trailStrength,
+          sequenceRef.current++
         );
       }
-
-      // Overshoot mist puff on rapid stop / sharp reversal
-      if (decelDot < -3000 && speed > 45) {
-        spawnOvershootMistWisp(
-          wisps.current,
-          centre + offsetX,
-          centre + offsetY,
-          vx,
-          vy,
-          palette.edge,
-          trails.trailStrength
-        );
-      }
-
-      // Wall contact mist puff
-      if (press > 0.15 && press - prevPress.current > 0.08) {
-        spawnImpactMistWisp(
-          wisps.current,
-          centre + offsetX,
-          centre + offsetY,
-          nx,
-          ny,
-          palette.edge,
-          trails.trailStrength * press
-        );
-      }
-      prevPress.current = press;
-      prevVel.current.vx = vx;
-      prevVel.current.vy = vy;
-
-      // Multi-directional spontaneous idle billow shedding (rare 4.5-7.5s)
-      idleWispTimer.current += step;
-      if (idleWispTimer.current > nextIdleInterval.current) {
-        idleWispTimer.current = 0;
-        nextIdleInterval.current = 4.5 + Math.random() * 3.0;
-        spawnRandomIdleWisp(
-          wisps.current,
-          centre + offsetX,
-          centre + offsetY,
-          palette.edge,
-          trails.trailStrength
-        );
-      }
-
-      updateWisps(wisps.current, step, trails.driftAmount);
+      emissionRef.current = Math.min(emissionRef.current, 1);
     }
 
-    ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
-    ctx.clearRect(0, 0, size, size);
+    const wallAngle =
+      (body.deformAngle * Math.PI) / 180 - (params.rotation * Math.PI) / 180;
+    const wallScaleX = 1 + (body.scaleX - 1) * 0.55;
+    const wallScaleY = body.scaleY;
 
-    // Circular AMOLED screen clipping (466x466 round screen, R=233):
-    // Eliminates any rectangular bounding box clipping so mist and lobes
-    // contour naturally against the bezel without straight cutoffs.
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(centre, centre, centre, 0, Math.PI * 2);
-    ctx.clip();
-
-    ctx.save();
-    ctx.translate(centre + offsetX, centre + offsetY);
-    ctx.rotate(((blob.rotation + body.rotation) * Math.PI) / 180);
-    ctx.scale(scaleX, scaleY);
-    ctx.translate(-centre, -centre);
-    ctx.globalAlpha = blob.opacity;
-
-    // Render cloud body directly onto the primary canvas: zero intermediate buffers,
-    // zero drawImage copies, full hardware framerate.
     renderCloudBlob(ctx, {
       size,
       renderScale,
       lobeStates: lobeStates.current,
       colour: palette,
       wisps: wisps.current,
-      showFace: false,
+      showFace: true,
+      rig,
       colourName: colour,
       idleTime: idleTime.current,
-      squash: params.squash,
-      lean: params.lean,
+      params,
+      wallAngle,
+      wallScaleX,
+      wallScaleY,
+      debug: false,
       vx,
       vy,
-      gazeX: params.gazeX,
-      gazeY: params.gazeY,
-      faceEmbedDepth: params.faceEmbedDepth,
-      fluffiness: params.fluffiness,
-      lightAngle: params.lightAngle,
-      cheekBlush: params.cheekBlush,
-      sandBounce: params.sandBounce,
-      clear: false,
-      skipTransform: true,
-    });
-
-    // The production face rides the visible mass, not the core alone. The
-    // lobes lag by design, so during a fast drag the core leads the cheeks and
-    // crown by enough that a face pinned to it slides off the leading edge.
-    // Averaging the front lobes keeps it seated on what you can actually see.
-    const faceLobes = ["core", "leftCheek", "rightCheek", "topCrown"] as const;
-    let massX = 0;
-    let massY = 0;
-    let counted = 0;
-    for (const id of faceLobes) {
-      const lobe = lobeStates.current[id];
-      const def = LOBE_DEFINITIONS.find((entry) => entry.id === id);
-      if (!lobe || !def) continue;
-      // Each lobe's displacement from where it rests, so the average is a
-      // drift rather than the lobe layout itself.
-      massX += lobe.x - def.baseX;
-      massY += lobe.y - def.baseY;
-      counted += 1;
-    }
-    if (counted > 0) {
-      massX /= counted;
-      massY /= counted;
-    }
-    const face = cloudFace ?? { offsetX: 0, offsetY: 10, scale: 1.04 };
-    drawBlobFace(ctx, {
-      size,
-      centre,
-      colour,
-      rig,
-      body: {
-        ...body,
-        x: massX + face.offsetX,
-        y: massY + face.offsetY,
-        // The face must NOT inherit the rig's body deformation here. On Blob
-        // that scale is the body, so the face rides it; on the cloud the body
-        // is the lobes, which already carry the contact, so passing it through
-        // sheared the eyes and mouth into diagonal slivers on top of a shape
-        // that had not deformed that way. A small share keeps it attached.
-        rotation: body.rotation * FACE_DEFORM_INHERIT,
-        // Skew is dropped outright rather than damped. It is what turned the
-        // eyes into slanted parallelograms: a shear of the body reads as
-        // material stretching on Blob, but the cloud's mist has no surface for
-        // the face to be painted on, so the shear only distorted the features.
-        skewX: 0,
-        skewY: 0,
-        deformAngle: 0,
-        scaleX: (1 + (body.scaleX - 1) * FACE_DEFORM_INHERIT) * face.scale,
-        scaleY: (1 + (body.scaleY - 1) * FACE_DEFORM_INHERIT) * face.scale,
-      },
-      bodyWidth: size * BODY_FRACTION,
-      bodyHeight: size * BODY_FRACTION,
-      faceVisibility: 1,
+      safeRadius: Math.max(0, size / 2 - 170 * params.scale),
+      face: cloudFace,
       showPupils,
-      settingsOpen,
     });
-    ctx.restore(); // Restore character transform
-    ctx.restore(); // Restore circular AMOLED clip
   }, [
     size,
     renderScale,
@@ -425,6 +344,7 @@ export default function CloudCharacter({
     cloudTrails,
     cloudColour,
     cloudFace,
+    cloudPalette,
   ]);
 
   const nativePoint = (
