@@ -318,6 +318,8 @@ export interface ElementTransform {
   mouthO: number;
   /** Amount of the flat-top, rounded-bottom D mouth. */
   mouthD: number;
+  /** Amount of the sharp half-oval / crescent smile. */
+  mouthCrescent: number;
   /**
    * Wall contact: unit normal toward the contact point, and how hard.
    *
@@ -389,6 +391,7 @@ export const NEUTRAL_ELEMENT: ElementTransform = {
   mouthCurve: 0,
   mouthO: 0,
   mouthD: 0,
+  mouthCrescent: 0,
   contactX: 0,
   contactY: 0,
   contactPressure: 0,

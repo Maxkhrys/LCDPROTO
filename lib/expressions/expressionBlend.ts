@@ -58,6 +58,7 @@ export function interpolateMouth(
     curve: lerp(from.curve, to.curve, t),
     dAmount: lerp(from.dAmount, to.dAmount, t),
     oAmount: lerp(from.oAmount, to.oAmount, t),
+    crescentSmileAmount: lerp(from.crescentSmileAmount ?? 0, to.crescentSmileAmount ?? 0, t),
   };
 }
 

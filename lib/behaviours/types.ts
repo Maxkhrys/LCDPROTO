@@ -217,6 +217,7 @@ export interface PoseDelta {
   mouthCurve: number;
   mouthO: number;
   mouthD: number;
+  mouthCrescent: number;
 }
 
 export const NEUTRAL_DELTA: PoseDelta = {
@@ -276,6 +277,7 @@ export const NEUTRAL_DELTA: PoseDelta = {
   mouthCurve: 0.82,
   mouthO: 0,
   mouthD: 0,
+  mouthCrescent: 0,
 };
 
 export const MOOD_LIST: readonly HomeMood[] = [

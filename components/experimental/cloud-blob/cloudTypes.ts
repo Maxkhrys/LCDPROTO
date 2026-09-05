@@ -114,6 +114,25 @@ export interface SuspendedDroplet {
   driftSpeed: number;
 }
 
+export type ParticleDepthClass = "rear" | "mid" | "front";
+
+export interface InternalAuraParticle {
+  id: string;
+  depthClass: ParticleDepthClass;
+  attachedLobe: LobeId;
+  baseX: number;
+  baseY: number;
+  baseRadius: number;
+  haloRadius: number;
+  baseOpacity: number;
+  speed: number;
+  phase: number;
+  twinkleDepth: number;
+  driftPhase: number;
+  driftSpeed: number;
+  driftRadius: number;
+}
+
 export interface TwinklingStar {
   x: number;
   y: number;
@@ -143,6 +162,8 @@ export interface CloudWisp {
   wobbleAmp?: number;
   wobblePhase?: number;
   isMicroParticle?: boolean;
+  stretchFactor?: number;
+  angle?: number;
 }
 
 export type CloudPresetName =

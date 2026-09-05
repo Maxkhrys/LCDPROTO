@@ -23,6 +23,7 @@ export interface MouthRecipe {
   curve: number;
   dAmount: number;
   oAmount: number;
+  crescentSmileAmount?: number;
 }
 
 export interface ExpressionRecipe {
@@ -58,6 +59,7 @@ export const DEFAULT_MOUTH_RECIPE: MouthRecipe = {
   curve: 0.82,
   dAmount: 0,
   oAmount: 0,
+  crescentSmileAmount: 0,
 };
 
 /** Convert recipe into universal CharacterFacePose */
@@ -108,6 +110,7 @@ export function recipeToBlobRig(
       mouthCurve: recipe.mouth.curve,
       mouthD: recipe.mouth.dAmount,
       mouthO: recipe.mouth.oAmount,
+      mouthCrescent: recipe.mouth.crescentSmileAmount ?? 0,
     },
   };
 }

@@ -54,6 +54,7 @@ export default function ExpressionMakerPanel({
   const [mouthCurve, setMouthCurve] = useState(0.82);
   const [mouthD, setMouthD] = useState(0);
   const [mouthO, setMouthO] = useState(0);
+  const [mouthCrescent, setMouthCrescent] = useState(0);
 
   const [statusMessage, setStatusMessage] = useState("466 × 466 transparent PNG");
   const [showJsonModal, setShowJsonModal] = useState(false);
@@ -91,6 +92,7 @@ export default function ExpressionMakerPanel({
     setMouthCurve(recipe.mouth.curve);
     setMouthD(recipe.mouth.dAmount);
     setMouthO(recipe.mouth.oAmount);
+    setMouthCrescent(recipe.mouth.crescentSmileAmount ?? 0);
 
     setStatusMessage(`Loaded "${recipe.label || recipe.id}"`);
   };
@@ -129,6 +131,7 @@ export default function ExpressionMakerPanel({
         curve: mouthCurve,
         dAmount: mouthD,
         oAmount: mouthO,
+        crescentSmileAmount: mouthCrescent,
       },
     };
   }, [
@@ -152,6 +155,7 @@ export default function ExpressionMakerPanel({
     mouthCurve,
     mouthD,
     mouthO,
+    mouthCrescent,
   ]);
 
   const rig: BlobRig = useMemo(() => {
@@ -217,6 +221,7 @@ export default function ExpressionMakerPanel({
     setMouthCurve(DEFAULT_MOUTH_RECIPE.curve);
     setMouthD(DEFAULT_MOUTH_RECIPE.dAmount);
     setMouthO(DEFAULT_MOUTH_RECIPE.oAmount);
+    setMouthCrescent(DEFAULT_MOUTH_RECIPE.crescentSmileAmount ?? 0);
 
     setStatusMessage("Reset face to neutral defaults");
   };
@@ -619,6 +624,15 @@ export default function ExpressionMakerPanel({
                   step={0.01}
                   format={(v) => v.toFixed(2)}
                   onChange={setMouthCurve}
+                />
+                <EmojiSlider
+                  label="Crescent smile"
+                  value={mouthCrescent}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  format={(v) => `${Math.round(v * 100)}%`}
+                  onChange={setMouthCrescent}
                 />
                 <EmojiSlider
                   label="D mouth"

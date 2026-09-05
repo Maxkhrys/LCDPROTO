@@ -14,6 +14,8 @@ import {
   createWispPool,
   spawnRandomIdleWisp,
   spawnDirectionalTrailWisp,
+  spawnOvershootMistWisp,
+  spawnImpactMistWisp,
   updateWisps,
 } from "@/components/experimental/cloud-blob/cloudMistTrails";
 import { renderCloudBlob } from "@/components/experimental/cloud-blob/cloudRenderer";
@@ -121,10 +123,12 @@ export default function CloudCharacter({
   const lobeStates = useRef(createLobeStates());
   const wisps = useRef(createWispPool(24));
   const idleTime = useRef(0);
-  const idleWispTimer = useRef(0.8);
-  const nextIdleInterval = useRef(1.0);
+  const idleWispTimer = useRef(0);
+  const nextIdleInterval = useRef(4.5 + Math.random() * 3.0);
   const lastFrame = useRef<number | null>(null);
   const previous = useRef({ x: 0, y: 0 });
+  const prevVel = useRef({ vx: 0, vy: 0 });
+  const prevPress = useRef(0);
 
   // Pointer bookkeeping, mirroring BlobCharacter so both characters feel the
   // same to handle.
@@ -244,7 +248,11 @@ export default function CloudCharacter({
 
     if (trails.enabled) {
       const speed = Math.hypot(vx, vy);
-      if (speed > 35) {
+      const ax = (vx - prevVel.current.vx) / Math.max(step, 1e-3);
+      const ay = (vy - prevVel.current.vy) / Math.max(step, 1e-3);
+      const decelDot = vx * ax + vy * ay;
+
+      if (speed >= 55) {
         spawnDirectionalTrailWisp(
           wisps.current,
           centre + offsetX,
@@ -253,15 +261,46 @@ export default function CloudCharacter({
           vy,
           palette.edge,
           trails.trailStrength,
-          trails.lifetime
+          trails.lifetime,
+          params.squash,
+          params.stretch
         );
       }
 
-      // Multi-directional spontaneous idle billow shedding & micro cloud particles
+      // Overshoot mist puff on rapid stop / sharp reversal
+      if (decelDot < -3000 && speed > 45) {
+        spawnOvershootMistWisp(
+          wisps.current,
+          centre + offsetX,
+          centre + offsetY,
+          vx,
+          vy,
+          palette.edge,
+          trails.trailStrength
+        );
+      }
+
+      // Wall contact mist puff
+      if (press > 0.15 && press - prevPress.current > 0.08) {
+        spawnImpactMistWisp(
+          wisps.current,
+          centre + offsetX,
+          centre + offsetY,
+          nx,
+          ny,
+          palette.edge,
+          trails.trailStrength * press
+        );
+      }
+      prevPress.current = press;
+      prevVel.current.vx = vx;
+      prevVel.current.vy = vy;
+
+      // Multi-directional spontaneous idle billow shedding (rare 4.5-7.5s)
       idleWispTimer.current += step;
       if (idleWispTimer.current > nextIdleInterval.current) {
         idleWispTimer.current = 0;
-        nextIdleInterval.current = 0.9 + Math.random() * 1.5;
+        nextIdleInterval.current = 4.5 + Math.random() * 3.0;
         spawnRandomIdleWisp(
           wisps.current,
           centre + offsetX,
@@ -305,6 +344,8 @@ export default function CloudCharacter({
       idleTime: idleTime.current,
       squash: params.squash,
       lean: params.lean,
+      vx,
+      vy,
       gazeX: params.gazeX,
       gazeY: params.gazeY,
       faceEmbedDepth: params.faceEmbedDepth,

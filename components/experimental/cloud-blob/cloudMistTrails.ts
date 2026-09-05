@@ -101,6 +101,10 @@ export function spawnWisp(
  * 4. Trailing tuft: buoyant wind puff drifting trailing-right
  * 5. Micro cloud particle: tiny floating round cloudlet
  */
+/**
+ * Spawns a rare, gentle breathing wisp while idling.
+ * Emits subtle wisps from the character perimeter without continuous smoke soup.
+ */
 export function spawnRandomIdleWisp(
   pool: CloudWisp[],
   centerX: number,
@@ -108,81 +112,20 @@ export function spawnRandomIdleWisp(
   color: string,
   strength = 1.0
 ): boolean {
-  const type = Math.floor(Math.random() * 6);
-  let spawnX = centerX;
-  let spawnY = centerY;
-  let vx = 0;
-  let vy = 0;
-  let radius = 16;
-  let life = 1.1;
-  let opac = 0.28 * strength;
-  let isMicro = false;
+  const angle = Math.random() * Math.PI * 2;
+  const rx = 96;
+  const ry = 72;
+  const cosA = Math.cos(angle);
+  const sinA = Math.sin(angle);
+  const dist = (rx * ry) / Math.hypot(ry * cosA, rx * sinA);
 
-  switch (type) {
-    case 0: // Crown crest - upward drifting cumulus wisp
-      spawnX += (Math.random() - 0.5) * 60;
-      spawnY += -55 + (Math.random() - 0.5) * 16;
-      vx = (Math.random() - 0.5) * 12;
-      vy = -18 - Math.random() * 14;
-      radius = 14 + Math.random() * 10;
-      life = 1.2 + Math.random() * 0.5;
-      opac = 0.28 * strength;
-      break;
-
-    case 1: // Left cheek roll - drifting outward to the left
-      spawnX += -82 - Math.random() * 18;
-      spawnY += (Math.random() - 0.5) * 36;
-      vx = -20 - Math.random() * 16;
-      vy = (Math.random() - 0.5) * 12;
-      radius = 16 + Math.random() * 12;
-      life = 1.1 + Math.random() * 0.4;
-      opac = 0.26 * strength;
-      break;
-
-    case 2: // Right cheek roll - drifting outward to the right
-      spawnX += 78 + Math.random() * 18;
-      spawnY += (Math.random() - 0.5) * 32;
-      vx = 18 + Math.random() * 16;
-      vy = (Math.random() - 0.5) * 12;
-      radius = 15 + Math.random() * 11;
-      life = 1.1 + Math.random() * 0.4;
-      opac = 0.26 * strength;
-      break;
-
-    case 3: // Underbelly - rolls downward and spreads
-      spawnX += (Math.random() - 0.5) * 64;
-      spawnY += 46 + Math.random() * 14;
-      vx = (Math.random() - 0.5) * 16;
-      vy = 8 + Math.random() * 12;
-      radius = 15 + Math.random() * 10;
-      life = 0.95 + Math.random() * 0.4;
-      opac = 0.24 * strength;
-      break;
-
-    case 4: // Trailing wind tuft - curling buoyant cloud puff
-      spawnX += 96 + Math.random() * 20;
-      spawnY += 18 + (Math.random() - 0.5) * 16;
-      vx = 22 + Math.random() * 16;
-      vy = -4 + (Math.random() - 0.5) * 10;
-      radius = 13 + Math.random() * 9;
-      life = 1.25 + Math.random() * 0.5;
-      opac = 0.30 * strength;
-      break;
-
-    case 5: // Micro cloud particle - tiny round floating cloudlet
-    default:
-      const angle = Math.random() * Math.PI * 2;
-      const dist = 65 + Math.random() * 40;
-      spawnX += Math.cos(angle) * dist;
-      spawnY += Math.sin(angle) * (dist * 0.7);
-      vx = Math.cos(angle) * (12 + Math.random() * 16);
-      vy = Math.sin(angle) * (10 + Math.random() * 12) - 6;
-      radius = 5 + Math.random() * 6;
-      life = 0.9 + Math.random() * 0.4;
-      opac = 0.36 * strength;
-      isMicro = true;
-      break;
-  }
+  const spawnX = centerX + cosA * (dist * 0.94);
+  const spawnY = centerY + 6 + sinA * (dist * 0.94);
+  const vx = cosA * 8 + (Math.random() - 0.5) * 6;
+  const vy = sinA * 6 - 8;
+  const radius = 10 + Math.random() * 6;
+  const life = 0.55 + Math.random() * 0.25;
+  const opac = 0.16 * strength;
 
   return spawnWisp(
     pool,
@@ -194,14 +137,31 @@ export function spawnRandomIdleWisp(
     color,
     life,
     opac,
-    3 + Math.random() * 3,
-    (Math.random() - 0.5) * 10,
-    isMicro
+    2.5 + Math.random() * 2,
+    (Math.random() - 0.5) * 6,
+    false
   );
 }
 
 /**
- * Spawns a multi-directional velocity trail wisp when the character is moving or dragged.
+ * Calculates the exact silhouette perimeter radius of the Cloud at angle theta.
+ * Accounts for squash/stretch soft-body deformation.
+ */
+export function getCloudSilhouetteRadius(
+  theta: number,
+  squash = 0,
+  stretch = 0
+): number {
+  const rx = 108 * (1 + squash * 0.45 - stretch * 0.22);
+  const ry = 80 * (1 - squash * 0.35 + stretch * 0.45);
+  const cosT = Math.cos(theta);
+  const sinT = Math.sin(theta);
+  return (rx * ry) / Math.hypot(ry * cosT, rx * sinT);
+}
+
+/**
+ * Spawns a multi-directional velocity trail wisp from the CLOUD SILHOUETTE EDGE.
+ * Decoupled from pointer coordinates — driven purely by physical velocity and body deformation.
  */
 export function spawnDirectionalTrailWisp(
   pool: CloudWisp[],
@@ -211,27 +171,34 @@ export function spawnDirectionalTrailWisp(
   vy: number,
   color: string,
   strength = 1.0,
-  lifetime = 0.9
+  lifetime = 0.6,
+  squash = 0,
+  stretch = 0
 ): boolean {
   const speed = Math.hypot(vx, vy);
-  if (speed < 20) return false;
+  // Strict threshold: no trail during slow drag or resting motion
+  if (speed < 55) return false;
 
   const vAngle = Math.atan2(vy, vx);
-  // Spawn from the trailing perimeter with randomized spread
-  const angleSpread = (Math.random() - 0.5) * 0.8;
+  // Spawn from the trailing perimeter with slight natural curl
+  const angleSpread = (Math.random() - 0.5) * 0.5;
   const trailAngle = vAngle + Math.PI + angleSpread;
-  const spawnDistance = 64 + Math.random() * 24;
 
-  const spawnX = charX + Math.cos(trailAngle) * spawnDistance;
-  const spawnY = charY + Math.sin(trailAngle) * (spawnDistance * 0.75);
+  const silhouetteDist = getCloudSilhouetteRadius(trailAngle, squash, stretch);
+  const spawnX = charX + Math.cos(trailAngle) * (silhouetteDist * 0.96);
+  const spawnY = charY + 6 + Math.sin(trailAngle) * (silhouetteDist * 0.96);
 
-  // Velocity carries opposite motion with slight lateral curl
-  const trailVx = -vx * 0.22 + (Math.random() - 0.5) * 16;
-  const trailVy = -vy * 0.22 - 6 + (Math.random() - 0.5) * 12;
+  // Velocity carries trailing inertia with slight lateral curl
+  const trailVx = -vx * 0.16 + (Math.random() - 0.5) * 10;
+  const trailVy = -vy * 0.16 - 4 + (Math.random() - 0.5) * 8;
 
-  const isMicro = Math.random() < 0.35;
-  const radius = isMicro ? 6 + Math.random() * 6 : 16 + Math.random() * 12;
-  const opac = (isMicro ? 0.34 : 0.28) * strength;
+  // Body coupling: stretch produces longer wisps, squash produces shorter denser puffs
+  const isMicro = Math.random() < 0.25;
+  const baseR = isMicro ? 5 + Math.random() * 4 : 12 + Math.random() * 8;
+  const radius = baseR * (squash > 0 ? (1 - squash * 0.2) : 1);
+  const opac = Math.min(0.38, (isMicro ? 0.26 : 0.22) * strength * (1 + squash * 0.25));
+
+  const actualLife = Math.min(0.75, Math.max(0.4, lifetime * (0.55 + Math.random() * 0.2)));
 
   return spawnWisp(
     pool,
@@ -241,49 +208,90 @@ export function spawnDirectionalTrailWisp(
     trailVy,
     radius,
     color,
-    lifetime * (0.9 + Math.random() * 0.4),
+    actualLife,
     opac,
-    3.5 + Math.random() * 3,
-    (Math.random() - 0.5) * 12,
+    3.0 + Math.random() * 2,
+    (Math.random() - 0.5) * 8,
     isMicro
   );
 }
 
 /**
- * Spawns a burst of wisps on sudden impacts or manual trigger.
+ * Spawns a brief overshoot wisp when the character decelerates or stops suddenly.
  */
-export function spawnWispBurst(
+export function spawnOvershootMistWisp(
   pool: CloudWisp[],
-  count: number,
-  originX: number,
-  originY: number,
+  charX: number,
+  charY: number,
+  prevVx: number,
+  prevVy: number,
   color: string,
-  spread = 24
-): void {
-  const actualCount = Math.min(count, 8);
-  for (let i = 0; i < actualCount; i++) {
-    const angle = (Math.PI * 2 * i) / actualCount + (Math.random() - 0.5) * 0.4;
-    const speed = 22 + Math.random() * 40;
-    const offsetX = (Math.random() - 0.5) * spread;
-    const offsetY = (Math.random() - 0.5) * spread * 0.6;
-    const isMicro = Math.random() < 0.4;
-    const r = isMicro ? 6 + Math.random() * 6 : 16 + Math.random() * 14;
-    const life = 0.75 + Math.random() * 0.45;
-    spawnWisp(
-      pool,
-      originX + offsetX,
-      originY + offsetY,
-      Math.cos(angle) * speed,
-      Math.sin(angle) * speed * 0.7 - 8,
-      r,
-      color,
-      life,
-      0.34 + Math.random() * 0.1,
-      4.0,
-      (Math.random() - 0.5) * 14,
-      isMicro
-    );
-  }
+  strength = 1.0
+): boolean {
+  const speed = Math.hypot(prevVx, prevVy);
+  if (speed < 60) return false;
+
+  const leadAngle = Math.atan2(prevVy, prevVx);
+  const silhouetteDist = getCloudSilhouetteRadius(leadAngle);
+  const spawnX = charX + Math.cos(leadAngle) * (silhouetteDist * 0.98);
+  const spawnY = charY + 6 + Math.sin(leadAngle) * (silhouetteDist * 0.98);
+
+  const vx = prevVx * 0.14 + (Math.random() - 0.5) * 8;
+  const vy = prevVy * 0.14 - 6 + (Math.random() - 0.5) * 6;
+
+  return spawnWisp(
+    pool,
+    spawnX,
+    spawnY,
+    vx,
+    vy,
+    13 + Math.random() * 6,
+    color,
+    0.55,
+    0.24 * strength,
+    2.8,
+    (Math.random() - 0.5) * 8,
+    false
+  );
+}
+
+/**
+ * Spawns a tiny displaced vapor puff on wall impact from the opposite / rear side.
+ */
+export function spawnImpactMistWisp(
+  pool: CloudWisp[],
+  charX: number,
+  charY: number,
+  contactNormalX: number,
+  contactNormalY: number,
+  color: string,
+  intensity = 1.0
+): boolean {
+  // Displaced vapor emerges from opposite side of impact
+  const releaseAngle = Math.atan2(-contactNormalY, -contactNormalX) + (Math.random() - 0.5) * 0.6;
+  const silhouetteDist = getCloudSilhouetteRadius(releaseAngle, 0.4, 0);
+
+  const spawnX = charX + Math.cos(releaseAngle) * (silhouetteDist * 0.96);
+  const spawnY = charY + 6 + Math.sin(releaseAngle) * (silhouetteDist * 0.96);
+
+  const speed = 14 + Math.random() * 20 * intensity;
+  const vx = Math.cos(releaseAngle) * speed;
+  const vy = Math.sin(releaseAngle) * speed - 6;
+
+  return spawnWisp(
+    pool,
+    spawnX,
+    spawnY,
+    vx,
+    vy,
+    11 + Math.random() * 7,
+    color,
+    0.55 + Math.random() * 0.2,
+    0.28 * Math.min(1.2, intensity),
+    3.2,
+    (Math.random() - 0.5) * 10,
+    false
+  );
 }
 
 /**

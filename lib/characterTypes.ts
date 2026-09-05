@@ -29,6 +29,7 @@ export interface CharacterMouthPose {
   curve: number;
   dAmount: number;
   oAmount: number;
+  crescentSmileAmount?: number;
 }
 
 export interface CharacterFacePose {
@@ -101,6 +102,7 @@ export const DEFAULT_FACE_POSE: CharacterFacePose = {
     curve: 0.82,
     dAmount: 0,
     oAmount: 0,
+    crescentSmileAmount: 0,
   },
 };
 

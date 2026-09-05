@@ -155,10 +155,12 @@ function drawMouthShape(
   curve: number,
   oAmount: number,
   dAmount: number,
+  crescentAmount: number,
   colour: BlobColour
 ) {
   const o = clamp(oAmount, 0, 1);
   const d = clamp(dAmount, 0, 1);
+  const c = clamp(crescentAmount, 0, 1);
 
   // A D mouth gives the happy and angry beats a readable open shape without
   // introducing a separate emoji asset. The top is held nearly flat while
@@ -199,40 +201,91 @@ function drawMouthShape(
     return;
   }
 
-  const halfWidth = width * (0.5 - o * 0.08);
-  const thickness = Math.max(1.8, height * (0.2 + o * 0.045));
+  // Sharp Half-Oval / Crescent Smile + Neutral Bar + O mouth continuous morph.
+  // When c rises, the rounded end-caps smoothly taper into acute sharp corners,
+  // the top edge stays relatively flat, and the bottom arcs into a compact, cute,
+  // premium animated-film half-oval silhouette.
+  const crescentWidth = width * (0.42 + c * 0.04);
+  const neutralWidth = width * (0.5 - o * 0.08);
+  const halfWidth = (1 - c) * neutralWidth + c * crescentWidth;
+
+  const baseThickness = Math.max(1.8, height * (0.2 + o * 0.045));
   const loopDepth = height * 0.42 * o;
   const bend = curve * height * 0.5 * (1 - o);
   const endY = -curve * height * 0.08 * (1 - o);
-  const topEnd = endY - thickness;
-  const bottomEnd = endY + thickness;
-  const topCenter = endY + bend - thickness - loopDepth;
-  const bottomCenter = endY + bend + thickness + loopDepth;
-  const capReach = Math.max(1.2, thickness * 1.35);
 
-  // One continuous filled contour. At zero O it is a soft, round-ended bar.
-  // As O rises, that same contour opens vertically and closes into one oval.
-  // There are no end dots, added blobs, asset swaps, or rotation tricks.
+  // Taper ends to sharp corners as crescent amount increases
+  const cornerThickness = baseThickness * (1 - c);
+  const cornerReach = Math.max(0, baseThickness * 1.35 * (1 - c));
+
+  // Upward corner lift for cute anime/animated-film smile
+  const cornerLift = -c * height * (0.08 + Math.max(0, curve) * 0.16);
+  const leftY = endY + cornerLift;
+  const rightY = endY + cornerLift;
+
+  // Top edge: relatively flat with subtle bow
+  const neutralTopCenter = endY + bend - baseThickness - loopDepth;
+  const crescentTopCenter = endY + cornerLift + height * 0.04 - Math.max(0, curve) * height * 0.04;
+  const topCenter = (1 - c) * neutralTopCenter + c * crescentTopCenter;
+
+  // Bottom edge: arcs downward into a clean, sharp half-oval
+  const neutralBottomCenter = endY + bend + baseThickness + loopDepth;
+  const crescentBottomCenter = endY + cornerLift + height * (0.36 + c * 0.42);
+  const bottomCenter = (1 - c) * neutralBottomCenter + c * crescentBottomCenter;
+
+  const topEndLeft = leftY - cornerThickness;
+  const topEndRight = rightY - cornerThickness;
+  const bottomEndLeft = leftY + cornerThickness;
+  const bottomEndRight = rightY + cornerThickness;
+
   ctx.beginPath();
-  ctx.moveTo(-halfWidth, topEnd);
-  ctx.quadraticCurveTo(0, topCenter, halfWidth, topEnd);
+  ctx.moveTo(-halfWidth, topEndLeft);
+  ctx.quadraticCurveTo(0, topCenter, halfWidth, topEndRight);
+
+  if (cornerReach > 0.05) {
+    ctx.bezierCurveTo(
+      halfWidth + cornerReach,
+      topEndRight,
+      halfWidth + cornerReach,
+      bottomEndRight,
+      halfWidth,
+      bottomEndRight
+    );
+  } else {
+    ctx.lineTo(halfWidth, bottomEndRight);
+  }
+
+  // Bottom half-oval arc with gentle shoulder curvature
   ctx.bezierCurveTo(
-    halfWidth + capReach,
-    topEnd,
-    halfWidth + capReach,
-    bottomEnd,
-    halfWidth,
-    bottomEnd
+    halfWidth * 0.55,
+    bottomCenter * 0.88 + rightY * 0.12,
+    halfWidth * 0.28,
+    bottomCenter,
+    0,
+    bottomCenter
   );
-  ctx.quadraticCurveTo(0, bottomCenter, -halfWidth, bottomEnd);
   ctx.bezierCurveTo(
-    -halfWidth - capReach,
-    bottomEnd,
-    -halfWidth - capReach,
-    topEnd,
+    -halfWidth * 0.28,
+    bottomCenter,
+    -halfWidth * 0.55,
+    bottomCenter * 0.88 + leftY * 0.12,
     -halfWidth,
-    topEnd
+    bottomEndLeft
   );
+
+  if (cornerReach > 0.05) {
+    ctx.bezierCurveTo(
+      -halfWidth - cornerReach,
+      bottomEndLeft,
+      -halfWidth - cornerReach,
+      topEndLeft,
+      -halfWidth,
+      topEndLeft
+    );
+  } else {
+    ctx.lineTo(-halfWidth, topEndLeft);
+  }
+
   ctx.closePath();
   const palette = mouthPalette(colour);
   const mouthSurface = ctx.createLinearGradient(0, -height, 0, height);
@@ -552,6 +605,7 @@ export function drawBlobFace(
         clamp(t.mouthCurve, -1, 1),
         clamp(t.mouthO, 0, 1),
         clamp(t.mouthD, 0, 1),
+        clamp(t.mouthCrescent ?? 0, 0, 1),
         colour
       );
       ctx.restore();

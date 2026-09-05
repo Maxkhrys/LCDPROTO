@@ -387,6 +387,8 @@ export default function CloudBlobTest() {
             opacity: d.mouthOpacity,
             mouthCurve: d.mouthCurve,
             mouthO: d.mouthO,
+            mouthD: d.mouthD,
+            mouthCrescent: d.mouthCrescent,
           },
         },
         DEFAULT_FACE_CALIBRATION

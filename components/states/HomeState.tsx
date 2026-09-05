@@ -385,6 +385,7 @@ export default function HomeState({
             mouthCurve: d.mouthCurve,
             mouthO: d.mouthO,
             mouthD: d.mouthD,
+            mouthCrescent: d.mouthCrescent,
           },
         },
         cal

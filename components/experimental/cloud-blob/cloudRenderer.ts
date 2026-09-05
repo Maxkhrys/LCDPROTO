@@ -16,13 +16,14 @@ import {
   LOBE_DEFINITIONS,
   LOBE_SUB_PUFFS,
   SUSPENDED_DROPLETS,
-  TWINKLING_STARS,
+  INTERNAL_AURA_PARTICLES,
 } from "./cloudLobeSystem";
 import type {
   LobeDefinition,
   LobeState,
   CloudColourConfig,
   CloudWisp,
+  ParticleDepthClass,
 } from "./cloudTypes";
 import {
   NEUTRAL_RIG,
@@ -46,6 +47,8 @@ interface RenderOptions {
   idleTime: number;
   squash: number;
   lean: number;
+  vx?: number;
+  vy?: number;
   gazeX?: number;
   gazeY?: number;
   faceEmbedDepth?: number;
@@ -361,95 +364,90 @@ function drawFaceRestingCradle(
   ctx.restore();
 }
 
-function drawTwinklingStarsAndParticles(
+function drawInternalAuraParticles(
   ctx: CanvasRenderingContext2D,
   cx: number,
   cy: number,
   lobeStates: Record<string, LobeState>,
   edgeRgb: { r: number; g: number; b: number },
-  idleTime: number
+  idleTime: number,
+  depthClass: ParticleDepthClass,
+  vx = 0,
+  vy = 0
 ) {
   ctx.save();
 
-  // 1. Render 15 Whimsical Twinkling Stars across the Cloud
-  for (let i = 0; i < TWINKLING_STARS.length; i++) {
-    const star = TWINKLING_STARS[i];
-    const lobe = lobeStates[star.attachedLobe] || lobeStates.core;
-    if (!lobe) continue;
+  const particles = INTERNAL_AURA_PARTICLES.filter((p) => p.depthClass === depthClass);
+  for (let i = 0; i < particles.length; i++) {
+    const p = particles[i];
+    const lobe = lobeStates[p.attachedLobe] || lobeStates.core;
+    if (!lobe || lobe.opacity <= 0.01) continue;
 
-    // Follow the lobe's position, scale, and subtle rotation
+    // Subtle gentle drift
+    const driftX = Math.sin(idleTime * p.driftSpeed + p.driftPhase) * p.driftRadius;
+    const driftY = Math.cos(idleTime * p.driftSpeed * 0.85 + p.driftPhase) * (p.driftRadius * 0.7);
+
+    // Inertia lag opposing character velocity
+    const lagX = -vx * 0.035;
+    const lagY = -vy * 0.035;
+
+    // Follow attached lobe transform
     const cosR = Math.cos(lobe.rotation);
     const sinR = Math.sin(lobe.rotation);
-    const scaledX = star.x * lobe.scaleX;
-    const scaledY = star.y * lobe.scaleY;
-    const rotX = scaledX * cosR - scaledY * sinR;
-    const rotY = scaledX * sinR + scaledY * cosR;
+    const localX = (p.baseX + driftX) * lobe.scaleX + lagX;
+    const localY = (p.baseY + driftY) * lobe.scaleY + lagY;
+    const rotX = localX * cosR - localY * sinR;
+    const rotY = localX * sinR + localY * cosR;
 
     const px = cx + lobe.x + rotX;
     const py = cy + lobe.y + rotY;
 
-    // Sparkle oscillation: power of 4 gives genuine astronomical twinkle
-    const sinVal = Math.sin(idleTime * star.speed + star.phase);
-    const twinkle = Math.pow(Math.max(0, sinVal), 4);
-    const ambient = 0.12 + 0.08 * Math.sin(idleTime * 1.2 + star.phase);
-    const alpha = (ambient + twinkle * 0.88) * lobe.opacity;
+    // Gentle asynchronous twinkle oscillation (soft wave, not harsh spikes)
+    const sinVal = Math.sin(idleTime * p.speed + p.phase);
+    const twinkle = 0.5 + 0.5 * sinVal;
+    const alpha =
+      (p.baseOpacity * (1 - p.twinkleDepth) + p.baseOpacity * p.twinkleDepth * twinkle) *
+      lobe.opacity;
 
-    if (alpha <= 0.02) continue;
+    if (alpha <= 0.01) continue;
 
-    // A. Soft glowing starlight halo
-    const glowRadius = Math.max(3, star.baseRadius * (1.8 + twinkle * 2.2));
-    const haloGrad = ctx.createRadialGradient(px, py, 0, px, py, glowRadius);
-    haloGrad.addColorStop(0, `rgba(255, 255, 255, ${alpha * 0.95})`);
-    haloGrad.addColorStop(0.35, `rgba(215, 235, 255, ${alpha * 0.55})`);
-    haloGrad.addColorStop(1.0, "rgba(215, 235, 255, 0)");
+    // Soft glowing halo (no star crosses, no harsh lines)
+    const haloR = Math.max(3.0, p.haloRadius * (0.85 + 0.3 * twinkle));
+    const haloGrad = ctx.createRadialGradient(px, py, 0, px, py, haloR);
+    haloGrad.addColorStop(0, `rgba(255, 255, 255, ${alpha * 0.85})`);
+    haloGrad.addColorStop(0.38, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, ${alpha * 0.40})`);
+    haloGrad.addColorStop(1.0, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, 0)`);
 
     ctx.fillStyle = haloGrad;
     ctx.beginPath();
-    ctx.arc(px, py, glowRadius, 0, Math.PI * 2);
+    ctx.arc(px, py, haloR, 0, Math.PI * 2);
     ctx.fill();
 
-    // B. Bright sparkling star core
-    const coreR = star.baseRadius * (0.55 + twinkle * 0.55);
-    ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(1, alpha * 1.1)})`;
+    // Soft luminous center point
+    const coreR = Math.max(0.8, p.baseRadius * (0.75 + 0.25 * twinkle));
+    const coreGrad = ctx.createRadialGradient(px, py, 0, px, py, coreR);
+    coreGrad.addColorStop(0, `rgba(255, 255, 255, ${Math.min(0.95, alpha * 1.4)})`);
+    coreGrad.addColorStop(0.65, `rgba(255, 255, 255, ${alpha * 0.6})`);
+    coreGrad.addColorStop(1.0, "rgba(255, 255, 255, 0)");
+
+    ctx.fillStyle = coreGrad;
     ctx.beginPath();
     ctx.arc(px, py, coreR, 0, Math.PI * 2);
     ctx.fill();
-
-    // C. Crisp 4-point diamond star cross during peak twinkle flash
-    if (twinkle > 0.14) {
-      const rayLen = star.rayLength * (0.45 + twinkle * 0.85);
-      const rayWidth = 1.4 * (0.6 + twinkle * 0.6);
-      const starAlpha = Math.min(1, twinkle * 1.15);
-
-      ctx.fillStyle = `rgba(255, 255, 255, ${starAlpha})`;
-
-      // 4-point diamond star polygon
-      ctx.beginPath();
-      ctx.moveTo(px, py - rayLen); // North tip
-      ctx.quadraticCurveTo(px + rayWidth * 0.35, py - rayWidth * 0.35, px + rayLen, py); // East tip
-      ctx.quadraticCurveTo(px + rayWidth * 0.35, py + rayWidth * 0.35, px, py + rayLen); // South tip
-      ctx.quadraticCurveTo(px - rayWidth * 0.35, py + rayWidth * 0.35, px - rayLen, py); // West tip
-      ctx.quadraticCurveTo(px - rayWidth * 0.35, py - rayWidth * 0.35, px, py - rayLen);
-      ctx.closePath();
-      ctx.fill();
-
-      // Subtle diagonal micro-glint at top of flash
-      if (twinkle > 0.50) {
-        const diagLen = rayLen * 0.42;
-        ctx.strokeStyle = `rgba(255, 255, 255, ${starAlpha * 0.70})`;
-        ctx.lineWidth = 0.8;
-        ctx.beginPath();
-        ctx.moveTo(px - diagLen, py - diagLen);
-        ctx.lineTo(px + diagLen, py + diagLen);
-        ctx.moveTo(px + diagLen, py - diagLen);
-        ctx.lineTo(px - diagLen, py + diagLen);
-        ctx.stroke();
-      }
-    }
   }
 
-  // 2. Render drifting micro cloud motes
-  const coreState = lobeStates.core ?? { x: 0, y: 0 };
+  ctx.restore();
+}
+
+function drawSuspendedDroplets(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  coreState: LobeState,
+  edgeRgb: { r: number; g: number; b: number },
+  idleTime: number
+) {
+  ctx.save();
   const dropletCount = SUSPENDED_DROPLETS.length;
   for (let i = 0; i < dropletCount; i++) {
     const d = SUSPENDED_DROPLETS[i];
@@ -462,7 +460,7 @@ function drawTwinklingStarsAndParticles(
     const py = cy + coreState.y + spanY;
 
     const verticalFade = Math.sin(progress * Math.PI);
-    const alpha = d.brightness * verticalFade * 0.75;
+    const alpha = d.brightness * verticalFade * 0.65;
     if (alpha <= 0.02) continue;
 
     const moteRadius = Math.max(1.6, d.radius * 1.8);
@@ -474,6 +472,95 @@ function drawTwinklingStarsAndParticles(
     ctx.fillStyle = moteGrad;
     ctx.beginPath();
     ctx.arc(px, py, moteRadius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawBillowCreviceShading(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  lobeStates: Record<string, LobeState>,
+  coreRgb: { r: number; g: number; b: number }
+) {
+  const core = lobeStates.core ?? { x: 0, y: 0, scaleX: 1, scaleY: 1 };
+  const topCrown = lobeStates.topCrown;
+  const leftCheek = lobeStates.leftCheek;
+  const rightCheek = lobeStates.rightCheek;
+  const bottomBelly = lobeStates.bottomBelly;
+
+  ctx.save();
+
+  // 1. Crown-to-Core billow junction crevice (valley beneath the crown dome)
+  if (topCrown) {
+    const jx = cx + (core.x + topCrown.x) * 0.5;
+    const jy = cy + topCrown.y * 0.55 + core.y * 0.45 + 12;
+    const radX = 54 * ((core.scaleX + topCrown.scaleX) * 0.5);
+    const radY = 16 * ((core.scaleY + topCrown.scaleY) * 0.5);
+
+    const grad = ctx.createRadialGradient(jx, jy, 2, jx, jy, radX);
+    grad.addColorStop(0, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0.09)`);
+    grad.addColorStop(0.55, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0.04)`);
+    grad.addColorStop(1, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0)`);
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(jx, jy, radX, radY, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 2. Left Cheek crease (vertical cleft tucking cheek billow into central core)
+  if (leftCheek) {
+    const lx = cx + leftCheek.x * 0.65 + core.x * 0.35 + 14;
+    const ly = cy + leftCheek.y * 0.7 + core.y * 0.3;
+    const radX = 18 * leftCheek.scaleX;
+    const radY = 36 * leftCheek.scaleY;
+
+    const grad = ctx.createRadialGradient(lx, ly, 1, lx, ly, radY);
+    grad.addColorStop(0, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0.075)`);
+    grad.addColorStop(0.50, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0.03)`);
+    grad.addColorStop(1, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0)`);
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(lx, ly, radX, radY, 0.18, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 3. Right Cheek crease (vertical cleft tucking right cheek billow into central core)
+  if (rightCheek) {
+    const rx = cx + rightCheek.x * 0.65 + core.x * 0.35 - 14;
+    const ry = cy + rightCheek.y * 0.7 + core.y * 0.3;
+    const radX = 18 * rightCheek.scaleX;
+    const radY = 36 * rightCheek.scaleY;
+
+    const grad = ctx.createRadialGradient(rx, ry, 1, rx, ry, radY);
+    grad.addColorStop(0, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0.075)`);
+    grad.addColorStop(0.50, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0.03)`);
+    grad.addColorStop(1, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0)`);
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(rx, ry, radX, radY, -0.18, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 4. Belly crease (horizontal shelf separation at the base)
+  if (bottomBelly) {
+    const bx = cx + (core.x + bottomBelly.x) * 0.5;
+    const by = cy + bottomBelly.y * 0.5 + core.y * 0.5 + 8;
+    const radX = 64 * bottomBelly.scaleX;
+    const radY = 18 * bottomBelly.scaleY;
+
+    const grad = ctx.createRadialGradient(bx, by, 2, bx, by, radX);
+    grad.addColorStop(0, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0.085)`);
+    grad.addColorStop(0.55, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0.035)`);
+    grad.addColorStop(1, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0)`);
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(bx, by, radX, radY, 0, 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -541,15 +628,27 @@ function drawMistWisps(
     if (!w.active || w.opacity <= 0.001) continue;
 
     const r = w.radius * w.softness;
-    const grad = ctx.createRadialGradient(w.x, w.y, 0, w.x, w.y, r);
+    const stretch = w.stretchFactor ?? 1.0;
+    const angle = w.angle ?? 0;
+
+    ctx.save();
+    ctx.translate(w.x, w.y);
+    if (Math.abs(angle) > 0.001 || stretch > 1.05) {
+      ctx.rotate(angle);
+      ctx.scale(stretch, 1.0 / Math.max(0.5, Math.sqrt(stretch)));
+    }
+
+    const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
     grad.addColorStop(0, `rgba(255, 255, 255, ${w.opacity * 0.92})`);
     grad.addColorStop(0.45, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, ${w.opacity * 0.42})`);
     grad.addColorStop(1.0, `rgba(${edgeRgb.r}, ${edgeRgb.g}, ${edgeRgb.b}, 0)`);
 
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.arc(w.x, w.y, r, 0, Math.PI * 2);
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fill();
+
+    ctx.restore();
   }
 
   ctx.restore();
@@ -575,6 +674,8 @@ export function renderCloudBlob(
     idleTime,
     squash,
     lean,
+    vx = 0,
+    vy = 0,
     faceEmbedDepth = 0.12,
     fluffiness = 1.0,
     lightAngle = -125,
@@ -630,13 +731,22 @@ export function renderCloudBlob(
     }
   }
 
-  // 3. Render Dominant Central Core (depth = 0)
+  // 3. Rear Internal Aura Particles (depthClass === 'rear')
+  drawInternalAuraParticles(ctx, cx, cy, lobeStates, edgeRgb, idleTime, "rear", vx, vy);
+
+  // 4. Render Dominant Central Core (depth = 0)
   const coreDef = LOBE_DEFINITIONS.find((d) => d.id === "core");
   if (coreDef && coreState) {
     drawVolumetricLobe(ctx, cx, cy, coreDef, coreState, bodyRgb, edgeRgb, coreRgb, glowRgb, colour.translucency, 1.0, true, fluffiness * 0.75, lightAngle, idleTime, sandBounce);
   }
 
-  // 4. Render Mid-Front Lobes (depth > 0 && depth < 10: leftCheek, rightCheek, trailingTuft, topCrown)
+  // 5. Billow Overlap Crevice Shading
+  drawBillowCreviceShading(ctx, cx, cy, lobeStates, coreRgb);
+
+  // 6. Subtle internal subsurface warmth (faint, atmospheric warmth deep inside)
+  drawInnerVolumeGlow(ctx, cx, cy, coreState, glowRgb, colour.glowIntensity, idleTime);
+
+  // 7. Render Mid-Front Lobes (depth > 0 && depth < 10: leftCheek, rightCheek, trailingTuft, topCrown)
   const midLobes = LOBE_DEFINITIONS.filter((d) => d.depth > 0 && d.depth < 10);
   for (const def of midLobes) {
     const state = lobeStates[def.id];
@@ -645,7 +755,7 @@ export function renderCloudBlob(
     }
   }
 
-  // 5. Subtle Global Volumetric Underside Shading (soft, diffuse, non-ringed depth on shadow side)
+  // 8. Subtle Global Volumetric Underside Shading (soft, diffuse, non-ringed depth on shadow side)
   const shadowCenterY = cy + coreState.y + 34;
   const shadowCenterX = cx + coreState.x + 18;
   const globalShadowGrad = ctx.createRadialGradient(
@@ -666,22 +776,23 @@ export function renderCloudBlob(
   ctx.fill();
   ctx.restore();
 
-  // 7. Subtle internal subsurface warmth (faint, atmospheric warmth deep inside)
-  drawInnerVolumeGlow(ctx, cx, cy, coreState, glowRgb, colour.glowIntensity, idleTime);
+  // 9. Mid Internal Aura Particles (depthClass === 'mid') + Suspended Micro Droplets
+  drawInternalAuraParticles(ctx, cx, cy, lobeStates, edgeRgb, idleTime, "mid", vx, vy);
+  drawSuspendedDroplets(ctx, cx, cy, coreState, edgeRgb, idleTime);
 
-  // 8. Whimsical Twinkling Stars & Floating Cloud Particles
-  drawTwinklingStarsAndParticles(ctx, cx, cy, lobeStates, edgeRgb, idleTime);
-
-  // 9. Soft Internal Cheek Blush (warm coral/peach vapor tint deep in cheek masses)
+  // 10. Soft Internal Cheek Blush (warm coral/peach vapor tint deep in cheek masses)
   drawCheekBlush(ctx, cx, cy, lobeStates.leftCheek, lobeStates.rightCheek, cheekBlush);
 
-  // 10. Calm Face Resting Cradle (creamy-white luminous cushion smoothing seams behind eyes)
+  // 11. Calm Face Resting Cradle (creamy-white luminous cushion smoothing seams behind eyes)
   drawFaceRestingCradle(ctx, cx, cy, coreState, bodyRgb);
 
-  // 11. Selective Crest Rim Light Accent along Dome Crown
+  // 12. Front Internal Aura Particles (depthClass === 'front')
+  drawInternalAuraParticles(ctx, cx, cy, lobeStates, edgeRgb, idleTime, "front", vx, vy);
+
+  // 13. Selective Crest Rim Light Accent along Dome Crown
   drawRimAccent(ctx, cx, cy, topState, edgeRgb, lightAngle);
 
-  // 12. Crisp Production Face Layer
+  // 14. Crisp Production Face Layer
   const activeRig = rig || faceRig || NEUTRAL_RIG;
   if (showFace) {
     drawSandwichedFace(
@@ -695,7 +806,7 @@ export function renderCloudBlob(
     );
   }
 
-  // 13. Front Translucent Mist Veil (depth = 10)
+  // 15. Front Translucent Mist Veil (depth = 10)
   const veilDef = LOBE_DEFINITIONS.find((d) => d.id === "frontVeil");
   const veilState = lobeStates.frontVeil;
   if (veilDef && veilState && faceEmbedDepth > 0.01) {
@@ -706,7 +817,7 @@ export function renderCloudBlob(
     drawVolumetricLobe(ctx, cx, cy, veilDef, adjustedVeil, bodyRgb, edgeRgb, coreRgb, glowRgb, 1.0, 1.0, false, fluffiness * 0.5, lightAngle, idleTime, 0);
   }
 
-  // 14. Trailing Mist Wisps
+  // 16. Trailing Mist Wisps
   drawMistWisps(ctx, wisps, edgeRgb);
 
   ctx.restore();

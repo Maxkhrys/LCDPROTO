@@ -84,6 +84,7 @@ interface MoodPose {
   mouthRotation: number;
   mouthCurve: number;
   mouthD: number;
+  mouthCrescent: number;
 }
 
 const MOODS: Record<HomeMood, MoodPose> = {
@@ -99,6 +100,7 @@ const MOODS: Record<HomeMood, MoodPose> = {
     mouthRotation: 0,
     mouthCurve: 0.84,
     mouthD: 0,
+    mouthCrescent: 0.65,
   },
   CURIOUS: {
     leftTension: 1.06,
@@ -112,6 +114,7 @@ const MOODS: Record<HomeMood, MoodPose> = {
     mouthRotation: 2,
     mouthCurve: 0.45,
     mouthD: 0.18,
+    mouthCrescent: 0.25,
   },
   SLEEPY: {
     leftTension: 0.84,
@@ -125,6 +128,7 @@ const MOODS: Record<HomeMood, MoodPose> = {
     mouthRotation: -1.5,
     mouthCurve: 0.18,
     mouthD: 0.05,
+    mouthCrescent: 0.1,
   },
   AMUSED: {
     leftTension: 0.9,
@@ -138,6 +142,7 @@ const MOODS: Record<HomeMood, MoodPose> = {
     mouthRotation: 1.5,
     mouthCurve: 0.96,
     mouthD: 0.78,
+    mouthCrescent: 0.75,
   },
   DISTRACTED: {
     leftTension: 0.97,
@@ -151,6 +156,7 @@ const MOODS: Record<HomeMood, MoodPose> = {
     mouthRotation: 3,
     mouthCurve: 0.25,
     mouthD: 0.22,
+    mouthCrescent: 0.2,
   },
   THOUGHTFUL: {
     leftTension: 0.9,
@@ -164,6 +170,7 @@ const MOODS: Record<HomeMood, MoodPose> = {
     mouthRotation: -4,
     mouthCurve: -0.12,
     mouthD: 0.1,
+    mouthCrescent: 0,
   },
 };
 
@@ -277,6 +284,7 @@ export class BehaviourController {
   private readonly mouthCurve = new SpringAxis(0.82);
   private readonly mouthO = new SpringAxis();
   private readonly mouthD = new SpringAxis();
+  private readonly mouthCrescent = new SpringAxis();
   private mouthOpacityValue = 1;
   private mouthTurnStartedAt = -1;
   private mouthTurnTarget = 0;
@@ -419,6 +427,7 @@ export class BehaviourController {
     this.mouthCurve.reset(0.82);
     this.mouthO.reset();
     this.mouthD.reset();
+    this.mouthCrescent.reset();
     this.mouthOpacityValue = 1;
     this.mouthTurnStartedAt = -1;
     this.mouthTurnTarget = 0;
@@ -1206,8 +1215,12 @@ export class BehaviourController {
       this.mouthScaleY.target = -0.1;
       this.mouthCurve.target = 0.5;
       this.mouthO.target = 0;
+      this.mouthCrescent.target =
+        this.faceStyle === FACE_STYLE.HAPPY || this.faceStyle === FACE_STYLE.CONTENT
+          ? 0.72
+          : 0;
       this.mouthD.target =
-        this.faceStyle === FACE_STYLE.HAPPY || this.faceStyle === FACE_STYLE.EXCITED
+        this.faceStyle === FACE_STYLE.EXCITED
           ? 0.82
           : this.faceStyle === FACE_STYLE.ANGRY
             ? 0.68
@@ -1224,12 +1237,11 @@ export class BehaviourController {
       this.mouthScaleY.target = -0.02;
       this.mouthCurve.target = 0.62 + dir * 0.18;
       this.mouthO.target = 0;
+      this.mouthCrescent.target = 0.35;
       this.mouthD.target =
         this.faceStyle === FACE_STYLE.ANGRY
           ? 0.62
-          : this.faceStyle === FACE_STYLE.HAPPY
-            ? 0.34
-            : 0;
+          : 0;
       this.setMouthRotationTarget(dir * 4.5);
       duration = 380 + this.rand() * 260;
     } else if (id === "MOUTH_O") {
@@ -1240,6 +1252,7 @@ export class BehaviourController {
       this.mouthCurve.target = 0;
       this.mouthO.target = 1;
       this.mouthD.target = 0;
+      this.mouthCrescent.target = 0;
       this.setMouthRotationTarget(0);
       duration = 820 + this.rand() * 520;
     } else {
@@ -1249,6 +1262,7 @@ export class BehaviourController {
       this.mouthScaleY.target = 0.06;
       this.mouthCurve.target = -1;
       this.mouthO.target = 0;
+      this.mouthCrescent.target = 0;
       this.mouthD.target =
         this.faceStyle === FACE_STYLE.ANGRY
           ? 0.76
@@ -2239,6 +2253,7 @@ export class BehaviourController {
     this.mouthCurve.target = mood.mouthCurve;
     this.mouthO.target = 0;
     this.mouthD.target = mood.mouthD;
+    this.mouthCrescent.target = mood.mouthCrescent ?? 0;
     this.setMouthRotationTarget(mood.mouthRotation);
   }
 
@@ -2291,6 +2306,7 @@ export class BehaviourController {
       this.mouthCurve.step(dt, 5.8, 0.72);
       this.mouthO.step(dt, 6.2, 0.7);
       this.mouthD.step(dt, 5.8, 0.72);
+      this.mouthCrescent.step(dt, 5.8, 0.72);
     }
   }
 
@@ -2372,6 +2388,7 @@ export class BehaviourController {
     this.delta.mouthCurve = this.mouthCurve.value;
     this.delta.mouthO = this.mouthO.value;
     this.delta.mouthD = clamp(this.mouthD.value, 0, 1);
+    this.delta.mouthCrescent = clamp(this.mouthCrescent.value, 0, 1);
     return this.delta;
   }
 

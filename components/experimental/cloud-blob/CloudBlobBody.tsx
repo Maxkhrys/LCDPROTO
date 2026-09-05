@@ -30,6 +30,7 @@ import {
   createWispPool,
   spawnRandomIdleWisp,
   spawnDirectionalTrailWisp,
+  spawnOvershootMistWisp,
   updateWisps,
 } from "./cloudMistTrails";
 import {
@@ -68,9 +69,10 @@ export default function CloudBlobBody({
   const wispPoolRef = useRef(createWispPool(24));
   const lastTimeRef = useRef<number | null>(null);
   const idleTimeRef = useRef(0);
-  const idleWispTimerRef = useRef(0.8);
-  const nextIdleIntervalRef = useRef(1.0);
+  const idleWispTimerRef = useRef(0);
+  const nextIdleIntervalRef = useRef(4.5 + Math.random() * 3.0);
   const prevPosRef = useRef({ x: 0, y: 0, lean: 0, squash: 0 });
+  const prevVelRef = useRef({ vx: 0, vy: 0 });
   const velocityRef = useRef({ vx: 0, vy: 0 });
 
   // Direct drag & jiggle physics refs
@@ -324,10 +326,12 @@ export default function CloudBlobBody({
 
       // 4. Multi-Directional Mist Trails & Spontaneous Idle Billow Shedding
       if (trails.enabled) {
-        const isRapid = dragSpeed > 45 || Math.abs(params.lean - prevPosRef.current.lean) > 3.5;
+        const ax = (vx - prevVelRef.current.vx) / Math.max(0.001, dt);
+        const ay = (vy - prevVelRef.current.vy) / Math.max(0.001, dt);
+        const decelDot = vx * ax + vy * ay;
 
         // A. Dynamic Motion / Drag Trails (spawns from trailing perimeter with directional spread)
-        if (isRapid && Math.random() < 0.38 * trails.spawnRate) {
+        if (dragSpeed >= 55 && Math.random() < 0.38 * trails.spawnRate) {
           spawnDirectionalTrailWisp(
             wispPoolRef.current,
             size / 2 + currentPosX,
@@ -336,15 +340,30 @@ export default function CloudBlobBody({
             vy,
             cloudColour.edge,
             trails.trailStrength,
-            trails.lifetime
+            trails.lifetime,
+            dynamicSquash,
+            dynamicStretch
           );
         }
 
-        // B. Spontaneous Multi-Directional Idle Billow Shedding & Micro Cloud Particles
+        // B. Overshoot Mist Wisp on rapid stop / reversal
+        if (decelDot < -3000 && dragSpeed > 45) {
+          spawnOvershootMistWisp(
+            wispPoolRef.current,
+            size / 2 + currentPosX,
+            size / 2 + currentPosY,
+            vx,
+            vy,
+            cloudColour.edge,
+            trails.trailStrength
+          );
+        }
+
+        // C. Spontaneous Multi-Directional Idle Billow Shedding (rare 4.5-7.5s)
         idleWispTimerRef.current += dt;
         if (idleWispTimerRef.current > nextIdleIntervalRef.current) {
           idleWispTimerRef.current = 0;
-          nextIdleIntervalRef.current = 0.9 + Math.random() * 1.5; // Random interval between 0.9s and 2.4s
+          nextIdleIntervalRef.current = 4.5 + Math.random() * 3.0;
           spawnRandomIdleWisp(
             wispPoolRef.current,
             size / 2 + currentPosX,
@@ -353,6 +372,9 @@ export default function CloudBlobBody({
             trails.trailStrength
           );
         }
+
+        prevVelRef.current.vx = vx;
+        prevVelRef.current.vy = vy;
       }
 
       prevPosRef.current.x = currentPosX;
@@ -409,6 +431,8 @@ export default function CloudBlobBody({
             idleTime: idleTimeRef.current,
             squash: dynamicSquash,
             lean: dynamicLean,
+            vx,
+            vy,
             gazeX: params.gazeX,
             gazeY: params.gazeY,
             faceEmbedDepth: params.faceEmbedDepth,
