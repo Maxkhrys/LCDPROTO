@@ -329,13 +329,16 @@ export default function CloudCharacter({
     turnVelPitchRef.current += fPitch * step;
     turnPitchRef.current += turnVelPitchRef.current * step;
 
-    params.turnYaw = turnYawRef.current;
-    params.turnPitch = turnPitchRef.current;
+    // Emote layering: preserve authored emote yaw & pitch from rig and add motion heading yaw
+    const emoteYaw = rig.blob?.yaw ?? 0;
+    const emotePitch = rig.blob?.pitch ?? 0;
+    params.turnYaw = clamp(emoteYaw + turnYawRef.current, -45, 45);
+    params.turnPitch = clamp(emotePitch + turnPitchRef.current, -30, 30);
 
-    // Keep rig blob yaw & pitch synchronized so environment layer shadow sees 3D heading
+    // Keep rig blob yaw & pitch synchronized so environment layer shadow sees combined 3D heading
     if (rig.blob) {
-      rig.blob.yaw = turnYawRef.current;
-      rig.blob.pitch = turnPitchRef.current;
+      rig.blob.yaw = params.turnYaw;
+      rig.blob.pitch = params.turnPitch;
     }
 
     // The authored expression gaze stays in charge of the subtle idle look;
