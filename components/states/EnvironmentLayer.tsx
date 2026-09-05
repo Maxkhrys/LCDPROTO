@@ -323,7 +323,9 @@ export default function EnvironmentLayer({
       const wholeScaleY =
         currentRig.blob.scale * depthScale * currentRig.blob.scaleY;
 
-      const footX = currentRig.blob.x + currentRig.body.x * wholeScaleX;
+      // Subtle lateral ground displacement and spring lag from character lean
+      const leanOffset = (currentRig.body.skewX || 0) * 0.32 * wholeScaleX;
+      const footX = currentRig.blob.x + (currentRig.body.x + leanOffset) * wholeScaleX;
       const footY =
         currentRig.blob.y +
         (currentRig.body.y + BODY_HALF_HEIGHT * currentRig.body.scaleY) *
@@ -338,18 +340,25 @@ export default function EnvironmentLayer({
       shadowY.current.step(groundedY, dt, 2.1 - active.shadowLag / 280, 0.75);
       shadowHeight.current.step(verticalSignal, dt, 2.25 - active.shadowLag / 300, 0.76);
       const height = clamp(shadowHeight.current.value, 0.2, 1.24);
-      const squash = Math.max(0, bodyDeformY) + Math.max(0, bodyDeformX) * 0.35;
-      // Proportional to how wide Blob actually is, so the patch still reads
-      // when he is scaled down and never looks like a pebble under him.
+      // Settling and ground contact add compression spread
+      const settlingSquash = sink > 0 ? clamp(sink * 0.012, 0, 0.35) : 0;
+      const squash = Math.max(0, bodyDeformY) + Math.max(0, bodyDeformX) * 0.35 + settlingSquash;
+      // Proportional to how wide character actually is
       const spread = Math.max(0.35, currentRig.body.scaleX * wholeScaleX);
       const shadowScaleX =
-        active.shadowWidth * spread * (0.88 + (1 - height) * 0.2 + squash * 1.7);
+        active.shadowWidth * spread * (0.88 + (1 - height) * 0.25 + squash * 1.7);
       const shadowScaleY =
-        active.shadowHeight * spread * (0.8 + height * 0.24);
+        active.shadowHeight * spread * (0.8 + height * 0.22);
       const shadowOpacity = clamp(
-        active.shadowOpacity * (0.78 + (1 - height) * 0.32),
+        active.shadowOpacity * (0.8 + (1 - height) * 0.36 + (sink > 0 ? 0.08 : 0)),
         0,
-        0.9
+        0.95
+      );
+      // Dynamic softness: tighter & crisper when grounded/dropping; lighter & diffused when rising
+      const dynamicSoftness = clamp(
+        active.shadowSoftness * (0.62 + (height - 0.35) * 0.65),
+        0.28,
+        1.35
       );
       const shadowYPosition =
         CENTRE + shadowY.current.value + SHADOW_DROP + active.shadowYOffset;
@@ -378,7 +387,7 @@ export default function EnvironmentLayer({
           shadowOpacity,
           CENTRE + shadowX.current.value,
           shadowYPosition,
-          active.shadowSoftness,
+          dynamicSoftness,
           displayMode === "dark" ? "#080604" : "#4b3729"
         );
       }

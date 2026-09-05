@@ -126,6 +126,8 @@ export default function CloudCharacter({
   const emissionRef = useRef(0);
   const sequenceRef = useRef(0);
   const prevVel = useRef({ vx: 0, vy: 0 });
+  const wasDragging = useRef(false);
+  const lastIdleWisp = useRef(0);
 
   // Pointer bookkeeping, mirroring BlobCharacter so both characters feel the
   // same to handle.
@@ -255,8 +257,9 @@ export default function CloudCharacter({
     params.x = offsetX + ambientX;
     params.y = offsetY + ambientY;
     params.scale = blob.scale * depthScale * (cloudParams?.scale ?? 1);
-    params.scaleX = scaleX;
-    params.scaleY = scaleY;
+    // Protect core shape: damp whole-character context scaling so character doesn't smear diagonally
+    params.scaleX = clamp(1 + (scaleX - 1) * 0.38, 0.78, 1.22);
+    params.scaleY = clamp(1 + (scaleY - 1) * 0.38, 0.78, 1.22);
     params.rotation = blob.rotation + body.rotation * 0.5;
 
     stepLobePhysics(
@@ -278,39 +281,54 @@ export default function CloudCharacter({
 
     if (step > 0 && trails.enabled !== false) {
       const isDragging = dragging.current;
-      // Energy from movement, acceleration, and active pulling
-      const pullBonus = isDragging ? 1.4 : 0;
-      const energy =
-        clamp((speed - 15) / 100, 0, 1.5) +
-        (speed > 10 ? clamp((acceleration - 500) / 3500, 0, 0.8) : 0) +
-        pullBonus;
+      const justReleased = wasDragging.current && !isDragging;
+      wasDragging.current = isDragging;
 
-      emissionRef.current =
-        energy > 0
-          ? emissionRef.current + energy * 8 * step * trails.spawnRate
-          : 0;
+      // Event- and motion-driven energy (no constant fog emission):
+      const velEnergy = speed > 95 ? clamp((speed - 95) / 140, 0, 1.3) : 0;
+      const accelEnergy = acceleration > 850 ? clamp((acceleration - 850) / 2200, 0, 1.0) : 0;
+      const prevSpeed = Math.hypot(prevVel.current.vx, prevVel.current.vy);
+      const dot = speed > 10 && prevSpeed > 10
+        ? (vx * prevVel.current.vx + vy * prevVel.current.vy) / (speed * prevSpeed)
+        : 1;
+      const turnEnergy = dot < 0.6 && speed > 55 ? clamp((1 - dot) * 0.9, 0, 0.9) : 0;
+      const releaseBonus = justReleased ? 1.8 : 0;
 
-      const cap = isDragging ? 32 : (speed > 180 ? 28 : (speed > 45 ? 18 : 8));
+      const dynamicEnergy = velEnergy + accelEnergy + turnEnergy + releaseBonus;
+
+      // Rare idle mist: single delicate wisp at breath peak every 11-14s
+      let idleWisp = false;
+      if (!isDragging && speed < 15 && idleTime.current - lastIdleWisp.current > 11.0) {
+        if (Math.sin(idleTime.current * 0.65) > 0.985) {
+          idleWisp = true;
+          lastIdleWisp.current = idleTime.current;
+        }
+      }
+
+      emissionRef.current = dynamicEnergy > 0
+        ? emissionRef.current + dynamicEnergy * 6 * step * trails.spawnRate
+        : (idleWisp ? 1 : 0);
+
+      const cap = isDragging ? 16 : (speed > 160 ? 14 : (speed > 50 ? 8 : 4));
       while (emissionRef.current >= 1 && activeWisps < cap) {
         emissionRef.current -= 1;
         const speedNorm = Math.max(1, speed);
-        const nxVel = vx / speedNorm;
-        const nyVel = vy / speedNorm;
+        const nxVel = speed > 5 ? vx / speedNorm : 0;
+        const nyVel = speed > 5 ? vy / speedNorm : -1;
 
         const seq = sequenceRef.current++;
-        const radiusJitter = ((seq % 5) - 2) * 3;
-        const puffRadius = 22 + (seq % 4) * 6 + radiusJitter;
+        const radiusJitter = ((seq % 4) - 1.5) * 2;
+        const puffRadius = (14 + (seq % 3) * 3 + radiusJitter) * params.scale;
 
-        // Spawn along the trailing contour opposite to pull direction
-        const sideOffset = Math.sin(seq * 2.1) * 32 * params.scale;
-        const trailOffset = (84 + (seq % 3) * 18) * params.scale;
+        // Spawn along the trailing contour opposite to motion direction
+        const sideOffset = Math.sin(seq * 2.1) * 26 * params.scale;
+        const trailOffset = (72 + (seq % 3) * 14) * params.scale;
 
         const spawnX = size / 2 + params.x - nxVel * trailOffset - nyVel * sideOffset;
         const spawnY = size / 2 + params.y - nyVel * trailOffset + nxVel * sideOffset;
 
-        // Smoke particles drift backward and curl upward
-        const smokeVx = -vx * 0.14 + Math.sin(seq * 2.5) * 14;
-        const smokeVy = -vy * 0.14 - 12 + Math.cos(seq * 2.1) * 12;
+        const smokeVx = -vx * 0.12 + Math.sin(seq * 2.5) * 10;
+        const smokeVy = -vy * 0.12 - 8 + Math.cos(seq * 2.1) * 8;
 
         spawnWisp(
           wisps.current,
@@ -318,10 +336,10 @@ export default function CloudCharacter({
           spawnY,
           smokeVx,
           smokeVy,
-          puffRadius * params.scale,
+          puffRadius,
           seq % 3 === 0 ? palette.body : palette.edge,
-          trails.lifetime * (1 + (seq % 3) * 0.25),
-          0.55 * trails.trailStrength,
+          trails.lifetime * (0.9 + (seq % 3) * 0.15),
+          0.42 * trails.trailStrength,
           seq
         );
       }

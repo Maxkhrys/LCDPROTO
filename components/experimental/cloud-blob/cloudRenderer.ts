@@ -98,7 +98,7 @@ function getStamps(
   const lx = Math.cos(rad),
     ly = Math.sin(rad);
 
-  // Front & Mid Volumetric Lobe: Strong directional spherical lighting with terminator form shadow
+  // Front & Mid Volumetric Lobe: Selective crisp edge, forward scattering, and terminator form shadow
   const makeMass = (dense: boolean) =>
     sprite((s) => {
       const volume = s.createRadialGradient(
@@ -109,11 +109,11 @@ function getStamps(
         0,
         1,
       );
-      volume.addColorStop(0, "rgba(255,255,255,0.96)");
+      volume.addColorStop(0, "rgba(255,255,255,0.98)");
       volume.addColorStop(0.18, rgba(edge, 1));
-      volume.addColorStop(0.48, rgba(body, dense ? 1 : 0.98));
-      volume.addColorStop(0.74, rgba(body, dense ? 0.94 : 0.86));
-      volume.addColorStop(0.88, rgba(body, 0.45 * c.translucency));
+      volume.addColorStop(0.52, rgba(body, dense ? 1 : 0.98));
+      volume.addColorStop(0.82, rgba(body, dense ? 0.96 : 0.9));
+      volume.addColorStop(0.94, rgba(body, 0.42 * c.translucency));
       volume.addColorStop(1, rgba(body, 0));
       s.fillStyle = volume;
       s.fillRect(-1, -1, 2, 2);
@@ -121,16 +121,16 @@ function getStamps(
       s.globalCompositeOperation = "source-atop";
       // Rich spherical form shadow on the unlit side
       const shade = s.createLinearGradient(lx, ly, -lx, -ly);
-      shade.addColorStop(0, "rgba(255,252,242,0.34)");
-      shade.addColorStop(0.32, "rgba(255,255,255,0)");
-      shade.addColorStop(0.58, rgba(core, p.lightStrength * 0.25));
-      shade.addColorStop(0.86, rgba(core, p.lightStrength * 0.65));
+      shade.addColorStop(0, "rgba(255,252,242,0.38)");
+      shade.addColorStop(0.28, "rgba(255,255,255,0)");
+      shade.addColorStop(0.54, rgba(core, p.lightStrength * 0.22));
+      shade.addColorStop(0.84, rgba(core, p.lightStrength * 0.62));
       shade.addColorStop(1.0, rgba(core, p.lightStrength * 0.82));
       s.fillStyle = shade;
       s.fillRect(-1, -1, 2, 2);
     });
 
-  // Rear Grounded Masses: Soft atmospheric tone that recedes gracefully behind the core
+  // Rear Grounded Masses: Softer atmospheric tone that recedes gracefully behind the core
   const makeRearMass = () =>
     sprite((s) => {
       const volume = s.createRadialGradient(
@@ -141,10 +141,10 @@ function getStamps(
         0,
         1,
       );
-      volume.addColorStop(0, rgba(edge, 0.96));
-      volume.addColorStop(0.35, rgba(body, 0.98));
-      volume.addColorStop(0.72, rgba(body, 0.88));
-      volume.addColorStop(0.9, rgba(core, 0.35 * c.translucency));
+      volume.addColorStop(0, rgba(edge, 0.92));
+      volume.addColorStop(0.35, rgba(body, 0.92));
+      volume.addColorStop(0.68, rgba(body, 0.82));
+      volume.addColorStop(0.88, rgba(body, 0.38 * c.translucency));
       volume.addColorStop(1, rgba(body, 0));
       s.fillStyle = volume;
       s.fillRect(-1, -1, 2, 2);
@@ -159,13 +159,13 @@ function getStamps(
       s.fillRect(-1, -1, 2, 2);
     });
 
-  // Crevice Ambient Occlusion: Soft darkening between overlapping billows
+  // Crevice Ambient Occlusion: Defined darkening between overlapping billows
   const makeCrevice = () =>
     sprite((s) => {
       const g = s.createRadialGradient(0, 0, 0, 0, 0, 1);
-      g.addColorStop(0, rgba(core, clamp(p.lightStrength * 0.35, 0.15, 0.45)));
-      g.addColorStop(0.45, rgba(core, clamp(p.lightStrength * 0.18, 0.06, 0.25)));
-      g.addColorStop(0.8, rgba(core, 0.02));
+      g.addColorStop(0, rgba(core, clamp(p.lightStrength * 0.42, 0.22, 0.52)));
+      g.addColorStop(0.42, rgba(core, clamp(p.lightStrength * 0.24, 0.1, 0.32)));
+      g.addColorStop(0.78, rgba(core, 0.03));
       g.addColorStop(1, rgba(core, 0));
       s.fillStyle = g;
       s.fillRect(-1, -1, 2, 2);
@@ -175,9 +175,9 @@ function getStamps(
   const makeCrestRim = () =>
     sprite((s) => {
       const g = s.createRadialGradient(lx * 0.5, ly * 0.5, 0.05, 0, 0, 1);
-      g.addColorStop(0, "rgba(255,255,255,0.85)");
-      g.addColorStop(0.25, rgba(edge, 0.65));
-      g.addColorStop(0.65, rgba(edge, 0.12));
+      g.addColorStop(0, "rgba(255,255,255,0.92)");
+      g.addColorStop(0.25, rgba(edge, 0.78));
+      g.addColorStop(0.65, rgba(edge, 0.18));
       g.addColorStop(1, rgba(edge, 0));
       s.fillStyle = g;
       s.fillRect(-1, -1, 2, 2);
@@ -214,19 +214,19 @@ function getStamps(
     underside: makeUnderside(),
     core: sprite((s) => {
       const g = s.createRadialGradient(lx * 0.32, ly * 0.32, 0.04, 0, 0, 1);
-      g.addColorStop(0, "rgba(255,255,255,0.85)");
-      g.addColorStop(0.2, rgba(edge, 1));
-      g.addColorStop(0.5, rgba(body, 0.96));
-      g.addColorStop(0.78, rgba(body, 0.56));
+      g.addColorStop(0, "rgba(255,255,255,0.92)");
+      g.addColorStop(0.22, rgba(edge, 1));
+      g.addColorStop(0.55, rgba(body, 0.98));
+      g.addColorStop(0.82, rgba(body, 0.65));
       g.addColorStop(1, rgba(body, 0));
       s.fillStyle = g;
       s.fillRect(-1, -1, 2, 2);
       s.globalCompositeOperation = "source-atop";
       const shade = s.createLinearGradient(lx, ly, -lx, -ly);
-      shade.addColorStop(0, "rgba(255,252,242,0.22)");
-      shade.addColorStop(0.4, "rgba(255,255,255,0)");
-      shade.addColorStop(0.75, rgba(core, p.lightStrength * 0.38));
-      shade.addColorStop(1.0, rgba(core, p.lightStrength * 0.6));
+      shade.addColorStop(0, "rgba(255,252,242,0.28)");
+      shade.addColorStop(0.38, "rgba(255,255,255,0)");
+      shade.addColorStop(0.72, rgba(core, p.lightStrength * 0.35));
+      shade.addColorStop(1.0, rgba(core, p.lightStrength * 0.58));
       s.fillStyle = shade;
       s.fillRect(-1, -1, 2, 2);
     }),
@@ -442,6 +442,9 @@ export function renderCloudBlob(
   const pitchSin = Math.sin(pitchRad);
   const pitchCos = Math.cos(pitchRad);
 
+  const lightRad = (p.lightAngle * Math.PI) / 180;
+  const lx = Math.cos(lightRad);
+
   // 3D Horizontal body foreshortening
   const bodyYawWidth = clamp(0.38 + Math.abs(yawCos) * 0.62, 0.38, 1);
   const bodyPitchHeight = clamp(0.74 + Math.abs(pitchCos) * 0.26, 0.74, 1);
@@ -606,37 +609,43 @@ export function renderCloudBlob(
     );
   }
 
-  // 7. TOP CREST RIM LIGHT ACCENT
+  // 7. TOP CREST & CHEEK RIM LIGHT ACCENTS
   if (crownPose) {
-    stamp(ctx, s.crestRim, crownPose.x, crownPose.y - crownPose.ry * 0.42, crownPose.rx * 0.95, crownPose.ry * 0.55, 0.8);
+    stamp(ctx, s.crestRim, crownPose.x, crownPose.y - crownPose.ry * 0.42, crownPose.rx * 0.95, crownPose.ry * 0.55, 0.85);
+  }
+  if (leftCheekPose && lx < -0.1) {
+    stamp(ctx, s.crestRim, leftCheekPose.x - 8, leftCheekPose.y - leftCheekPose.ry * 0.32, leftCheekPose.rx * 0.72, leftCheekPose.ry * 0.48, 0.52);
+  }
+  if (rightCheekPose && lx > 0.1) {
+    stamp(ctx, s.crestRim, rightCheekPose.x + 8, rightCheekPose.y - rightCheekPose.ry * 0.32, rightCheekPose.rx * 0.72, rightCheekPose.ry * 0.48, 0.52);
   }
 
-  // 8. FOURTEEN INTERNAL LIGHTS / TWINKLING DROPLETS (with 3D depth parallax)
+  // 8. RESTRAINED INTERNAL LIFE MOTES (Gentle, slow breathing shimmer deep inside volume)
   for (const d of SUSPENDED_DROPLETS) {
-    const twinkle = Math.pow(
-      Math.max(0, Math.sin(t * d.driftSpeed + d.driftPhase)),
-      10,
-    );
-    if (twinkle < 0.025) continue;
-    const dropDepth = d.radius > 1.3 ? 1 : -0.8;
-    const dropParallaxX = dropDepth * yawSin * 18;
-    const dropParallaxY = dropDepth * pitchSin * 12;
-    const x = corePose.x + d.x * 1.65 + dropParallaxX;
-    const y = corePose.y + d.y * 1.25 + dropParallaxY;
+    // Smooth, gentle continuous breathing cycle (no abrupt on/off glitter pop)
+    const shimmer = 0.5 + 0.5 * Math.sin(t * d.driftSpeed + d.driftPhase);
+    if (shimmer < 0.05) continue;
+    const dropDepth = d.radius > 2.0 ? 0.8 : -0.6;
+    const dropParallaxX = dropDepth * yawSin * 14;
+    const dropParallaxY = dropDepth * pitchSin * 10;
+    const x = corePose.x + d.x * 1.35 + dropParallaxX;
+    const y = corePose.y + d.y * 1.1 + dropParallaxY;
+    // Soft ambient mist halo around the mote
     stamp(
       ctx,
       s.mist,
       x,
       y,
-      d.radius * 4,
-      d.radius * 4,
-      twinkle * d.brightness * 0.16,
+      d.radius * 7,
+      d.radius * 7,
+      shimmer * d.brightness * 0.2,
     );
+    // Faint, soft inner glint
     ctx.save();
-    ctx.globalAlpha *= twinkle * d.brightness * 0.65;
-    ctx.fillStyle = "#fffbed";
+    ctx.globalAlpha *= shimmer * d.brightness * 0.28;
+    ctx.fillStyle = "#fffcf2";
     ctx.beginPath();
-    ctx.arc(x, y, d.radius * 0.45, 0, TAU);
+    ctx.arc(x, y, d.radius * 0.55, 0, TAU);
     ctx.fill();
     ctx.restore();
   }
@@ -653,8 +662,9 @@ export function renderCloudBlob(
     ctx.restore();
   }
 
-  // 10. FAINT VEIL BELOW FACE
-  stamp(ctx, s.mist, corePose.x, corePose.y + 30, 82, 46, p.faceEmbedDepth * 0.16);
+  // 10. LOCAL FACIAL DEPTH EMBEDDING (Dense core bed beneath features)
+  stamp(ctx, s.core, corePose.x, corePose.y + 8, 96 * corePose.scaleX, 74 * corePose.scaleY, 0.42);
+  stamp(ctx, s.mist, corePose.x, corePose.y + 26, 88, 44, Math.max(0.08, p.faceEmbedDepth * 0.2));
 
   // 11. CRISP PRODUCTION FACE (3D Spherical placement, foreshortening, and differential eye scale)
   if (o.showFace) drawFace(ctx, o);

@@ -21,6 +21,8 @@ import {
   type CloudPresetName,
 } from "./cloudTypes";
 
+const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+
 export const DEFAULT_DEFORMATION: CloudDeformationParams = {
   scale: 1,
   scaleX: 1,
@@ -293,120 +295,49 @@ export const LOBE_SUB_PUFFS: Partial<Record<string, readonly LobeSubPuff[]>> = {
 };
 
 /**
- * Deterministic suspended light droplets inside the cloud body.
+ * 5 Restrained internal light motes deep within the cloud volume.
+ * Gives subtle, living bioluminescent / sunlit moisture twinkle without cluttering or reading as glitter.
  */
 export const SUSPENDED_DROPLETS: readonly SuspendedDroplet[] = [
   {
-    x: -36,
-    y: -26,
+    x: -28,
+    y: -22,
     radius: 2.2,
-    brightness: 0.85,
-    driftPhase: 0.3,
-    driftSpeed: 1.1,
+    brightness: 0.55,
+    driftPhase: 0.4,
+    driftSpeed: 0.45,
   },
   {
-    x: 42,
-    y: -32,
-    radius: 1.8,
-    brightness: 0.75,
-    driftPhase: 1.7,
-    driftSpeed: 0.85,
-  },
-  {
-    x: -48,
-    y: 18,
-    radius: 2.4,
-    brightness: 0.8,
-    driftPhase: 3.1,
-    driftSpeed: 1.0,
-  },
-  {
-    x: 46,
-    y: 24,
+    x: 32,
+    y: -18,
     radius: 2.0,
-    brightness: 0.7,
-    driftPhase: 4.5,
-    driftSpeed: 0.8,
-  },
-  {
-    x: -14,
-    y: 52,
-    radius: 1.6,
-    brightness: 0.65,
+    brightness: 0.5,
     driftPhase: 2.2,
-    driftSpeed: 1.2,
+    driftSpeed: 0.38,
   },
   {
-    x: 22,
-    y: 54,
-    radius: 1.9,
-    brightness: 0.72,
-    driftPhase: 5.1,
-    driftSpeed: 0.95,
-  },
-  {
-    x: -6,
-    y: -52,
-    radius: 2.5,
-    brightness: 0.92,
-    driftPhase: 0.8,
-    driftSpeed: 1.3,
-  },
-  {
-    x: 28,
-    y: -12,
-    radius: 1.5,
-    brightness: 0.6,
-    driftPhase: 3.9,
-    driftSpeed: 0.7,
-  },
-  {
-    x: -24,
-    y: -8,
-    radius: 2.0,
-    brightness: 0.78,
-    driftPhase: 2.8,
-    driftSpeed: 0.9,
-  },
-  {
-    x: 12,
-    y: 2,
-    radius: 1.7,
-    brightness: 0.82,
+    x: -34,
+    y: 22,
+    radius: 1.8,
+    brightness: 0.45,
     driftPhase: 4.1,
-    driftSpeed: 1.05,
+    driftSpeed: 0.42,
   },
   {
-    x: -55,
-    y: -6,
-    radius: 1.4,
-    brightness: 0.55,
-    driftPhase: 1.2,
-    driftSpeed: 0.75,
-  },
-  {
-    x: 55,
-    y: -4,
-    radius: 1.4,
-    brightness: 0.55,
-    driftPhase: 5.4,
-    driftSpeed: 0.75,
+    x: 30,
+    y: 26,
+    radius: 1.9,
+    brightness: 0.48,
+    driftPhase: 5.3,
+    driftSpeed: 0.35,
   },
   {
     x: 0,
     y: -38,
-    radius: 2.6,
-    brightness: 0.95,
-    driftPhase: 0.0,
-    driftSpeed: 1.15,
-  },
-  {
-    x: 0,
-    y: 65,
-    radius: 1.8,
+    radius: 2.4,
     brightness: 0.6,
-    driftPhase: 3.5,
-    driftSpeed: 0.85,
+    driftPhase: 1.2,
+    driftSpeed: 0.4,
   },
 ];
 
@@ -531,8 +462,8 @@ export function computeLobeTarget(
     tx += wobbleDist;
   }
 
-  // 6. CRITICAL LOBE LAG HIERARCHY:
-  // Face leads -> core follows (lag 0.08) -> crown & cheeks follow (0.42 - 0.56) -> base & belly lag (0.74 - 0.88)
+  // 6. CRITICAL LOBE LAG HIERARCHY & DIRECTIONAL AIRFLOW DEFORMATION:
+  // Face leads -> core maintains chunky structural presence (lag 0.05, low stretch) -> crown & cheeks follow (0.35 - 0.45) -> rear base & belly trail along motion wake (0.75 - 0.88)
   const lagStrength = def.lagFactor * motion.lobeLag * 0.09;
   const maxLobeOffset = def.radiusX * 0.48;
   const rawLagX = characterVx * lagStrength;
@@ -540,17 +471,44 @@ export function computeLobeTarget(
   tx -= Math.max(-maxLobeOffset, Math.min(maxLobeOffset, rawLagX));
   ty -= Math.max(-maxLobeOffset, Math.min(maxLobeOffset, rawLagY));
 
-  // 7. Scale computation
+  // 7. Scale computation with core shape protection and directional airflow
+  const speed = Math.hypot(characterVx, characterVy);
+  const nvx = speed > 1e-2 ? characterVx / speed : 0;
+  const nvy = speed > 1e-2 ? characterVy / speed : 0;
+  // Position projection along travel direction: positive = leading into air, negative = trailing behind
+  const travelProjection = (def.baseX * nvx + def.baseY * nvy) / 75;
+
   let sx = breathScale * (1 + puff * 0.3);
   let sy = breathScale * (1 + puff * 0.3);
 
+  const isCore = def.id === "core" || def.id === "frontVeil";
+  // Core preserves chunky spherical volume; trailing rear lobes take on fluid elongation
+  const squashFactor = isCore ? 0.22 : (def.depth < 0 ? 1.25 : 0.8);
+  const stretchFactor = isCore ? 0.22 : (def.depth < 0 ? 1.35 : 0.85);
+
   if (squash > 0) {
-    sx *= 1 + squash * 0.3;
-    sy *= 1 - squash * 0.24;
+    sx *= 1 + squash * 0.3 * squashFactor;
+    sy *= 1 - squash * 0.24 * squashFactor;
   }
   if (stretch > 0) {
-    sx *= 1 - stretch * 0.2;
-    sy *= 1 + stretch * 0.36;
+    sx *= 1 - stretch * 0.2 * stretchFactor;
+    sy *= 1 + stretch * 0.36 * stretchFactor;
+  }
+
+  // Aerodynamic motion reaction:
+  // Leading lobes compress slightly from airflow resistance; trailing lobes elongate along wake
+  if (speed > 25 && !isCore) {
+    const airflowLag = clamp(speed / 380, 0, 0.35) * def.lagFactor;
+    if (travelProjection > 0.2) {
+      // Leading into airflow: compact slightly
+      const comp = 1 - airflowLag * 0.45;
+      sx *= comp;
+      sy *= comp;
+    } else if (travelProjection < -0.2) {
+      // Trailing behind: stretch gently along motion vector
+      sx *= 1 + Math.abs(nvx) * airflowLag * 0.55;
+      sy *= 1 + Math.abs(nvy) * airflowLag * 0.65;
+    }
   }
 
   const rot = (lean * 0.38 * (1 - def.lagFactor * 0.45) * Math.PI) / 180;

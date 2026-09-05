@@ -93,17 +93,86 @@ export class CloudPerformance {
       this.cue.includes("HAPPY") ||
       this.cue.includes("JOY") ||
       this.cue.includes("LAUGH");
-    t.x = d.blobX * 0.55;
-    t.y = d.blobY * 0.6 + beat * (sad ? 10 : sleepy ? 5 : happy ? -5 : 0);
+    const surprised = this.cue.includes("SURPRISE") || this.cue.includes("SHOCKED");
+    const curious = this.cue.includes("CURIOUS") || this.cue.includes("CONFUSED");
+
+    // Dynamic acting envelopes for NEUTRAL, HAPPY, ANGRY, SURPRISED, SLEEPY, CURIOUS:
+    let emotionHopY = 0;
+    let emotionBodyScaleX = 0;
+    let emotionBodyScaleY = 0;
+    let emotionCloudScale = 0;
+    let emotionShakeX = 0;
+    let emotionBrowLiftLeft = 0;
+    let emotionBrowLiftRight = 0;
+    let emotionBrowRotLeft = 0;
+    let emotionBrowRotRight = 0;
+    let emotionEyeOpen = 1.0;
+    let emotionEyeScale = 0;
+    let emotionMouthCrescent = d.mouthCrescent ?? 0;
+    let emotionMouthO = d.mouthO;
+    let emotionMouthCurve = d.mouthCurve;
+    let emotionMouthD = d.mouthD;
+
+    if (happy && beat > 0.05) {
+      // Small anticipation squash -> joy hop -> upward puff -> sharp crescent smile -> settle
+      if (phase < 0.35) {
+        emotionBodyScaleY -= 0.14 * beat;
+        emotionBodyScaleX += 0.1 * beat;
+      } else {
+        const hop = Math.sin((phase - 0.35) * Math.PI * 1.6);
+        emotionHopY = -16 * Math.max(0, hop);
+        emotionCloudScale = 0.08 * beat;
+      }
+      emotionMouthD = Math.max(emotionMouthD, 0.42 * beat);
+      emotionMouthCrescent = Math.max(emotionMouthCrescent, 0.88 * beat);
+      emotionBrowLiftLeft += 0.16 * beat;
+      emotionBrowLiftRight += 0.16 * beat;
+    } else if (angry && beat > 0.05) {
+      // Compact body, tightened lobes, angry inward brow angle, frustrated shake
+      emotionBodyScaleX -= 0.08 * beat;
+      emotionBodyScaleY -= 0.06 * beat;
+      emotionCloudScale = -0.05 * beat;
+      emotionBrowRotLeft += 7 * beat;
+      emotionBrowRotRight -= 7 * beat;
+      emotionEyeOpen = 1 - 0.28 * beat;
+      emotionShakeX = Math.sin(phase * 34) * 2.5 * beat;
+      emotionMouthCurve = Math.min(emotionMouthCurve, -0.6 * beat);
+    } else if (surprised && beat > 0.05) {
+      // Instant vertical puff, wide eyes, O mouth
+      emotionHopY = -14 * beat;
+      emotionCloudScale = 0.14 * beat;
+      emotionEyeScale = 0.22 * beat;
+      emotionEyeOpen = 1 + 0.25 * beat;
+      emotionMouthO = Math.max(emotionMouthO, 0.95 * beat);
+      emotionBrowLiftLeft += 0.35 * beat;
+      emotionBrowLiftRight += 0.35 * beat;
+    } else if (sleepy && beat > 0.05) {
+      // Heavy lids, widened/soft body, sagging lobes, yawn
+      emotionBodyScaleX += 0.15 * beat;
+      emotionBodyScaleY -= 0.16 * beat;
+      emotionHopY = 8 * beat;
+      emotionEyeOpen = Math.max(0.25, 1 - 0.65 * beat);
+      if (phase > 0.4 && phase < 1.6) {
+        emotionMouthO = Math.max(emotionMouthO, 0.7 * Math.sin((phase - 0.4) * Math.PI));
+      }
+    } else if (curious && beat > 0.05) {
+      // Gaze leads, asymmetrical brow raise (left higher), core tilt
+      emotionBrowLiftLeft += 0.42 * beat;
+      emotionBrowLiftRight -= 0.06 * beat;
+      t.bodySkewX = 6 * beat;
+      t.bodyRotation = 4 * beat;
+      t.x += 10 * beat;
+    }
+
+    t.x = d.blobX * 0.55 + emotionShakeX;
+    t.y = d.blobY * 0.6 + emotionHopY + (sad ? 10 * beat : 0);
     t.rotation = d.blobRotation;
     t.scaleX = d.blobScaleX;
     t.scaleY = d.blobScaleY;
     t.bodyX = d.bodyX;
     t.bodyY = d.bodyY;
-    t.bodyScaleX =
-      d.bodyScaleX + beat * (sad || sleepy ? 0.1 : angry ? -0.06 : 0);
-    t.bodyScaleY =
-      d.bodyScaleY - beat * (sad || sleepy ? 0.12 : angry ? 0.08 : 0);
+    t.bodyScaleX = d.bodyScaleX + emotionBodyScaleX;
+    t.bodyScaleY = d.bodyScaleY + emotionBodyScaleY;
     t.bodyRotation = d.bodyRotation;
     t.bodySkewX = d.bodySkewX;
     t.bodySkewY = d.bodySkewY;
@@ -115,8 +184,7 @@ export class CloudPerformance {
           x: physical.x,
           y: physical.y,
           rotation: physical.rotation,
-          scale:
-            1 + d.blobScale * 0.4 + beat * (happy ? 0.035 : angry ? -0.035 : 0),
+          scale: 1 + d.blobScale * 0.4 + emotionCloudScale,
           opacity: d.blobOpacity,
         },
         body: {
@@ -133,11 +201,11 @@ export class CloudPerformance {
           ...NEUTRAL_ELEMENT,
           x: d.eyeX + d.leftEyeX,
           y: d.eyeY + d.leftEyeY,
-          eyeOpen: d.eyeLid * d.leftEyeTension,
-          eyeSocketScaleX: 1 + d.leftEyeScaleX,
-          eyeSocketScaleY: 1 + d.leftEyeScaleY,
-          browLift: d.leftEyeTension - 1,
-          browRotation: d.leftBrowRotation,
+          eyeOpen: d.eyeLid * d.leftEyeTension * emotionEyeOpen,
+          eyeSocketScaleX: 1 + d.leftEyeScaleX + emotionEyeScale,
+          eyeSocketScaleY: 1 + d.leftEyeScaleY + emotionEyeScale,
+          browLift: d.leftEyeTension - 1 + emotionBrowLiftLeft,
+          browRotation: d.leftBrowRotation + emotionBrowRotLeft,
           lidBias: d.leftLidBias,
           pupilX: d.leftPupilX,
           pupilY: d.leftPupilY,
@@ -148,11 +216,11 @@ export class CloudPerformance {
           ...NEUTRAL_ELEMENT,
           x: d.eyeX + d.rightEyeX,
           y: d.eyeY + d.rightEyeY,
-          eyeOpen: d.eyeLid * d.rightEyeTension,
-          eyeSocketScaleX: 1 + d.rightEyeScaleX,
-          eyeSocketScaleY: 1 + d.rightEyeScaleY,
-          browLift: d.rightEyeTension - 1,
-          browRotation: d.rightBrowRotation,
+          eyeOpen: d.eyeLid * d.rightEyeTension * emotionEyeOpen,
+          eyeSocketScaleX: 1 + d.rightEyeScaleX + emotionEyeScale,
+          eyeSocketScaleY: 1 + d.rightEyeScaleY + emotionEyeScale,
+          browLift: d.rightEyeTension - 1 + emotionBrowLiftRight,
+          browRotation: d.rightBrowRotation + emotionBrowRotRight,
           lidBias: d.rightLidBias,
           pupilX: d.rightPupilX,
           pupilY: d.rightPupilY,
@@ -166,9 +234,10 @@ export class CloudPerformance {
           scaleX: 1 + d.mouthScaleX,
           scaleY: 1 + d.mouthScaleY,
           opacity: d.mouthOpacity,
-          mouthCurve: d.mouthCurve,
-          mouthO: d.mouthO,
-          mouthD: d.mouthD,
+          mouthCurve: emotionMouthCurve,
+          mouthO: emotionMouthO,
+          mouthD: emotionMouthD,
+          mouthCrescent: emotionMouthCrescent,
         },
       },
       DEFAULT_FACE_CALIBRATION,

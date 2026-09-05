@@ -144,8 +144,9 @@ export default function CloudBlobBody(props: CloudBlobBodyProps) {
         rig.body.y +
         Math.sin(s.time * 0.8) * s.motion.floatAmount * ambient;
       p.scale = clamp(p.scale * rig.blob.scale, 0.4, 1.3);
-      p.scaleX *= rig.blob.scaleX;
-      p.scaleY *= rig.blob.scaleY;
+      // Protect core shape: damp whole-character context scaling so character doesn't smear diagonally
+      p.scaleX = clamp(1 + (rig.blob.scaleX - 1) * 0.38, 0.78, 1.22);
+      p.scaleY = clamp(1 + (rig.blob.scaleY - 1) * 0.38, 0.78, 1.22);
       p.rotation += rig.blob.rotation + rig.body.rotation * 0.5;
       p.squash += Math.max(0, 1 - rig.body.scaleY) * 1.4;
       p.stretch += Math.max(0, rig.body.scaleY - 1) * 1.4;
@@ -188,44 +189,63 @@ export default function CloudBlobBody(props: CloudBlobBodyProps) {
         trails?.driftAmount ?? 1,
         trails?.fadeSpeed ?? 1,
       );
-      // Rate is time-based. No emission at mount, from cursor alone, or while paused.
+      // Event- and motion-driven wisp emission (no constant fog emission)
       if (dt > 0 && trails?.enabled !== false && s.previous) {
         const isDragging = Boolean(drag.grabbed || s.pointer);
-        const dragBonus = isDragging ? 1.4 : 0;
-        const energy =
-          clamp((speed - 15) / 100, 0, 1.5) +
-          (speed > 10 ? clamp((acceleration - 500) / 3500, 0, 0.8) : 0) +
-          dragBonus;
-        s.emission =
-          energy > 0
-            ? s.emission + energy * 8 * dt * (trails?.spawnRate ?? 1)
-            : 0;
-        const cap = isDragging ? 32 : (speed > 180 ? 28 : (speed > 45 ? 18 : 8));
+        const justReleased = s.wasDragging && !isDragging;
+        s.wasDragging = isDragging;
+
+        const velEnergy = speed > 95 ? clamp((speed - 95) / 140, 0, 1.3) : 0;
+        const accelEnergy = acceleration > 850 ? clamp((acceleration - 850) / 2200, 0, 1.0) : 0;
+        const prevSpeed = Math.hypot(s.prevVx, s.prevVy);
+        const dot = speed > 10 && prevSpeed > 10
+          ? (vx * s.prevVx + vy * s.prevVy) / (speed * prevSpeed)
+          : 1;
+        const turnEnergy = dot < 0.6 && speed > 55 ? clamp((1 - dot) * 0.9, 0, 0.9) : 0;
+        const releaseBonus = justReleased ? 1.8 : 0;
+
+        const dynamicEnergy = velEnergy + accelEnergy + turnEnergy + releaseBonus;
+
+        let idleWisp = false;
+        if (!isDragging && speed < 15 && s.time - s.lastIdleWisp > 11.0) {
+          if (Math.sin(s.time * 0.65) > 0.985) {
+            idleWisp = true;
+            s.lastIdleWisp = s.time;
+          }
+        }
+
+        s.emission = dynamicEnergy > 0
+          ? s.emission + dynamicEnergy * 6 * dt * (trails?.spawnRate ?? 1)
+          : (idleWisp ? 1 : 0);
+
+        const cap = isDragging ? 16 : (speed > 160 ? 14 : (speed > 50 ? 8 : 4));
         while (s.emission >= 1 && active < cap) {
           s.emission -= 1;
           const speedNorm = Math.max(1, speed);
-          const nx = vx / speedNorm,
-            ny = vy / speedNorm;
+          const nx = speed > 5 ? vx / speedNorm : 0;
+          const ny = speed > 5 ? vy / speedNorm : -1;
           const seq = s.sequence++;
-          const radiusJitter = ((seq % 5) - 2) * 3;
-          const puffRadius = 22 + (seq % 4) * 6 + radiusJitter;
-          const sideOffset = Math.sin(seq * 2.1) * 32 * p.scale;
-          const trailOffset = (84 + (seq % 3) * 18) * p.scale;
+          const radiusJitter = ((seq % 4) - 1.5) * 2;
+          const puffRadius = (14 + (seq % 3) * 3 + radiusJitter) * p.scale;
+          const sideOffset = Math.sin(seq * 2.1) * 26 * p.scale;
+          const trailOffset = (72 + (seq % 3) * 14) * p.scale;
 
           spawnWisp(
             s.wisps,
             size / 2 + p.x - nx * trailOffset - ny * sideOffset,
             size / 2 + p.y - ny * trailOffset + nx * sideOffset,
-            -vx * 0.14 + Math.sin(seq * 2.5) * 14,
-            -vy * 0.14 - 12 + Math.cos(seq * 2.1) * 12,
-            puffRadius * p.scale,
+            -vx * 0.12 + Math.sin(seq * 2.5) * 10,
+            -vy * 0.12 - 8 + Math.cos(seq * 2.1) * 8,
+            puffRadius,
             seq % 3 === 0 ? options.colour.body : options.colour.edge,
-            (trails?.lifetime ?? 0.95) * (1 + (seq % 3) * 0.25),
-            0.55 * (trails?.trailStrength ?? 1),
+            (trails?.lifetime ?? 0.95) * (0.9 + (seq % 3) * 0.15),
+            0.42 * (trails?.trailStrength ?? 1),
             seq,
           );
         }
         s.emission = Math.min(s.emission, 2);
+        s.prevVx = vx;
+        s.prevVy = vy;
       }
       if (dt > 0 || !s.previous) {
         s.x = p.x;
@@ -353,6 +373,10 @@ function createSimulation() {
     vy: 0,
     hitRadius: 170,
     previous: false,
+    wasDragging: false,
+    lastIdleWisp: 0,
+    prevVx: 0,
+    prevVy: 0,
     emission: 0,
     sequence: 0,
     resetId: 0,
