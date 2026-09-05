@@ -401,9 +401,21 @@ export default function EnvironmentLayer({
       }
 
       const lightPulse = 0.84 + Math.sin(elapsedSeconds / 10.5) * 0.16;
-      const ambient = backgroundCtx.createRadialGradient(CENTRE, 201, 26, CENTRE, 201, 212);
-      ambient.addColorStop(0, rgba(palette.bounce, active.ambientLight * 0.028 * lightPulse));
-      ambient.addColorStop(0.7, rgba(palette.bounce, active.ambientLight * 0.011 * lightPulse));
+      // Directional ambient light pool follows the character as he moves across the screen
+      const charCenterY = 201 + currentRig.blob.y + currentRig.body.y;
+      const lightFollowX = CENTRE + shadowX.current.value * 0.72 - 18;
+      const lightFollowY = clamp(charCenterY - 24, 60, size - 100);
+
+      const ambient = backgroundCtx.createRadialGradient(
+        lightFollowX,
+        lightFollowY,
+        28 * spread,
+        lightFollowX,
+        lightFollowY,
+        220 * spread
+      );
+      ambient.addColorStop(0, rgba(palette.bounce, active.ambientLight * 0.034 * lightPulse));
+      ambient.addColorStop(0.55, rgba(palette.bounce, active.ambientLight * 0.014 * lightPulse));
       ambient.addColorStop(1, rgba(palette.bounce, 0));
       backgroundCtx.fillStyle = ambient;
       backgroundCtx.fillRect(0, 0, size, size);

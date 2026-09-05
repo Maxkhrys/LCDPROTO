@@ -499,6 +499,13 @@ export function renderCloudBlob(
   ctx.rotate(-o.wallAngle);
   ctx.globalAlpha = o.rig.blob.opacity;
 
+  // Directional Light Follow:
+  // As Cloud moves across the 466 AMOLED screen, the incident directional light follows him
+  // with physical angle parallax and compensates for whole-character rotation/lean so the light stays world-anchored.
+  const lightParallaxX = clamp((p.x / (size / 2)) * 0.22, -0.25, 0.25);
+  const worldRotRad = (p.rotation * Math.PI) / 180;
+  const lightFollowRotation = -worldRotRad * 0.65 + lightParallaxX;
+
   // Lobe 3D pose calculator with depth parallax & cohesive pull lag
   const getLobePose = (def: (typeof LOBE_DEFINITIONS)[number]) => {
     const l = lobeStates[def.id] ?? { x: def.baseX, y: def.baseY, scaleX: 1, scaleY: 1, opacity: 1, rotation: 0 };
@@ -556,7 +563,7 @@ export function renderCloudBlob(
           pose.rx * sub.radiusRatio,
           pose.ry * sub.radiusRatio,
           l.opacity * 0.85,
-          pose.rotation,
+          pose.rotation + lightFollowRotation,
         );
       }
     }
@@ -568,7 +575,7 @@ export function renderCloudBlob(
       pose.rx,
       pose.ry,
       Math.min(1, l.opacity * colour.density * 1.05),
-      pose.rotation,
+      pose.rotation + lightFollowRotation,
     );
   }
 
@@ -584,7 +591,7 @@ export function renderCloudBlob(
       118 * corePose.scaleX,
       72 * corePose.scaleY,
       0.94,
-      0,
+      lightFollowRotation,
     );
   }
 
@@ -603,8 +610,9 @@ export function renderCloudBlob(
     126 * corePose.scaleX,
     100 * corePose.scaleY,
     clamp(p.coreDensity * colour.density, 0, 1),
+    lightFollowRotation,
   );
-  stamp(ctx, s.glow, corePose.x, corePose.y + 12, 80, 70, colour.glowIntensity * 0.16);
+  stamp(ctx, s.glow, corePose.x, corePose.y + 12, 80, 70, colour.glowIntensity * 0.16, lightFollowRotation);
 
   // 5. PROXIMITY-BASED BILLOW CREVICE SHADOWS (soft, only between closely overlapping lobes)
   if (leftCheekPose && Math.hypot(leftCheekPose.x - corePose.x, leftCheekPose.y - corePose.y) < 95) {
@@ -634,7 +642,7 @@ export function renderCloudBlob(
           pose.rx * sub.radiusRatio,
           pose.ry * sub.radiusRatio,
           l.opacity * 0.88,
-          pose.rotation,
+          pose.rotation + lightFollowRotation,
         );
       }
     }
@@ -646,7 +654,7 @@ export function renderCloudBlob(
       pose.rx,
       pose.ry,
       Math.min(1, l.opacity * colour.density * 1.08),
-      pose.rotation,
+      pose.rotation + lightFollowRotation,
     );
   }
 
