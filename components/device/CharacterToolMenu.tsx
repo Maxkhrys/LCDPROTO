@@ -41,9 +41,12 @@ const TOOLS: { id: CharacterTool; label: string }[] = [
   { id: "character", label: "Character" },
 ];
 
-/** Arc across the top of the body, in degrees (0° = right, counter-clockwise). */
-const ARC_START = 200;
-const ARC_END = 340;
+/**
+ * Halo arc across the top of the panel, in degrees (0° = right, y down).
+ * Kept inside a semicircle so the row reads as a crown rather than a ring.
+ */
+const ARC_START = 208;
+const ARC_END = 332;
 
 export default function CharacterToolMenu({
   open,
@@ -58,11 +61,18 @@ export default function CharacterToolMenu({
 }: CharacterToolMenuProps) {
   if (!open) return null;
 
-  const orbSize = Math.max(38, Math.min(56, screenSize * 0.135));
-  const radius = screenSize * 0.33;
-  /** The body sits slightly low while the menu is open; match that centre. */
-  const originY = screenSize * 0.56;
+  // Everything is laid out from the panel centre, which is also where the
+  // character idles: the body no longer drops out of the way, so the halo has
+  // to be measured against the display's inner ring instead.
+  const centre = screenSize / 2;
+  const orbSize = Math.max(36, Math.min(52, screenSize * 0.118));
+  /** Constant inset from the inner ring, so the arc hugs it without touching. */
+  const ringInset = screenSize * 0.055;
+  const radius = centre - orbSize / 2 - ringInset;
   const step = (ARC_END - ARC_START) / (TOOLS.length - 1);
+  /** Arrows sit on the character's own horizontal axis, clear of both edges. */
+  const arrowSize = Math.max(34, Math.min(44, screenSize * 0.095));
+  const arrowX = centre - arrowSize / 2 - screenSize * 0.05;
 
   return (
     <div className="pointer-events-none absolute inset-0 z-30">
@@ -80,13 +90,13 @@ export default function CharacterToolMenu({
             }`}
             style={
               {
-                left: screenSize / 2,
-                top: originY,
+                left: centre,
+                top: centre,
                 width: orbSize,
                 height: orbSize,
                 "--orb-x": `${Math.cos(angle) * radius}px`,
                 "--orb-y": `${Math.sin(angle) * radius}px`,
-                "--orb-delay": `${index * 42}ms`,
+                "--orb-delay": `${index * 38}ms`,
               } as React.CSSProperties
             }
           >
@@ -109,7 +119,7 @@ export default function CharacterToolMenu({
       {active === "colour" && (
         <div
           className="cloud-orb-tray pointer-events-auto"
-          style={{ left: screenSize / 2, top: screenSize * 0.2 }}
+          style={{ left: centre, top: centre - radius * 0.52 }}
         >
           {BLOB_COLOURS.map((colour) => (
             <button
@@ -132,28 +142,54 @@ export default function CharacterToolMenu({
             aria-label="Previous character preset"
             onClick={() => onStepPreset(-1)}
             className="cloud-arrow cloud-arrow-left pointer-events-auto"
-            style={{ top: originY + screenSize * 0.1, left: screenSize / 2 - radius * 1.2 }}
+            style={{
+              top: centre,
+              left: centre - arrowX,
+              width: arrowSize,
+              height: arrowSize,
+            }}
           >
-            ‹
+            <ArrowGlyph direction="left" />
           </button>
           <button
             type="button"
             aria-label="Next character preset"
             onClick={() => onStepPreset(1)}
             className="cloud-arrow cloud-arrow-right pointer-events-auto"
-            style={{ top: originY + screenSize * 0.1, left: screenSize / 2 + radius * 1.2 }}
+            style={{
+              top: centre,
+              left: centre + arrowX,
+              width: arrowSize,
+              height: arrowSize,
+            }}
           >
-            ›
+            <ArrowGlyph direction="right" />
           </button>
           <div
             className="cloud-preset-name"
-            style={{ left: screenSize / 2, top: originY + radius * 0.72 }}
+            style={{ left: centre, top: centre + screenSize * 0.3 }}
           >
             {activePresetName}
           </div>
         </>
       )}
     </div>
+  );
+}
+
+function ArrowGlyph({ direction }: { direction: "left" | "right" }) {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {direction === "left" ? <path d="M14.5 5.5 8 12l6.5 6.5" /> : <path d="M9.5 5.5 16 12l-6.5 6.5" />}
+    </svg>
   );
 }
 

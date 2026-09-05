@@ -2426,11 +2426,12 @@ canvas {
 }
 
 /* ---------------------------------------------------------------------------
- * Cloud-born tool menu.
+ * Cloud-born tool halo.
  *
- * Each orb starts collapsed at the body's centre and springs out along its own
- * vector, so the set reads as lobes pinching off the cloud. Transforms only —
- * nothing here reflows, which keeps the 60fps display budget intact.
+ * The row is measured against the panel's inner ring rather than the body, so
+ * it reads as a crown hugging the glass while the character keeps idling in
+ * the middle. Each orb still springs out of the centre along its own vector —
+ * transforms only, so nothing reflows and the 60fps budget is untouched.
  * ------------------------------------------------------------------------ */
 .cloud-orb {
   position: absolute;
@@ -2439,8 +2440,8 @@ canvas {
   place-items: center;
   border: 0;
   background: transparent;
-  animation: cloud-orb-emerge 520ms cubic-bezier(0.18, 1.32, 0.4, 1) var(--orb-delay, 0ms)
-    both;
+  animation: cloud-orb-emerge 620ms cubic-bezier(0.16, 0.9, 0.24, 1.02)
+    var(--orb-delay, 0ms) both;
 }
 
 .cloud-orb-puff {
@@ -2448,11 +2449,12 @@ canvas {
   inset: 0;
   border-radius: 50%;
   background:
-    radial-gradient(circle at 32% 26%, rgb(255 255 255 / 0.95), rgb(255 255 255 / 0.62) 58%,
-      rgb(233 241 253 / 0.4) 100%);
-  box-shadow: 0 8px 22px -8px rgb(12 24 46 / 0.55),
-    inset 0 -3px 8px rgb(146 170 204 / 0.35), inset 0 2px 5px rgb(255 255 255 / 0.9);
-  transition: transform 160ms ease-out, box-shadow 160ms ease-out;
+    radial-gradient(circle at 34% 28%, rgb(255 255 255 / 0.97), rgb(252 253 255 / 0.8) 52%,
+      rgb(231 240 252 / 0.62) 100%);
+  box-shadow: 0 6px 16px -6px rgb(12 24 46 / 0.42),
+    inset 0 -4px 9px rgb(150 174 208 / 0.28), inset 0 2px 4px rgb(255 255 255 / 0.95);
+  transition: transform 180ms cubic-bezier(0.2, 0.9, 0.3, 1.05),
+    box-shadow 180ms ease-out;
 }
 
 /* Two offset lobes give the orb a cloud silhouette rather than a plain disc. */
@@ -2465,26 +2467,26 @@ canvas {
 }
 
 .cloud-orb-puff::before {
-  top: 12%;
-  left: -18%;
-  width: 56%;
-  height: 56%;
+  top: 14%;
+  left: -15%;
+  width: 50%;
+  height: 50%;
 }
 
 .cloud-orb-puff::after {
-  right: -14%;
-  bottom: 6%;
-  width: 46%;
-  height: 46%;
+  right: -12%;
+  bottom: 8%;
+  width: 41%;
+  height: 41%;
 }
 
 .cloud-orb-glyph {
   position: relative;
   display: grid;
-  width: 46%;
-  height: 46%;
+  width: 44%;
+  height: 44%;
   place-items: center;
-  color: #24334c;
+  color: #2b3a52;
 }
 
 .cloud-orb-glyph svg {
@@ -2496,33 +2498,45 @@ canvas {
   display: block;
   width: 100%;
   height: 100%;
-  border: 1px solid rgb(255 255 255 / 0.9);
+  border: 1px solid rgb(255 255 255 / 0.92);
   border-radius: 50%;
+  box-shadow: inset 0 -2px 4px rgb(20 34 58 / 0.22);
 }
 
 .cloud-orb-label {
   position: absolute;
-  top: calc(100% + 5px);
-  color: rgb(255 255 255 / 0.9);
-  font-size: 9.5px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  text-shadow: 0 1px 4px rgb(0 0 0 / 0.55);
+  top: calc(100% + 6px);
+  color: rgb(255 255 255 / 0.92);
+  font-size: 9px;
+  font-weight: 620;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 4px rgb(0 0 0 / 0.6);
   white-space: nowrap;
+  opacity: 0.85;
+  transition: opacity 160ms ease-out;
 }
 
 .cloud-orb:hover .cloud-orb-puff,
 .cloud-orb:focus-visible .cloud-orb-puff {
-  transform: scale(1.07);
+  transform: scale(1.06);
+}
+
+.cloud-orb:hover .cloud-orb-label,
+.cloud-orb-active .cloud-orb-label {
+  opacity: 1;
 }
 
 .cloud-orb:active .cloud-orb-puff {
-  transform: scale(0.93);
+  transform: scale(0.94);
 }
 
+/* Selected: a soft double ring rather than a hard outline. */
 .cloud-orb-active .cloud-orb-puff {
-  box-shadow: 0 8px 22px -8px rgb(12 24 46 / 0.55),
-    0 0 0 3px color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: 0 6px 18px -6px rgb(12 24 46 / 0.5),
+    inset 0 -4px 9px rgb(150 174 208 / 0.28), inset 0 2px 4px rgb(255 255 255 / 0.95),
+    0 0 0 2px rgb(255 255 255 / 0.9),
+    0 0 0 5px color-mix(in srgb, var(--accent) 45%, transparent),
+    0 0 16px 2px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 .cloud-orb-tray {
@@ -2530,43 +2544,49 @@ canvas {
   display: flex;
   translate: -50% -50%;
   gap: 7px;
-  border: 1px solid rgb(255 255 255 / 0.55);
+  border: 1px solid rgb(255 255 255 / 0.6);
   border-radius: 999px;
-  padding: 8px 10px;
-  background: rgb(255 255 255 / 0.82);
-  box-shadow: 0 12px 30px -12px rgb(10 20 40 / 0.6);
-  backdrop-filter: blur(6px);
-  animation: cloud-orb-emerge 320ms cubic-bezier(0.18, 1.24, 0.4, 1) both;
+  padding: 7px 9px;
+  background: rgb(255 255 255 / 0.86);
+  box-shadow: 0 12px 30px -14px rgb(10 20 40 / 0.65);
+  backdrop-filter: blur(7px);
+  animation: cloud-orb-emerge 380ms cubic-bezier(0.16, 0.9, 0.24, 1.02) both;
 }
 
 .cloud-orb-tray-dot {
-  width: 22px;
-  height: 22px;
+  width: 21px;
+  height: 21px;
   border: 1px solid rgb(255 255 255 / 0.9);
   border-radius: 50%;
   box-shadow: 0 2px 6px rgb(10 20 40 / 0.3);
-  transition: transform 140ms ease-out;
+  transition: transform 150ms cubic-bezier(0.2, 0.9, 0.3, 1.05);
 }
 
 .cloud-orb-tray-dot:hover {
   transform: scale(1.12);
 }
 
+/* Preset arrows: one horizontal axis through the character, inset from the
+   ring on both sides so the pair reads as a matched set. */
 .cloud-arrow {
   position: absolute;
   display: grid;
-  width: 40px;
-  height: 40px;
   translate: -50% -50%;
   place-items: center;
-  border: 1px solid rgb(255 255 255 / 0.6);
+  border: 1px solid rgb(255 255 255 / 0.66);
   border-radius: 50%;
-  background: rgb(255 255 255 / 0.85);
-  box-shadow: 0 10px 24px -12px rgb(10 20 40 / 0.7);
-  color: #24334c;
-  font-size: 22px;
-  line-height: 1;
-  transition: transform 150ms ease-out, background-color 150ms ease-out;
+  padding: 0;
+  background: rgb(255 255 255 / 0.88);
+  box-shadow: 0 8px 20px -10px rgb(10 20 40 / 0.7),
+    inset 0 1px 2px rgb(255 255 255 / 0.9);
+  color: #2b3a52;
+  transition: transform 170ms cubic-bezier(0.2, 0.9, 0.3, 1.05),
+    background-color 170ms ease-out;
+}
+
+.cloud-arrow svg {
+  width: 45%;
+  height: 45%;
 }
 
 .cloud-arrow:hover {
@@ -2574,38 +2594,43 @@ canvas {
 }
 
 .cloud-arrow:active {
-  transform: translate(-50%, -50%) scale(0.92);
+  transform: translate(-50%, -50%) scale(0.93);
 }
 
 .cloud-arrow-left {
-  animation: cloud-arrow-in-left 340ms cubic-bezier(0.18, 1.28, 0.4, 1) both;
+  animation: cloud-arrow-in-left 420ms cubic-bezier(0.16, 0.9, 0.24, 1.02) both;
 }
 
 .cloud-arrow-right {
-  animation: cloud-arrow-in-right 340ms cubic-bezier(0.18, 1.28, 0.4, 1) both;
+  animation: cloud-arrow-in-right 420ms cubic-bezier(0.16, 0.9, 0.24, 1.02) both;
 }
 
 .cloud-preset-name {
   position: absolute;
   translate: -50% -50%;
+  border: 1px solid rgb(255 255 255 / 0.5);
   border-radius: 999px;
-  padding: 5px 12px;
-  background: rgb(255 255 255 / 0.85);
-  color: #24334c;
-  font-size: 11px;
-  font-weight: 600;
+  padding: 4px 13px;
+  background: rgb(255 255 255 / 0.88);
+  box-shadow: 0 6px 16px -10px rgb(10 20 40 / 0.6);
+  color: #2b3a52;
+  font-size: 10.5px;
+  font-weight: 640;
+  letter-spacing: 0.01em;
   white-space: nowrap;
+  animation: cloud-pill-in 380ms cubic-bezier(0.16, 0.9, 0.24, 1) both;
 }
 
+/* Calm reveal: travel out, kiss 1.04, settle. No hard bounce. */
 @keyframes cloud-orb-emerge {
   0% {
     opacity: 0;
-    transform: translate(0, 0) scale(0.3);
+    transform: translate(0, 0) scale(0.42);
   }
-  62% {
+  55% {
     opacity: 1;
-    transform: translate(calc(var(--orb-x, 0px) * 1.08), calc(var(--orb-y, 0px) * 1.08))
-      scale(1.06);
+    transform: translate(calc(var(--orb-x, 0px) * 1.035), calc(var(--orb-y, 0px) * 1.035))
+      scale(1.04);
   }
   100% {
     opacity: 1;
@@ -2614,24 +2639,43 @@ canvas {
 }
 
 @keyframes cloud-arrow-in-left {
-  from {
+  0% {
     opacity: 0;
-    transform: translate(-50%, -50%) translateX(22px) scale(0.7);
+    transform: translate(-50%, -50%) translateX(16px) scale(0.78);
   }
-  to {
+  60% {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateX(-2px) scale(1.03);
+  }
+  100% {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
   }
 }
 
 @keyframes cloud-arrow-in-right {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translateX(-16px) scale(0.78);
+  }
+  60% {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateX(2px) scale(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes cloud-pill-in {
   from {
     opacity: 0;
-    transform: translate(-50%, -50%) translateX(-22px) scale(0.7);
+    transform: translate(-50%, -50%) translateY(6px);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    transform: translate(-50%, -50%);
   }
 }
 
@@ -2639,7 +2683,8 @@ canvas {
   .cloud-orb,
   .cloud-orb-tray,
   .cloud-arrow-left,
-  .cloud-arrow-right {
+  .cloud-arrow-right,
+  .cloud-preset-name {
     animation-duration: 1ms;
   }
 }

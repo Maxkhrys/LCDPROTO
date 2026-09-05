@@ -711,10 +711,14 @@ export function renderCloudBlob(
 
   // 11. CRISP PRODUCTION FACE (3D Spherical placement, foreshortening, and differential eye scale)
   if (o.showFace) drawFace(ctx, o);
-  // One very light veil across the outer face field. At this opacity it never
-  // greys the features, it only stops their outline reading as a decal.
+  // Two very light veils across the outer face field: a wide one that ties the
+  // whole feature group into the body, and a tighter one that softens the
+  // material immediately around the features. Both stay far below the level
+  // that would grey the black itself — they only stop the outline reading as
+  // a decal laid over the volume.
   if (o.showFace) {
-    stamp(ctx, s.mist, corePose.x, corePose.y + 2, 104 * corePose.scaleX, 72 * corePose.scaleY, 0.05 + p.faceEmbedDepth * 0.1);
+    stamp(ctx, s.mist, corePose.x, corePose.y + 2, 108 * corePose.scaleX, 76 * corePose.scaleY, 0.06 + p.faceEmbedDepth * 0.12);
+    stamp(ctx, s.mist, corePose.x, corePose.y + 10, 76 * corePose.scaleX, 50 * corePose.scaleY, 0.04 + p.faceEmbedDepth * 0.08);
   }
 
   if (o.debug) {

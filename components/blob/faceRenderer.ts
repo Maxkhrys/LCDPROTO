@@ -73,6 +73,10 @@ export function drawMouthShape(
   const colour: BlobColour =
     typeof crescentOrColour === "string" ? crescentOrColour : maybeColour ?? "teal";
 
+  // The silhouette is built into a Path2D rather than straight onto the
+  // context so the identical geometry can be replayed into the supersampled
+  // buffer. The shapes themselves are unchanged.
+
   // A D mouth gives the happy and angry beats a readable open shape without
   // introducing a separate emoji asset. The top is held nearly flat while
   // the lower edge rounds into the jaw of the D.
@@ -81,11 +85,11 @@ export function drawMouthShape(
     const top = -height * (0.18 + curve * 0.035);
     const bottom = height * (0.16 + d * 0.62 + o * 0.08);
     const corner = height * (0.06 + d * 0.06);
-    ctx.beginPath();
-    ctx.moveTo(-halfWidth, top);
-    ctx.quadraticCurveTo(0, top - height * 0.035, halfWidth, top);
-    ctx.lineTo(halfWidth, bottom - corner);
-    ctx.bezierCurveTo(
+    const path = new Path2D();
+    path.moveTo(-halfWidth, top);
+    path.quadraticCurveTo(0, top - height * 0.035, halfWidth, top);
+    path.lineTo(halfWidth, bottom - corner);
+    path.bezierCurveTo(
       halfWidth * 0.96,
       bottom + height * 0.03,
       halfWidth * 0.48,
@@ -93,7 +97,7 @@ export function drawMouthShape(
       0,
       bottom + height * 0.045
     );
-    ctx.bezierCurveTo(
+    path.bezierCurveTo(
       -halfWidth * 0.48,
       bottom + height * 0.075,
       -halfWidth * 0.96,
@@ -101,14 +105,14 @@ export function drawMouthShape(
       -halfWidth,
       bottom - corner
     );
-    ctx.closePath();
-    const palette = mouthPalette(colour);
-    const mouthSurface = ctx.createLinearGradient(0, -height, 0, height);
-    mouthSurface.addColorStop(0, "#020203");
-    mouthSurface.addColorStop(0.72, "#050506");
-    mouthSurface.addColorStop(1, palette.shade);
-    ctx.fillStyle = mouthSurface;
-    ctx.fill();
+    path.closePath();
+
+    fillMouth(ctx, path, height, colour, 0.72, {
+      x: -halfWidth - height * 0.25,
+      y: top - height * 0.2,
+      width: halfWidth * 2 + height * 0.5,
+      height: bottom - top + height * 0.4,
+    });
     return;
   }
 
@@ -141,15 +145,15 @@ export function drawMouthShape(
   const crescentBottomCenter = endY + bend * 0.28 + height * (0.46 + c * 0.28);
   const bottomCenter = (1 - c) * neutralBottomCenter + c * crescentBottomCenter;
 
-  ctx.beginPath();
+  const path = new Path2D();
   // Start at left corner
-  ctx.moveTo(-halfWidth, topEnd);
+  path.moveTo(-halfWidth, topEnd);
   // Top curve (flattens into cute anime upper lip as c -> 1)
-  ctx.quadraticCurveTo(0, topCenter, halfWidth, topEnd);
+  path.quadraticCurveTo(0, topCenter, halfWidth, topEnd);
 
   // Right corner: rounded cap when c=0, acute tapered tip when c=1
   if (c < 0.96) {
-    ctx.bezierCurveTo(
+    path.bezierCurveTo(
       halfWidth + cornerReach,
       topEnd,
       halfWidth + cornerReach,
@@ -158,15 +162,15 @@ export function drawMouthShape(
       bottomEnd
     );
   } else {
-    ctx.lineTo(halfWidth, bottomEnd);
+    path.lineTo(halfWidth, bottomEnd);
   }
 
   // Bottom curve (arcs into round half-oval smile)
-  ctx.quadraticCurveTo(0, bottomCenter, -halfWidth, bottomEnd);
+  path.quadraticCurveTo(0, bottomCenter, -halfWidth, bottomEnd);
 
   // Left corner: rounded cap when c=0, acute tapered tip when c=1
   if (c < 0.96) {
-    ctx.bezierCurveTo(
+    path.bezierCurveTo(
       -halfWidth - cornerReach,
       bottomEnd,
       -halfWidth - cornerReach,
@@ -175,16 +179,49 @@ export function drawMouthShape(
       topEnd
     );
   } else {
-    ctx.closePath();
+    path.closePath();
   }
 
+  const spanTop = Math.min(topEnd, topCenter) - 2;
+  const spanBottom = Math.max(bottomEnd, bottomCenter) + 2;
+  fillMouth(ctx, path, height, colour, 0.7, {
+    x: -halfWidth - cornerReach - 2,
+    y: spanTop,
+    width: (halfWidth + cornerReach + 2) * 2,
+    height: spanBottom - spanTop,
+  });
+}
+
+/**
+ * Resolves a mouth silhouette with the same supersampled coverage the eyes
+ * use. The vertical gradient is untouched, so depth and colour are identical —
+ * only the edge quality changes.
+ */
+function fillMouth(
+  ctx: CanvasRenderingContext2D,
+  path: Path2D,
+  height: number,
+  colour: BlobColour,
+  midStop: number,
+  bounds: MaskBounds
+) {
   const palette = mouthPalette(colour);
-  const mouthSurface = ctx.createLinearGradient(0, -height, 0, height);
-  mouthSurface.addColorStop(0, "#020203");
-  mouthSurface.addColorStop(0.7, "#050506");
-  mouthSurface.addColorStop(1, palette.shade);
-  ctx.fillStyle = mouthSurface;
-  ctx.fill();
+  const surface = (target: CanvasRenderingContext2D) => {
+    const gradient = target.createLinearGradient(0, -height, 0, height);
+    gradient.addColorStop(0, "#020203");
+    gradient.addColorStop(midStop, "#050506");
+    gradient.addColorStop(1, palette.shade);
+    return gradient;
+  };
+
+  const painted = drawSupersampled(ctx, bounds, (target) => {
+    target.fillStyle = surface(target);
+    target.fill(path);
+  });
+  if (painted) return;
+
+  ctx.fillStyle = surface(ctx);
+  ctx.fill(path);
 }
 
 function mouthPalette(colour: BlobColour) {
@@ -269,6 +306,63 @@ function contextScale(ctx: CanvasRenderingContext2D) {
   return Math.max(1, Math.hypot(t.a, t.b));
 }
 
+interface MaskBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Paints a face element through a supersampled offscreen buffer, then resolves
+ * it back into the scene in local coordinates.
+ *
+ * Both facial elements need this, for different reasons. The eye's aperture is
+ * an intersection and `clip()` is a hard 1-bit mask, so its lid contours had no
+ * edge coverage at all. The mouth is an ordinary fill, but its upper and lower
+ * edges are the shallowest curves on the face, where a single native-resolution
+ * pass still resolves to about one step. Rasterising above the display scale
+ * and resolving down gives both several coverage levels instead of one — no
+ * blur pass, no per-frame allocation.
+ *
+ * Returns false when there is no DOM to allocate a buffer in, so callers can
+ * fall back to drawing straight onto the context.
+ */
+function drawSupersampled(
+  ctx: CanvasRenderingContext2D,
+  bounds: MaskBounds,
+  paint: (target: CanvasRenderingContext2D) => void
+): boolean {
+  const ss = Math.min(4, Math.max(2, Math.ceil(contextScale(ctx) * 1.75)));
+  const bufferWidth = Math.max(1, Math.ceil(bounds.width * ss));
+  const bufferHeight = Math.max(1, Math.ceil(bounds.height * ss));
+  const scratch = acquireEyeScratch(bufferWidth, bufferHeight);
+  if (!scratch) return false;
+
+  scratch.save();
+  scratch.scale(ss, ss);
+  scratch.translate(-bounds.x, -bounds.y);
+  paint(scratch);
+  scratch.restore();
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(
+    scratch.canvas,
+    0,
+    0,
+    bufferWidth,
+    bufferHeight,
+    bounds.x,
+    bounds.y,
+    bounds.width,
+    bounds.height
+  );
+  ctx.restore();
+  return true;
+}
+
 export function drawProceduralEye(
   ctx: CanvasRenderingContext2D,
   eye: EyeGeometry,
@@ -287,64 +381,25 @@ export function drawProceduralEye(
   // left eye; positive values lower the inner edge of the right eye.
   const lidTilt = clamp(lidBias, -1, 1) * eye.height * 0.16;
 
-  // Local bounding box of the aperture band, with a pixel of slack so the
-  // alpha ramp is never clipped by the buffer itself.
-  const pad = 2;
-  const boxX = eye.centerX - eye.width - pad;
-  const boxY = eye.centerY - eye.height - pad;
-  const boxW = eye.width * 2 + pad * 2;
-  const boxH = eye.height * 2 + pad * 2;
+  const band = new Path2D();
+  band.moveTo(eye.centerX - eye.width, top + lidTilt);
+  band.quadraticCurveTo(
+    eye.centerX,
+    top - lidTilt * 0.22,
+    eye.centerX + eye.width,
+    top - lidTilt
+  );
+  band.lineTo(eye.centerX + eye.width, bottom - lidTilt);
+  band.quadraticCurveTo(
+    eye.centerX,
+    bottom + lidTilt * 0.18,
+    eye.centerX - eye.width,
+    bottom + lidTilt
+  );
+  band.closePath();
 
-  // Rasterise the mask at the resolution it will actually be shown at, so the
-  // blit resamples nothing and the eye stays as sharp as a direct fill.
-  const ss = Math.min(4, Math.max(2, Math.ceil(contextScale(ctx) * 1.5)));
-  const scratch = acquireEyeScratch(Math.ceil(boxW * ss), Math.ceil(boxH * ss));
-
-  const paint = (target: CanvasRenderingContext2D) => {
-    target.beginPath();
-    target.moveTo(eye.centerX - eye.width, top + lidTilt);
-    target.quadraticCurveTo(
-      eye.centerX,
-      top - lidTilt * 0.22,
-      eye.centerX + eye.width,
-      top - lidTilt
-    );
-    target.lineTo(eye.centerX + eye.width, bottom - lidTilt);
-    target.quadraticCurveTo(
-      eye.centerX,
-      bottom + lidTilt * 0.18,
-      eye.centerX - eye.width,
-      bottom + lidTilt
-    );
-    target.closePath();
-  };
-
-  if (!scratch) {
-    // No DOM (tests, workers): fall back to the hard clip rather than nothing.
-    ctx.save();
-    paint(ctx);
-    ctx.clip();
-    ctx.beginPath();
-    ctx.ellipse(eye.centerX, eye.centerY, eye.width * 0.5, eye.height * 0.5, 0, 0, Math.PI * 2);
-    ctx.fillStyle = "#010204";
-    ctx.fill();
-    ctx.restore();
-    return;
-  }
-
-  scratch.save();
-  scratch.scale(ss, ss);
-  scratch.translate(-boxX, -boxY);
-
-  // Aperture band first, then the eye mass intersected into it. Both are
-  // ordinary fills, so both carry real edge coverage.
-  paint(scratch);
-  scratch.fillStyle = "#010204";
-  scratch.fill();
-
-  scratch.globalCompositeOperation = "source-in";
-  scratch.beginPath();
-  scratch.ellipse(
+  const mass = new Path2D();
+  mass.ellipse(
     eye.centerX,
     eye.centerY,
     eye.width * 0.5,
@@ -353,39 +408,49 @@ export function drawProceduralEye(
     0,
     Math.PI * 2
   );
-  scratch.fillStyle = "#010204";
-  scratch.fill();
 
-  // The developer gaze glint rides inside the finished mask.
-  if (showPupil) {
-    scratch.globalCompositeOperation = "source-atop";
-    scratch.beginPath();
-    scratch.arc(
-      eye.centerX + clamp(pupilX, -eye.width * 0.22, eye.width * 0.22),
-      eye.centerY + clamp(pupilY, -eye.height * 0.16, eye.height * 0.16),
-      Math.max(0.8, Math.min(1.7, eye.width * 0.06 * clamp(pupilScale, 0.55, 1.45))),
-      0,
-      Math.PI * 2
-    );
-    scratch.fillStyle = "rgba(255, 255, 255, 0.9)";
-    scratch.fill();
-  }
-  scratch.restore();
+  // A pixel of slack so the alpha ramp is never clipped by the buffer itself.
+  const pad = 2;
+  const painted = drawSupersampled(
+    ctx,
+    {
+      x: eye.centerX - eye.width - pad,
+      y: eye.centerY - eye.height - pad,
+      width: eye.width * 2 + pad * 2,
+      height: eye.height * 2 + pad * 2,
+    },
+    (target) => {
+      // Aperture band first, then the eye mass intersected into it. Both are
+      // ordinary fills, so both carry real edge coverage.
+      target.fillStyle = "#010204";
+      target.fill(band);
+      target.globalCompositeOperation = "source-in";
+      target.fill(mass);
 
-  ctx.save();
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(
-    scratch.canvas,
-    0,
-    0,
-    Math.ceil(boxW * ss),
-    Math.ceil(boxH * ss),
-    boxX,
-    boxY,
-    boxW,
-    boxH
+      // The developer gaze glint rides inside the finished mask.
+      if (showPupil) {
+        target.globalCompositeOperation = "source-atop";
+        target.beginPath();
+        target.arc(
+          eye.centerX + clamp(pupilX, -eye.width * 0.22, eye.width * 0.22),
+          eye.centerY + clamp(pupilY, -eye.height * 0.16, eye.height * 0.16),
+          Math.max(0.8, Math.min(1.7, eye.width * 0.06 * clamp(pupilScale, 0.55, 1.45))),
+          0,
+          Math.PI * 2
+        );
+        target.fillStyle = "rgba(255, 255, 255, 0.9)";
+        target.fill();
+      }
+    }
   );
+
+  if (painted) return;
+
+  // No DOM (tests, workers): fall back to the hard clip rather than nothing.
+  ctx.save();
+  ctx.clip(band);
+  ctx.fillStyle = "#010204";
+  ctx.fill(mass);
   ctx.restore();
 }
 

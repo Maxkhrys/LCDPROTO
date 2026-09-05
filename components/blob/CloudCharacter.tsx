@@ -239,7 +239,9 @@ export default function CloudCharacter({
     const scaleX = blob.scaleX;
     const scaleY = blob.scaleY;
     const offsetX = blob.x + body.x;
-    const offsetY = blob.y + body.y + (settingsOpen ? size * 0.075 : 0);
+    // The settings halo is measured against the panel's inner ring, so the
+    // character no longer steps aside for it: it keeps idling dead centre.
+    const offsetY = blob.y + body.y;
 
     // Ambient float and drift
     const ambientX = Math.sin(idleTime.current * 0.45) * motion.driftAmount;
@@ -445,7 +447,7 @@ export default function CloudCharacter({
 
   const hitTest = (x: number, y: number) => {
     const blobX = size / 2 + rig.blob.x;
-    const blobY = size / 2 + rig.blob.y + (settingsOpen ? size * 0.075 : 0);
+    const blobY = size / 2 + rig.blob.y;
     const scale = (rig.blob.scale || 1) * (cloudParams?.scale ?? 1);
     return Math.hypot(x - blobX, y - blobY) <= size * BODY_FRACTION * 0.72 * scale;
   };
