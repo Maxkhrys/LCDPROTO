@@ -353,6 +353,7 @@ export default function CloudCharacter({
       safeRadius: Math.max(0, size / 2 - 170 * params.scale),
       face: cloudFace,
       showPupils,
+      showContactShadow: false,
     });
   }, [
     size,

@@ -41,6 +41,7 @@ export interface RenderOptions {
   safeRadius: number;
   face?: CloudFaceSettings;
   showPupils?: boolean;
+  showContactShadow?: boolean;
 }
 const TAU = Math.PI * 2;
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
@@ -414,20 +415,22 @@ export function renderCloudBlob(
     }
   }
 
-  // Contact shadow on the floor (smoothly diffuses and fades out as cloud rises or is pulled upward)
-  const altitude = Math.max(0, -p.y);
-  const shadowFade = clamp(1 - altitude / 130, 0, 1);
-  if (shadowFade > 0.01) {
-    const height = clamp(1 - p.y / 160, 0.45, 1.35);
-    stamp(
-      ctx,
-      s.shadow,
-      size / 2 + p.x * 0.4,
-      size / 2 + 130 * p.scale + Math.max(0, p.y) * 0.4,
-      95 * p.scale * height,
-      13 * p.scale,
-      (0.22 / height) * shadowFade,
-    );
+  // Contact shadow on the floor (only rendered if explicitly requested, as EnvironmentLayer handles the official grounded shadow)
+  if (o.showContactShadow) {
+    const altitude = Math.max(0, -p.y);
+    const shadowFade = clamp(1 - altitude / 130, 0, 1);
+    if (shadowFade > 0.01) {
+      const height = clamp(1 - p.y / 160, 0.45, 1.35);
+      stamp(
+        ctx,
+        s.shadow,
+        size / 2 + p.x * 0.4,
+        size / 2 + 130 * p.scale + Math.max(0, p.y) * 0.4,
+        95 * p.scale * height,
+        13 * p.scale,
+        (0.22 / height) * shadowFade,
+      );
+    }
   }
 
   const yaw = o.rig.blob.yaw ?? 0;
@@ -541,11 +544,11 @@ export function renderCloudBlob(
     );
   }
 
-  // 3. DYNAMIC UNDERSIDE AMBIENT OCCLUSION SHADOW (anchored at true bottom perimeter)
+  // 3. DYNAMIC UNDERSIDE AMBIENT OCCLUSION SHADOW (anchored inside lower volume, cleanly contained)
   const trueBottomY = bottomBellyPose
-    ? Math.max(corePose.y + 36, bottomBellyPose.y + 14)
-    : corePose.y + 44;
-  stamp(ctx, s.underside, corePose.x, trueBottomY, 130 * corePose.scaleX, 46 * corePose.scaleY, 0.48);
+    ? corePose.y * 0.35 + bottomBellyPose.y * 0.65
+    : corePose.y + 24;
+  stamp(ctx, s.underside, corePose.x, trueBottomY, 116 * corePose.scaleX, 34 * corePose.scaleY, 0.38);
 
   // 4. CENTRAL CLOUD CORE
   stamp(

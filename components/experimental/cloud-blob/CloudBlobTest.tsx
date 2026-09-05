@@ -39,7 +39,6 @@ const INITIAL_TRAILS: CloudTrailConfig = {
 };
 const CLOUD_ENVIRONMENT = {
   ...DEFAULT_ENVIRONMENT,
-  shadowEnabled: false,
   particleCount: 4,
   ambientLight: 0.3,
   bounceLight: 0.2,
@@ -230,6 +229,7 @@ export default function CloudBlobTest() {
                     colour={colour}
                     cloudColour={COLOUR_PRESETS[PALETTES[colour]]}
                     showFace={face}
+                    showContactShadow={!scene}
                     dragEnabled={drag}
                     playing={playing}
                     fps={fps}

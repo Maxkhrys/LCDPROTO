@@ -250,6 +250,7 @@ export default function CloudBlobBody(props: CloudBlobBodyProps) {
       options.vx = vx;
       options.vy = vy;
       options.safeRadius = Math.max(0, size / 2 - bodyRadius);
+      options.showContactShadow = c.showContactShadow ?? false;
       s.hitRadius = Math.min(bodyRadius, size / 2 - 5);
       renderCloudBlob(ctx, options);
       c.onPose?.(p.x, p.y, p.scale);

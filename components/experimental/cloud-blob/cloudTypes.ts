@@ -177,6 +177,8 @@ export interface CloudBlobBodyProps {
   showFace?: boolean;
   /** Enable interactive pointer drag / touch manipulation. */
   dragEnabled?: boolean;
+  /** Whether to render fallback contact shadow (EnvironmentLayer handles this if present). */
+  showContactShadow?: boolean;
   playing?: boolean;
   fps?: 30 | 60;
   idleEnabled?: boolean;
