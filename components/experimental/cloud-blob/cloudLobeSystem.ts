@@ -48,6 +48,8 @@ export const DEFAULT_DEFORMATION: CloudDeformationParams = {
   cloudBrows: false,
   gazeX: 0,
   gazeY: 0,
+  turnYaw: 0,
+  turnPitch: 0,
 };
 
 export const DEFAULT_MOTION_CONFIG: CloudMotionConfig = {
@@ -462,16 +464,50 @@ export function computeLobeTarget(
     tx += wobbleDist;
   }
 
-  // 6. CRITICAL LOBE LAG HIERARCHY & DIRECTIONAL AIRFLOW DEFORMATION:
-  // Face leads -> core maintains chunky structural presence (lag 0.05, low stretch) -> crown & cheeks follow (0.35 - 0.45) -> rear base & belly trail along motion wake (0.75 - 0.88)
-  const lagStrength = def.lagFactor * motion.lobeLag * 0.09;
+  // 6. DIRECTIONAL TURNING SILHOUETTE MORPHING (Pseudo-3D volumetric rotation)
+  const turnYaw = params.turnYaw ?? 0;
+  const turnPitch = params.turnPitch ?? 0;
+  const yawRatio = clamp(turnYaw / 28, -1, 1);
+  const pitchRatio = clamp(turnPitch / 18, -1, 1);
+
+  if (Math.abs(yawRatio) > 0.01 || Math.abs(pitchRatio) > 0.01) {
+    if (def.id === "topCrown") {
+      // Top crown mass leans dynamically into motion
+      tx += yawRatio * 20;
+      ty += pitchRatio * 10;
+    } else if (def.id === "leftCheek") {
+      // Left cheek leads and shifts left when turning left; tucks in when turning right
+      tx += yawRatio < 0 ? yawRatio * 14 : yawRatio * 18;
+      ty += pitchRatio * 6;
+    } else if (def.id === "rightCheek") {
+      // Right cheek leads and shifts right when turning right; tucks in when turning left
+      tx += yawRatio > 0 ? yawRatio * 14 : yawRatio * 18;
+      ty += pitchRatio * 6;
+    } else if (def.id === "bottomBelly") {
+      tx -= yawRatio * 8;
+      ty += pitchRatio * 10;
+    } else if (def.id === "baseLeft") {
+      tx += yawRatio < 0 ? yawRatio * 8 : yawRatio * 12;
+    } else if (def.id === "baseRight") {
+      tx += yawRatio > 0 ? yawRatio * 8 : yawRatio * 12;
+    }
+  }
+
+  // 7. CRITICAL LOBE LAG HIERARCHY & DIRECTIONAL AIRFLOW DEFORMATION:
+  // Face leads -> core maintains chunky structural presence (lag 0.05, low stretch) -> crown & cheeks follow -> rear base & belly trail along motion wake
+  // Asymmetric directional lag: front leading lobes have reduced lag; rear trailing lobes drag along wake
+  const isLeadingX = (characterVx > 10 && def.baseX > 10) || (characterVx < -10 && def.baseX < -10);
+  const isTrailingX = (characterVx > 10 && def.baseX < -10) || (characterVx < -10 && def.baseX > 10);
+  const directionalLagMod = isLeadingX ? 0.45 : isTrailingX ? 1.35 : 1.0;
+
+  const lagStrength = def.lagFactor * motion.lobeLag * 0.09 * directionalLagMod;
   const maxLobeOffset = def.radiusX * 0.48;
   const rawLagX = characterVx * lagStrength;
   const rawLagY = characterVy * lagStrength;
   tx -= Math.max(-maxLobeOffset, Math.min(maxLobeOffset, rawLagX));
   ty -= Math.max(-maxLobeOffset, Math.min(maxLobeOffset, rawLagY));
 
-  // 7. Scale computation with core shape protection and directional airflow
+  // 8. Scale computation with core shape protection and directional airflow
   const speed = Math.hypot(characterVx, characterVy);
   const nvx = speed > 1e-2 ? characterVx / speed : 0;
   const nvy = speed > 1e-2 ? characterVy / speed : 0;
@@ -493,6 +529,48 @@ export function computeLobeTarget(
   if (stretch > 0) {
     sx *= 1 - stretch * 0.2 * stretchFactor;
     sy *= 1 + stretch * 0.36 * stretchFactor;
+  }
+
+  // Directional silhouette volume modulation:
+  // Leading side becomes fuller and firmer; trailing rear side compresses and recedes
+  if (!isCore) {
+    if (def.id === "leftCheek") {
+      if (yawRatio < -0.05) {
+        // Leading left side becomes fuller
+        sx *= 1 + Math.abs(yawRatio) * 0.15;
+        sy *= 1 + Math.abs(yawRatio) * 0.08;
+      } else if (yawRatio > 0.05) {
+        // Trailing side compresses
+        sx *= 1 - Math.abs(yawRatio) * 0.20;
+        sy *= 1 - Math.abs(yawRatio) * 0.10;
+      }
+    } else if (def.id === "rightCheek") {
+      if (yawRatio > 0.05) {
+        // Leading right side becomes fuller
+        sx *= 1 + Math.abs(yawRatio) * 0.15;
+        sy *= 1 + Math.abs(yawRatio) * 0.08;
+      } else if (yawRatio < -0.05) {
+        // Trailing side compresses
+        sx *= 1 - Math.abs(yawRatio) * 0.20;
+        sy *= 1 - Math.abs(yawRatio) * 0.10;
+      }
+    } else if (def.id === "baseLeft") {
+      sx *= yawRatio < 0 ? 1 + Math.abs(yawRatio) * 0.10 : 1 - Math.abs(yawRatio) * 0.15;
+    } else if (def.id === "baseRight") {
+      sx *= yawRatio > 0 ? 1 + Math.abs(yawRatio) * 0.10 : 1 - Math.abs(yawRatio) * 0.15;
+    } else if (def.id === "topCrown") {
+      if (pitchRatio < -0.05) {
+        sy *= 1 + Math.abs(pitchRatio) * 0.14;
+      } else if (pitchRatio > 0.05) {
+        sy *= 1 - Math.abs(pitchRatio) * 0.10;
+      }
+    } else if (def.id === "bottomBelly") {
+      if (pitchRatio > 0.05) {
+        sy *= 1 + Math.abs(pitchRatio) * 0.14;
+      } else if (pitchRatio < -0.05) {
+        sy *= 1 - Math.abs(pitchRatio) * 0.12;
+      }
+    }
   }
 
   // Aerodynamic motion reaction:

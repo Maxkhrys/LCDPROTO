@@ -336,29 +336,35 @@ export default function EnvironmentLayer({
       const sink = footY - restFootY;
       const groundedY = restFootY + (sink > 0 ? sink : sink * 0.25);
 
-      shadowX.current.step(footX, dt, 2.2 - active.shadowLag / 260, 0.72);
+      shadowX.current.step(footX, dt, 2.05 - active.shadowLag / 260, 0.72);
       shadowY.current.step(groundedY, dt, 2.1 - active.shadowLag / 280, 0.75);
       shadowHeight.current.step(verticalSignal, dt, 2.25 - active.shadowLag / 300, 0.76);
       const height = clamp(shadowHeight.current.value, 0.2, 1.24);
-      // Settling and ground contact add compression spread
-      const settlingSquash = sink > 0 ? clamp(sink * 0.012, 0, 0.35) : 0;
+
+      // Height rules: higher = smaller, softer, lighter; lower = wider, darker, tighter
+      const heightScale = clamp(1 - (height - 0.45) * 0.65, 0.45, 1.25);
+      const heightOpacity = clamp(1 - (height - 0.4) * 0.65, 0.35, 1.15);
+
+      // Settling and ground contact add landing compression spread
+      const settlingSquash = sink > 0 ? clamp(sink * 0.015, 0, 0.4) : 0;
       const squash = Math.max(0, bodyDeformY) + Math.max(0, bodyDeformX) * 0.35 + settlingSquash;
+
       // Proportional to how wide character actually is
       const spread = Math.max(0.35, currentRig.body.scaleX * wholeScaleX);
       const shadowScaleX =
-        active.shadowWidth * spread * (0.88 + (1 - height) * 0.25 + squash * 1.7);
+        active.shadowWidth * spread * (heightScale + squash * 1.8);
       const shadowScaleY =
-        active.shadowHeight * spread * (0.8 + height * 0.22);
+        active.shadowHeight * spread * (heightScale * 0.82 + 0.18);
       const shadowOpacity = clamp(
-        active.shadowOpacity * (0.8 + (1 - height) * 0.36 + (sink > 0 ? 0.08 : 0)),
+        active.shadowOpacity * (heightOpacity + (sink > 0 ? 0.14 : 0)),
         0,
         0.95
       );
       // Dynamic softness: tighter & crisper when grounded/dropping; lighter & diffused when rising
       const dynamicSoftness = clamp(
-        active.shadowSoftness * (0.62 + (height - 0.35) * 0.65),
-        0.28,
-        1.35
+        active.shadowSoftness * (0.5 + (height - 0.25) * 0.85),
+        0.25,
+        1.45
       );
       const shadowYPosition =
         CENTRE + shadowY.current.value + SHADOW_DROP + active.shadowYOffset;

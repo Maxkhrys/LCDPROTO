@@ -270,25 +270,26 @@ function drawFace(ctx: CanvasRenderingContext2D, o: RenderOptions) {
   const face = o.face ?? { offsetX: 0, offsetY: 0, scale: 1 };
   const faceScale = face.scale ?? 1;
 
-  const yaw = rig.blob.yaw ?? 0;
-  const pitch = rig.blob.pitch ?? 0;
+  // Dynamic turning yaw & pitch from both character rig and motion heading
+  const yaw = clamp((rig.blob.yaw ?? 0) + (p.turnYaw ?? 0), -45, 45);
+  const pitch = clamp((rig.blob.pitch ?? 0) + (p.turnPitch ?? 0), -30, 30);
   const yawRad = (yaw * Math.PI) / 180;
   const pitchRad = (pitch * Math.PI) / 180;
   const yawSin = Math.sin(yawRad);
   const yawCos = Math.cos(yawRad);
   const pitchSin = Math.sin(pitchRad);
 
-  // 3D face travel across the spherical surface of the core
-  const faceTurnX = yawSin * 38;
-  const faceTurnY = pitchSin * 24 - Math.abs(yawSin) * 6;
+  // 1. 3D face travel across the spherical surface of the core
+  const faceTurnX = yawSin * 32;
+  const faceTurnY = pitchSin * 20 - Math.abs(yawSin) * 5;
 
-  // Horizontal perspective foreshortening of the face
-  const faceYawWidth = clamp(0.35 + Math.abs(yawCos) * 0.65, 0.35, 1);
-  const facePitchHeight = clamp(0.72 + Math.abs(Math.cos(pitchRad)) * 0.28, 0.72, 1);
+  // Horizontal perspective foreshortening of the face mask
+  const faceYawWidth = clamp(0.42 + Math.abs(yawCos) * 0.58, 0.42, 1);
+  const facePitchHeight = clamp(0.76 + Math.abs(Math.cos(pitchRad)) * 0.24, 0.76, 1);
 
-  // Smooth profile fade when turning beyond 55 degrees
-  const profileAmount = Math.max(0, Math.abs(yawSin) - 0.45);
-  const faceVisibility = clamp(1 - profileAmount * 1.5, 0.15, 1);
+  // Smooth profile fade when turning beyond 50 degrees
+  const profileAmount = Math.max(0, Math.abs(yawSin) - 0.7);
+  const faceVisibility = clamp(1 - profileAmount * 2.0, 0.2, 1);
 
   ctx.save();
   ctx.translate(
@@ -304,23 +305,59 @@ function drawFace(ctx: CanvasRenderingContext2D, o: RenderOptions) {
 
   for (const id of ["leftEye", "rightEye"] as const) {
     const a = faceAnchor(id, size, colourName),
-      t = rig[id];
+      t = { ...rig[id] };
     const isLeft = id === "leftEye";
-    // Near vs far eye perspective:
-    const isReceding = isLeft ? yawSin < -0.05 : yawSin > 0.05;
-    const recedingAmount = Math.abs(yawSin);
-    const eyePerspX = isReceding
-      ? clamp(1 - recedingAmount * 0.28, 0.72, 1)
-      : clamp(1 + recedingAmount * 0.1, 1, 1.12);
-    const eyePerspAlpha = isReceding ? clamp(1 - recedingAmount * 0.25, 0.7, 1) : 1;
 
-    const eye = eyeGeometry(a.width * eyePerspX, a.height, t, false);
+    // Asymmetric 3D Perspective on Left vs Right Eye:
+    // When turning left (yawSin < 0): left eye curves away / recedes; right eye faces camera / prominent
+    // When turning right (yawSin > 0): right eye curves away / recedes; left eye faces camera / prominent
+    const isReceding = isLeft ? yawSin < -0.02 : yawSin > 0.02;
+    const isProminent = isLeft ? yawSin > 0.02 : yawSin < -0.02;
+    const turnMagnitude = Math.abs(yawSin);
+
+    let eyeScaleX = 1.0;
+    let eyeScaleY = 1.0;
+    let eyeOpenMod = 1.0;
+    let eyeAlphaMod = 1.0;
+    let eyeSpacingShiftX = 0;
+    let browAngleMod = 0;
+
+    if (isReceding) {
+      // Receding eye curves around the 3D dome:
+      // becomes narrower / slightly compressed / slightly more occluded / slightly less open
+      eyeScaleX = clamp(1 - turnMagnitude * 0.24, 0.76, 1);
+      eyeScaleY = clamp(1 - turnMagnitude * 0.06, 0.94, 1);
+      eyeOpenMod = clamp(1 - turnMagnitude * 0.16, 0.84, 1);
+      eyeAlphaMod = clamp(1 - turnMagnitude * 0.22, 0.78, 1);
+      // Eye spacing changes subtly (shifts slightly toward the center line along sphere curve)
+      eyeSpacingShiftX = (isLeft ? 1 : -1) * turnMagnitude * 6;
+      // Brow tilts subtly along curved brow ridge
+      browAngleMod = (isLeft ? 1 : -1) * turnMagnitude * 4;
+    } else if (isProminent) {
+      // Prominent eye faces camera directly:
+      // becomes slightly larger / slightly more open / fully opaque
+      eyeScaleX = clamp(1 + turnMagnitude * 0.08, 1, 1.12);
+      eyeScaleY = clamp(1 + turnMagnitude * 0.06, 1, 1.08);
+      eyeOpenMod = clamp(1 + turnMagnitude * 0.12, 1, 1.16);
+      eyeAlphaMod = 1.0;
+      eyeSpacingShiftX = (isLeft ? 1 : -1) * turnMagnitude * 3;
+      browAngleMod = (isLeft ? -1 : 1) * turnMagnitude * 2.5;
+    }
+
+    t.eyeOpen *= eyeOpenMod;
+
+    const eye = eyeGeometry(a.width * eyeScaleX, a.height * eyeScaleY, t, false);
     eye.centerX += p.gazeX * 4;
     eye.centerY += p.gazeY * 3;
+
     ctx.save();
-    ctx.translate(a.x - size / 2 + t.socketX, a.y - size / 2 + t.socketY);
-    ctx.globalAlpha *= t.opacity * eyePerspAlpha;
-    // Optional mist accent sits behind canonical black brows, never replaces them.
+    ctx.translate(
+      a.x - size / 2 + t.socketX + eyeSpacingShiftX,
+      a.y - size / 2 + t.socketY
+    );
+    ctx.globalAlpha *= t.opacity * eyeAlphaMod;
+
+    // Optional mist accent behind brows
     if (p.cloudBrows) {
       ctx.save();
       ctx.globalAlpha *= 0.18;
@@ -330,16 +367,18 @@ function drawFace(ctx: CanvasRenderingContext2D, o: RenderOptions) {
       ctx.fill();
       ctx.restore();
     }
+
     ctx.save();
     ctx.globalAlpha *= 0.88;
     drawEyebrow(
       ctx,
       eye,
       t.browLift,
-      t.browRotation,
+      t.browRotation + browAngleMod,
       size * BROW_CLEARANCE_RATIO,
     );
     ctx.restore();
+
     ctx.rotate((t.rotation * Math.PI) / 180);
     drawProceduralEye(
       ctx,
@@ -353,13 +392,19 @@ function drawFace(ctx: CanvasRenderingContext2D, o: RenderOptions) {
     ctx.restore();
   }
 
+  // Mouth: shifts toward turning direction with perspective compression
+  const mouthShiftX = yawSin * 14;
+  const mouthShiftY = pitchSin * 6;
+  const mouthPerspX = clamp(1 - Math.abs(yawSin) * 0.18, 0.78, 1);
+
   const a = faceAnchor("mouth", size, colourName),
     t = rig.mouth;
-  ctx.translate(a.x - size / 2 + t.x, a.y - size / 2 + t.y);
+  ctx.save();
+  ctx.translate(a.x - size / 2 + t.x + mouthShiftX, a.y - size / 2 + t.y + mouthShiftY);
   ctx.globalAlpha *= t.opacity;
   drawMouthShape(
     ctx,
-    a.width * 0.95 * clamp(t.scaleX, 0.62, 1.18),
+    a.width * 0.95 * clamp(t.scaleX * mouthPerspX, 0.55, 1.18),
     a.height * 1.08 * clamp(t.scaleY, 0.7, 1.24),
     clamp(t.mouthCurve, -1, 1),
     t.mouthO,
@@ -367,6 +412,7 @@ function drawFace(ctx: CanvasRenderingContext2D, o: RenderOptions) {
     t.mouthCrescent ?? 0,
     colourName
   );
+  ctx.restore();
   ctx.restore();
 }
 
@@ -431,8 +477,8 @@ export function renderCloudBlob(
     }
   }
 
-  const yaw = o.rig.blob.yaw ?? 0;
-  const pitch = o.rig.blob.pitch ?? 0;
+  const yaw = clamp((o.rig.blob.yaw ?? 0) + (p.turnYaw ?? 0), -45, 45);
+  const pitch = clamp((o.rig.blob.pitch ?? 0) + (p.turnPitch ?? 0), -30, 30);
   const yawRad = (yaw * Math.PI) / 180;
   const pitchRad = (pitch * Math.PI) / 180;
   const yawSin = Math.sin(yawRad);

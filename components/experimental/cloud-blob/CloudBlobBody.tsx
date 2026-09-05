@@ -171,6 +171,31 @@ export default function CloudBlobBody(props: CloudBlobBodyProps) {
       const speed = Math.hypot(vx, vy);
       const acceleration =
         dt > 0 && s.previous ? Math.hypot(vx - s.vx, vy - s.vy) / dt : 0;
+
+      // Directional Turning & Heading System:
+      const desiredYaw = speed > 5 ? clamp(vx * 0.08, -26, 26) : 0;
+      const desiredPitch = speed > 5 ? clamp(vy * 0.05, -16, 16) : 0;
+      const springK = 125;
+      const springD = 16.5;
+      const fYaw = -springK * (s.turnYaw - desiredYaw) - springD * s.turnVelYaw;
+      s.turnVelYaw += fYaw * dt;
+      s.turnYaw += s.turnVelYaw * dt;
+
+      const fPitch = -springK * (s.turnPitch - desiredPitch) - springD * s.turnVelPitch;
+      s.turnVelPitch += fPitch * dt;
+      s.turnPitch += s.turnVelPitch * dt;
+
+      p.turnYaw = s.turnYaw;
+      p.turnPitch = s.turnPitch;
+
+      // Anticipation gaze
+      if (speed > 18) {
+        const motionGazeX = clamp(vx / 140, -1, 1);
+        const motionGazeY = clamp(vy / 110, -1, 1);
+        p.gazeX = clamp((p.gazeX ?? 0) * 0.45 + motionGazeX * 0.65, -1, 1);
+        p.gazeY = clamp((p.gazeY ?? 0) * 0.45 + motionGazeY * 0.65, -1, 1);
+      }
+
       p.lean += clamp(vx * 0.022, -12, 12);
       p.stretch += Math.min(0.14, speed * 0.0003);
       stepLobePhysics(
@@ -377,6 +402,10 @@ function createSimulation() {
     lastIdleWisp: 0,
     prevVx: 0,
     prevVy: 0,
+    turnYaw: 0,
+    turnPitch: 0,
+    turnVelYaw: 0,
+    turnVelPitch: 0,
     emission: 0,
     sequence: 0,
     resetId: 0,

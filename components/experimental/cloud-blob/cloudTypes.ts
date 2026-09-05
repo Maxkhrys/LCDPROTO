@@ -72,6 +72,8 @@ export interface CloudDeformationParams {
   cloudBrows: boolean; // Render floating wispy cloud brows
   gazeX: number; // -1 to 1 iris glance
   gazeY: number; // -1 to 1 iris glance
+  turnYaw?: number; // -45 to 45 directional turning angle in degrees
+  turnPitch?: number; // -30 to 30 directional pitch angle in degrees
 }
 
 export interface CloudMotionConfig {

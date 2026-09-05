@@ -128,6 +128,10 @@ export default function CloudCharacter({
   const prevVel = useRef({ vx: 0, vy: 0 });
   const wasDragging = useRef(false);
   const lastIdleWisp = useRef(0);
+  const turnYawRef = useRef(0);
+  const turnPitchRef = useRef(0);
+  const turnVelYawRef = useRef(0);
+  const turnVelPitchRef = useRef(0);
 
   // Pointer bookkeeping, mirroring BlobCharacter so both characters feel the
   // same to handle.
@@ -253,6 +257,33 @@ export default function CloudCharacter({
     const acceleration = Math.hypot(ax, ay);
     prevVel.current.vx = vx;
     prevVel.current.vy = vy;
+
+    // Directional Turning & Heading System:
+    // Derives smoothed yaw & pitch from actual motion velocity, so Cloud "faces into" movement
+    const desiredYaw = speed > 5 ? clamp(vx * 0.08, -26, 26) : 0;
+    const desiredPitch = speed > 5 ? clamp(vy * 0.05, -16, 16) : 0;
+
+    // Damped 2nd-order spring physics (critically damped with ~6% organic overshoot on sudden stops)
+    const springK = 125;
+    const springD = 16.5;
+    const fYaw = -springK * (turnYawRef.current - desiredYaw) - springD * turnVelYawRef.current;
+    turnVelYawRef.current += fYaw * step;
+    turnYawRef.current += turnVelYawRef.current * step;
+
+    const fPitch = -springK * (turnPitchRef.current - desiredPitch) - springD * turnVelPitchRef.current;
+    turnVelPitchRef.current += fPitch * step;
+    turnPitchRef.current += turnVelPitchRef.current * step;
+
+    params.turnYaw = turnYawRef.current;
+    params.turnPitch = turnPitchRef.current;
+
+    // Anticipation: Gaze leads movement direction first
+    if (speed > 18) {
+      const motionGazeX = clamp(vx / 140, -1, 1);
+      const motionGazeY = clamp(vy / 110, -1, 1);
+      params.gazeX = clamp(params.gazeX * 0.45 + motionGazeX * 0.65, -1, 1);
+      params.gazeY = clamp(params.gazeY * 0.45 + motionGazeY * 0.65, -1, 1);
+    }
 
     params.x = offsetX + ambientX;
     params.y = offsetY + ambientY;
