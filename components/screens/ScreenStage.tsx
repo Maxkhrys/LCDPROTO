@@ -53,7 +53,7 @@ export default function ScreenStage({
 
   return (
     <div
-      className="relative overflow-hidden rounded-full"
+      className="relative overflow-hidden rounded-full touch-none select-none"
       style={{ width: screenSize, height: screenSize, background: screenColour }}
     >
       {definition.showsBlob && (

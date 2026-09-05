@@ -510,7 +510,8 @@ export default function CloudCharacter({
     const blobX = size / 2 + rig.blob.x;
     const blobY = size / 2 + rig.blob.y;
     const scale = (rig.blob.scale || 1) * (cloudParams?.scale ?? 1);
-    return Math.hypot(x - blobX, y - blobY) <= size * BODY_FRACTION * 0.72 * scale;
+    // Generous touch hit-test radius for mobile fingers and organic cloud puffs
+    return Math.hypot(x - blobX, y - blobY) <= Math.max(size * 0.32, size * BODY_FRACTION * 1.05 * scale);
   };
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -588,7 +589,7 @@ export default function CloudCharacter({
         // coverage and put the staircase back.
         imageRendering:
           renderScale === 1 && (viewportSize ?? size) >= size ? "pixelated" : "auto",
-        touchAction: drag ? "none" : undefined,
+        touchAction: "none",
         cursor: drag ? (grabbing ? "grabbing" : "grab") : undefined,
       }}
     />

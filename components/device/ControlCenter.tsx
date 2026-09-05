@@ -72,6 +72,7 @@ export default function ControlCenter({
 }: ControlCenterProps) {
   const [query, setQuery] = useState("");
   const [saved, setSaved] = useState(false);
+  const [mobileTab, setMobileTab] = useState<"preview" | "controls" | "sections">("controls");
 
   const activeSection =
     sections.find((section) => section.id === active) ?? sections[0];
@@ -100,6 +101,8 @@ export default function ControlCenter({
     const id = window.setTimeout(() => setSaved(false), 1800);
     return () => window.clearTimeout(id);
   }, [saved]);
+
+  const ActiveIcon = ConsoleIcon[activeSection.id];
 
   return (
     <div className={`control-center-root console-shell ${open ? "console-shell-open" : ""}`}>
@@ -134,7 +137,7 @@ export default function ControlCenter({
 
           <div className="control-center-live">
             <span aria-hidden />
-            Console live
+            <span className="control-center-live-text">Console live</span>
           </div>
 
           <label className="console-search">
@@ -160,6 +163,7 @@ export default function ControlCenter({
               className="control-center-topbar-action control-center-topbar-icon"
               aria-label="Step the scene colour"
               onClick={onCycleScene}
+              title="Cycle scene colour"
             >
               <ActionIcon.sun className="console-icon" />
             </button>
@@ -167,11 +171,20 @@ export default function ControlCenter({
               type="button"
               className="control-center-topbar-action control-center-topbar-icon"
               aria-label="Open tuning tools"
-              onClick={() => onActiveChange("tools")}
+              onClick={() => {
+                onActiveChange("tools");
+                setMobileTab("controls");
+              }}
+              title="Tuning tools"
             >
               <ActionIcon.terminal className="console-icon" />
             </button>
-            <button type="button" className="control-center-topbar-action" onClick={onReset}>
+            <button
+              type="button"
+              className="control-center-topbar-action control-center-reset-btn"
+              onClick={onReset}
+              title="Reset all parameters"
+            >
               Reset all
             </button>
             <Beam style={beam} active={!saved} size="line" strength={0.4} className="beam-inline">
@@ -189,7 +202,7 @@ export default function ControlCenter({
             </Beam>
             <button
               type="button"
-              className="control-center-topbar-action control-center-topbar-icon"
+              className="control-center-topbar-action control-center-topbar-icon control-center-close-btn"
               aria-label="Close controls"
               autoFocus
               onClick={() => onOpenChange(false)}
@@ -200,13 +213,53 @@ export default function ControlCenter({
         </header>
       )}
 
-      <div className="console-body">
+      {open && (
+        <nav className="console-mobile-bar" aria-label="Console mode switcher">
+          <button
+            type="button"
+            className={`console-mobile-bar-item ${mobileTab === "preview" ? "console-mobile-bar-item-active" : ""}`}
+            onClick={() => setMobileTab("preview")}
+          >
+            <ActionIcon.sliders className="console-icon" />
+            <span>Display</span>
+          </button>
+          <button
+            type="button"
+            className={`console-mobile-bar-item ${mobileTab === "controls" ? "console-mobile-bar-item-active" : ""}`}
+            onClick={() => setMobileTab("controls")}
+          >
+            <ActiveIcon className="console-icon" />
+            <span>{activeSection.label}</span>
+          </button>
+          <button
+            type="button"
+            className={`console-mobile-bar-item ${mobileTab === "sections" ? "console-mobile-bar-item-active" : ""}`}
+            onClick={() => setMobileTab("sections")}
+          >
+            <ActionIcon.terminal className="console-icon" />
+            <span>Sections</span>
+          </button>
+        </nav>
+      )}
+
+      <div className={`console-body console-body-mobile-${mobileTab}`}>
         {open && (
           <nav
             id="lcdproto-control-center"
             className="control-center-nav"
             aria-label="Control sections"
           >
+            <div className="control-center-nav-search-mobile">
+              <label className="console-search">
+                <ActionIcon.search className="console-icon" />
+                <input
+                  type="search"
+                  value={query}
+                  placeholder="Filter sections..."
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+              </label>
+            </div>
             <div className="control-center-nav-scroll">
               {GROUPS.map((group) => {
                 const items = matches.filter((section) => section.group === group);
@@ -226,7 +279,10 @@ export default function ControlCenter({
                               selected ? "control-center-nav-item-active" : ""
                             }`}
                             aria-current={selected ? "page" : undefined}
-                            onClick={() => onActiveChange(section.id)}
+                            onClick={() => {
+                              onActiveChange(section.id);
+                              setMobileTab("controls");
+                            }}
                           >
                             <Icon className="console-icon control-center-nav-icon" />
                             <span className="control-center-nav-text">
@@ -264,7 +320,14 @@ export default function ControlCenter({
         {open && (
           <section className="control-center-workspace">
             <div className="control-center-section-header">
-              <div>
+              <div className="control-center-section-header-main">
+                <button
+                  type="button"
+                  className="control-center-mobile-sections-btn"
+                  onClick={() => setMobileTab("sections")}
+                >
+                  ‹ All sections
+                </button>
                 <h1>{activeSection.label}</h1>
                 <p>{activeSection.description}</p>
               </div>

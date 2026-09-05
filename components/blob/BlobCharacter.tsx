@@ -705,7 +705,8 @@ export default function BlobCharacter({
     const blobX = size / 2 + rig.blob.x;
     const blobY = size / 2 + rig.blob.y + (settingsOpen ? size * 0.075 : 0);
     const scale = rig.blob.scale || 1;
-    return Math.hypot(x - blobX, y - blobY) <= size * BODY_FRACTION * 0.62 * scale;
+    // Generous touch hit-test radius for mobile fingers
+    return Math.hypot(x - blobX, y - blobY) <= Math.max(size * 0.30, size * BODY_FRACTION * 0.95 * scale);
   };
 
   const isBlobHit = (event: MouseEvent<HTMLCanvasElement>) => {
@@ -789,7 +790,7 @@ export default function BlobCharacter({
         width: cssSize,
         height: cssSize,
         imageRendering: "auto",
-        touchAction: drag ? "none" : undefined,
+        touchAction: "none",
         cursor: drag ? (grabbing ? "grabbing" : "grab") : undefined,
       }}
     />
